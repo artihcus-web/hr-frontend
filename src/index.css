@@ -12,7 +12,7 @@
   }
 
   .dark body {
-    @apply bg-gray-950 text-gray-100;
+    @apply bg-slate-950 text-slate-200;
   }
 }
 
@@ -22,9 +22,9 @@
 }
 
 .dark ::-webkit-scrollbar-track {
-  @apply bg-gray-900;
+  @apply bg-slate-950;
 }
 
 .dark ::-webkit-scrollbar-thumb {
-  @apply bg-gray-700 rounded-full border-2 border-gray-900 hover:bg-gray-600;
+  @apply bg-slate-800 rounded-full border-2 border-slate-950 hover:bg-slate-700;
 }

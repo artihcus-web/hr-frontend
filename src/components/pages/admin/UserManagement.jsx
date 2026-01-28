@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../context/AuthContext'
-import { FiEdit2, FiTrash2, FiUpload, FiX, FiSearch, FiFilter, FiDownload, FiChevronDown, FiChevronUp, FiSave, FiPlus } from 'react-icons/fi'
+import { FiEdit2, FiTrash2, FiUpload, FiX, FiSearch, FiFilter, FiDownload, FiChevronDown, FiChevronUp, FiSave, FiPlus, FiMoreVertical } from 'react-icons/fi'
 import * as XLSX from 'xlsx'
 import toast from 'react-hot-toast'
 import axiosInstance from '../../../utils/axiosInstance'
@@ -138,6 +138,23 @@ function UserManagement() {
   const [filterDepartment, setFilterDepartment] = useState('all')
   const [filterStatus, setFilterStatus] = useState('all')
   const [showFilters, setShowFilters] = useState(false)
+
+  // Action Menu State
+  const [openActionMenuId, setOpenActionMenuId] = useState(null)
+
+  useEffect(() => {
+    const handleClickOutside = () => setOpenActionMenuId(null)
+    if (openActionMenuId) {
+      document.addEventListener('click', handleClickOutside)
+    }
+    return () => document.removeEventListener('click', handleClickOutside)
+  }, [openActionMenuId])
+
+  const toggleActionMenu = (id, e) => {
+    e.stopPropagation()
+    setOpenActionMenuId(prev => (prev === id ? null : id))
+  }
+
   const [formData, setFormData] = useState({
     // Basic Information
     firstName: '',
@@ -1126,7 +1143,7 @@ function UserManagement() {
             {/* Title & Top Actions Row */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
               <div>
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">User Management</h1>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Employee Management</h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                   Manage employee accounts, roles, and access permissions.
                   <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300">
@@ -1264,19 +1281,16 @@ function UserManagement() {
                     <tr>
 
                       <th className="px-2 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                        Employee
+                        Employee ID
                       </th>
                       <th className="px-2 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                        Employee ID
+                        Employee
                       </th>
                       <th className="px-2 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
                         Phone
                       </th>
                       <th className="px-2 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
                         Role
-                      </th>
-                      <th className="px-2 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                        Department
                       </th>
                       <th className="px-2 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
                         Status
@@ -1322,6 +1336,11 @@ function UserManagement() {
                           className="hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 transition-colors duration-150"
                         >
                           <td className="px-2 py-3 whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900 dark:text-gray-200">
+                              {emp.employeeId || 'N/A'}
+                            </div>
+                          </td>
+                          <td className="px-2 py-3 whitespace-nowrap">
                             <div className="flex items-center space-x-3">
                               {/* Profile Avatar */}
                               {emp.profileImage ? (
@@ -1347,11 +1366,6 @@ function UserManagement() {
                             </div>
                           </td>
                           <td className="px-2 py-3 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900 dark:text-gray-200">
-                              {emp.employeeId || 'N/A'}
-                            </div>
-                          </td>
-                          <td className="px-2 py-3 whitespace-nowrap">
                             <div className="text-sm text-gray-700 dark:text-gray-400">
                               {emp.phone || 'N/A'}
                             </div>
@@ -1366,11 +1380,6 @@ function UserManagement() {
                               {emp.role || 'employee'}
                             </span>
                           </td>
-                          <td className="px-2 py-3">
-                            <div className="text-sm text-gray-700 dark:text-gray-400 font-medium break-words">
-                              {emp.department || 'N/A'}
-                            </div>
-                          </td>
                           <td className="px-2 py-3 whitespace-nowrap">
                             <span className={`px-2.5 py-1 inline-flex text-xs font-semibold rounded-full ${emp.isActive !== false
                               ? 'bg-green-100 text-green-700 border border-green-200'
@@ -1380,31 +1389,57 @@ function UserManagement() {
                             </span>
                           </td>
                           <td className="px-2 py-3 whitespace-nowrap">
-                            <div className="flex items-center justify-center space-x-2">
-                              {/* Edit Icon */}
+                            <div className="flex items-center justify-center relative">
                               <button
-                                onClick={() => handleEdit(emp._id || emp.id)}
-                                className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors duration-150"
-                                title="Edit"
+                                onClick={(e) => toggleActionMenu(emp._id || emp.id, e)}
+                                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg transition-colors focus:outline-none"
                               >
-                                <FiEdit2 className="w-4 h-4" />
+                                <FiMoreVertical className="w-5 h-5" />
                               </button>
-                              {/* Export Icon */}
-                              <button
-                                onClick={() => handleExportSingle(emp)}
-                                className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors duration-150"
-                                title="Export Details"
-                              >
-                                <FiDownload className="w-4 h-4" />
-                              </button>
-                              {/* Delete Icon */}
-                              <button
-                                onClick={() => handleDeleteClick(emp)}
-                                className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-150"
-                                title="Delete"
-                              >
-                                <FiTrash2 className="w-4 h-4" />
-                              </button>
+
+                              {openActionMenuId === (emp._id || emp.id) && (
+                                <div className="absolute right-8 top-0 mt-0 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg py-1 z-50 border border-gray-200 dark:border-gray-700 ring-1 ring-black ring-opacity-5 focus:outline-none origin-top-right">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleEdit(emp._id || emp.id)
+                                      setOpenActionMenuId(null)
+                                    }}
+                                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <FiEdit2 className="w-4 h-4" />
+                                      <span>Edit</span>
+                                    </div>
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleExportSingle(emp)
+                                      setOpenActionMenuId(null)
+                                    }}
+                                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-green-600 dark:hover:text-green-400 transition-colors"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <FiDownload className="w-4 h-4" />
+                                      <span>Download</span>
+                                    </div>
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleDeleteClick(emp)
+                                      setOpenActionMenuId(null)
+                                    }}
+                                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <FiTrash2 className="w-4 h-4" />
+                                      <span>Delete</span>
+                                    </div>
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           </td>
                         </tr>

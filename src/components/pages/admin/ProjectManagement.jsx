@@ -42,6 +42,12 @@ function ProjectManagement() {
   const [loadingBench, setLoadingBench] = useState(false)
   const [benchSearch, setBenchSearch] = useState('')
 
+  // Create Project Builder State
+  const [creationTeamIds, setCreationTeamIds] = useState([])
+  const [allUsers, setAllUsers] = useState([])
+  const [builderSearchQuery, setBuilderSearchQuery] = useState('')
+  const [loadingAllUsers, setLoadingAllUsers] = useState(false)
+
   // Filter projects based on search
   const filteredProjects = projects.filter(project =>
     project.projectName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -84,12 +90,10 @@ function ProjectManagement() {
       if (res.ok) {
         const fetchedProjects = data.projects || []
 
-        // Pin "Ready-to-deploy resources" to top
-        const updatedProjects = fetchedProjects.sort((a, b) => {
-          if (a.projectName === 'Ready-to-deploy resources') return -1
-          if (b.projectName === 'Ready-to-deploy resources') return 1
-          return new Date(b.createdAt) - new Date(a.createdAt)
-        })
+        // Filter out "Ready-to-deploy resources" as per user request
+        const updatedProjects = fetchedProjects
+          .filter(p => p.projectName !== 'Ready-to-deploy resources')
+          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
 
         setProjects(updatedProjects)
 
@@ -241,7 +245,36 @@ function ProjectManagement() {
     setEditingProject(null)
     setError(null)
     setMessage(null)
+    setCreationTeamIds([])
+    setBuilderSearchQuery('')
   }
+
+  // Fetch all users for the builder
+  const fetchAllUsers = useCallback(async () => {
+    if (!token) return
+    try {
+      setLoadingAllUsers(true)
+      const res = await axiosInstance.get('/api/auth/users')
+      // Filter out admins and maybe format them
+      const validUsers = (res.data.users || []).filter(u => u.role !== 'admin')
+      setAllUsers(validUsers)
+    } catch (error) {
+      console.error("Failed to fetch users", error)
+    } finally {
+      setLoadingAllUsers(false)
+    }
+  }, [token])
+
+  useEffect(() => {
+    if (showForm && !editingProject) {
+      fetchAllUsers()
+    }
+  }, [showForm, editingProject, fetchAllUsers])
+
+  const filteredBuilderUsers = allUsers.filter(u =>
+    (u.fullName || '').toLowerCase().includes(builderSearchQuery.toLowerCase()) ||
+    (u.email || '').toLowerCase().includes(builderSearchQuery.toLowerCase())
+  )
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -263,6 +296,7 @@ function ProjectManagement() {
         ? `${API_URL}/api/projects/${editingProject}`
         : `${API_URL}/api/projects`
 
+      // 1. Create/Update Project
       const res = await fetch(url, {
         method: editingProject ? 'PUT' : 'POST',
         headers: {
@@ -273,10 +307,32 @@ function ProjectManagement() {
       })
 
       const data = await res.json()
+
       if (!res.ok) {
         toast.error(data.message || `Failed to ${editingProject ? 'update' : 'create'} project`)
       } else {
-        toast.success(`Project ${editingProject ? 'updated' : 'created'} successfully`)
+        const createdProjectId = editingProject ? editingProject : (data.project._id || data.project.id)
+
+        // 2. If Creating NEW project AND team members selected, assign them
+        if (!editingProject && creationTeamIds.length > 0 && createdProjectId) {
+          setMessage('Project created. Assigning team members...')
+          try {
+            // Reuse existing assignment endpoint
+            await fetch(`${API_URL}/api/projects/${createdProjectId}/assign-employees`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`
+              },
+              body: JSON.stringify({ employeeIds: creationTeamIds })
+            })
+          } catch (assignErr) {
+            console.error("Assignment failed", assignErr)
+            toast.error("Project created, but failed to auto-assign team.")
+          }
+        }
+
+        toast.success(`Project ${editingProject ? 'updated' : 'initialized'} successfully`)
         resetForm()
         setShowForm(false)
         await fetchProjects()
@@ -290,11 +346,11 @@ function ProjectManagement() {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'active': return 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800'
-      case 'inactive': return 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-400 border-gray-200 dark:border-gray-700'
-      case 'completed': return 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-800'
-      case 'on-hold': return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800'
-      default: return 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-400 border-gray-200 dark:border-gray-700'
+      case 'active': return 'bg-emerald-100 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50'
+      case 'inactive': return 'bg-slate-100 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700/50'
+      case 'completed': return 'bg-blue-100 dark:bg-blue-950/30 text-blue-800 dark:text-blue-400 border-blue-200 dark:border-blue-800/50'
+      case 'on-hold': return 'bg-amber-100 dark:bg-amber-950/30 text-amber-800 dark:text-amber-400 border-amber-200 dark:border-amber-800/50'
+      default: return 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700'
     }
   }
 
@@ -494,29 +550,29 @@ function ProjectManagement() {
   // RETURN 1: Project Detail View
   if (selectedProject) {
     return (
-      <div className="min-h-screen bg-gray-50/50 dark:bg-gray-950 transition-colors">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Header Dashboard Style */}
           <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-5">
               <button
                 onClick={closeProjectDetail}
-                className="group p-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all shadow-sm active:scale-95"
+                className="group p-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm active:scale-95"
                 title="Back to Projects"
               >
                 <FiArrowLeft className="w-5 h-5 text-gray-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors" />
               </button>
               <div>
                 <div className="flex items-center gap-3 mb-1">
-                  <h1 className="text-2xl font-extrabold text-gray-900 dark:text-gray-100 tracking-tight uppercase">
+                  <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight uppercase">
                     {selectedProject.projectName}
                   </h1>
-                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border uppercase tracking-wider ${getStatusColor(selectedProject.status).replace('bg-100', 'bg-50/50')}`}>
+                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border uppercase tracking-wider ${getStatusColor(selectedProject.status)}`}>
                     {selectedProject.status}
                   </span>
                 </div>
-                <div className="flex items-center gap-3 text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
-                  <span className="flex items-center gap-1.5 bg-white dark:bg-gray-900 px-2 py-0.5 rounded border border-gray-100 dark:border-gray-800 shadow-sm">
+                <div className="flex items-center gap-3 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                  <span className="flex items-center gap-1.5 bg-white dark:bg-slate-900 px-2 py-0.5 rounded border border-slate-100 dark:border-slate-800 shadow-sm">
                     <FiHash className="w-3.5 h-3.5" /> {selectedProject.projectId}
                   </span>
                 </div>
@@ -540,7 +596,7 @@ function ProjectManagement() {
             {/* Main Content Area */}
             <div className="lg:col-span-2 space-y-8">
               {/* Description Card */}
-              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-6 overflow-hidden relative group transition-colors">
+              <div className="bg-white dark:bg-slate-900/50 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 p-6 overflow-hidden relative group transition-colors">
                 <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500 rounded-r opacity-0 group-hover:opacity-100 transition-opacity"></div>
                 <h3 className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2">
                   <FiFolder className="w-4 h-4" /> Project Description
@@ -772,34 +828,32 @@ function ProjectManagement() {
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
               <div>
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Project Management</h1>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                  Oversee project lifecycles and manage workforce allocation.
-                </p>
+
               </div>
               <div className="flex items-center gap-2 bg-white dark:bg-gray-900 p-1 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm">
                 <button
                   onClick={() => setActiveTab('projects')}
                   className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 ${activeTab === 'projects'
-                    ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 shadow-sm ring-1 ring-indigo-200 dark:ring-indigo-800'
-                    : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                    ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 shadow-sm ring-1 ring-indigo-200 dark:ring-indigo-800'
+                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900'
                     }`}
                 >
                   <FiGrid className="w-4 h-4" />
                   Active Projects
-                  <span className="ml-1 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 py-0.5 px-2 rounded-full text-xs">
+                  <span className={`ml-1 py-0.5 px-2 rounded-full text-xs font-bold ${activeTab === 'projects' ? 'bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'}`}>
                     {projects.length}
                   </span>
                 </button>
                 <button
                   onClick={() => setActiveTab('bench')}
                   className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 ${activeTab === 'bench'
-                    ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 shadow-sm ring-1 ring-indigo-200 dark:ring-indigo-800'
-                    : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                    ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 shadow-sm ring-1 ring-indigo-200 dark:ring-indigo-800'
+                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900'
                     }`}
                 >
                   <FiBriefcase className="w-4 h-4" />
                   Resource Bench
-                  <span className="ml-1 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 py-0.5 px-2 rounded-full text-xs">
+                  <span className={`ml-1 py-0.5 px-2 rounded-full text-xs font-bold ${activeTab === 'bench' ? 'bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'}`}>
                     {benchEmployees.length}
                   </span>
                 </button>
@@ -807,10 +861,12 @@ function ProjectManagement() {
             </div>
 
             {/* Toolbar */}
-            <div className="bg-white dark:bg-gray-900 p-1.5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3 transition-colors">
-              <div className="relative w-full sm:max-w-md group">
+            {/* Toolbar */}
+            <div className="flex flex-col sm:flex-row items-center gap-4 w-full">
+              {/* Search Bar - Separate Card */}
+              <div className="relative flex-1 group bg-white dark:bg-slate-900/50 backdrop-blur-sm p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm transition-colors w-full">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FiSearch className="h-5 w-5 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
+                  <FiSearch className="h-5 w-5 text-gray-400 group-focus-within:text-indigo-500 transition-colors z-10 ml-1" />
                 </div>
                 <input
                   type="text"
@@ -826,10 +882,10 @@ function ProjectManagement() {
                   <button
                     type="button"
                     onClick={() => { resetForm(); setShowForm(true); }}
-                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 dark:bg-indigo-500 text-white rounded-lg hover:bg-indigo-700 dark:hover:bg-indigo-600 active:scale-95 transition-all shadow-md shadow-indigo-100 dark:shadow-none text-sm font-semibold whitespace-nowrap"
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 dark:bg-indigo-500 text-white rounded-xl hover:bg-indigo-700 dark:hover:bg-indigo-600 active:scale-95 transition-all shadow-lg shadow-indigo-100 dark:shadow-none text-sm font-bold uppercase tracking-wide whitespace-nowrap"
                   >
                     <FiPlus className="w-5 h-5" />
-                    <span>Create Project</span>
+                    <span>Create New Project</span>
                   </button>
                 </div>
               )}
@@ -862,14 +918,14 @@ function ProjectManagement() {
                     {filteredProjects.map((project) => (
                       <div
                         key={project._id || project.id}
-                        className="group bg-white dark:bg-gray-900 rounded-2xl shadow-sm hover:shadow-xl hover:-translate-y-1 border border-gray-100 dark:border-gray-800 transition-all duration-300 overflow-hidden cursor-pointer"
-                        onClick={(e) => { if (!e.target.closest('button')) handleProjectClick(project); }}
+                        className="group bg-white dark:bg-slate-900/50 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 transition-all duration-300 overflow-hidden cursor-default"
+
                       >
                         <div className="h-1.5 w-full bg-indigo-50 dark:bg-indigo-950/50 group-hover:bg-indigo-500 transition-colors"></div>
                         <div className="p-6">
                           <div className="flex items-start justify-between mb-4">
                             <div className="flex-1 min-w-0">
-                              <h3 className="text-lg font-extrabold text-gray-900 dark:text-gray-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate pr-2 uppercase" title={project.projectName}>
+                              <h3 className="text-lg font-extrabold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate pr-2 uppercase" title={project.projectName}>
                                 {project.projectName}
                               </h3>
                               <div className="flex items-center gap-1.5 text-[11px] font-bold text-gray-400 dark:text-gray-500 mt-0.5 tracking-wider uppercase">
@@ -881,30 +937,30 @@ function ProjectManagement() {
                               {project.status}
                             </span>
                           </div>
-                          <p className="text-gray-500 text-xs leading-relaxed mb-6 line-clamp-2 h-8">
+                          <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed mb-6 line-clamp-2 h-8">
                             {project.description || "Building excellence through strategic project execution and resource management."}
                           </p>
                           <div className="grid grid-cols-2 gap-3 mb-6">
-                            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-2.5 border border-gray-50 dark:border-gray-800 flex flex-col items-center justify-center transition-colors group-hover:bg-indigo-50/30 dark:group-hover:bg-indigo-900/20 group-hover:border-indigo-50 dark:group-hover:border-indigo-900/10">
-                              <FiUsers className="w-4 h-4 text-gray-400 dark:text-gray-500 mb-1 group-hover:text-indigo-400" />
-                              <span className="text-xs font-bold text-gray-900 dark:text-gray-100">{project.employees?.length || 0}</span>
-                              <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase font-bold tracking-tighter">Employees</span>
+                            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-2.5 border border-slate-100 dark:border-slate-700/50 flex flex-col items-center justify-center transition-colors group-hover:bg-indigo-50/30 dark:group-hover:bg-indigo-900/20 group-hover:border-indigo-100 dark:group-hover:border-indigo-500/20">
+                              <FiUsers className="w-4 h-4 text-slate-400 dark:text-slate-500 mb-1 group-hover:text-indigo-500 dark:group-hover:text-indigo-400" />
+                              <span className="text-xs font-bold text-slate-900 dark:text-white">{project.employees?.length || 0}</span>
+                              <span className="text-[10px] text-slate-400 dark:text-slate-500 uppercase font-bold tracking-tighter">Employees</span>
                             </div>
-                            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-2.5 border border-gray-50 dark:border-gray-800 flex flex-col items-center justify-center transition-colors group-hover:bg-indigo-50/30 dark:group-hover:bg-indigo-900/20 group-hover:border-indigo-50 dark:group-hover:border-indigo-900/10">
-                              <FiUserCheck className="w-4 h-4 text-gray-400 dark:text-gray-500 mb-1 group-hover:text-indigo-400" />
-                              <span className="text-xs font-bold text-gray-900 dark:text-gray-100">{project.projectManagers?.length || 0}</span>
-                              <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase font-bold tracking-tighter">Managers</span>
+                            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-2.5 border border-slate-100 dark:border-slate-700/50 flex flex-col items-center justify-center transition-colors group-hover:bg-indigo-50/30 dark:group-hover:bg-indigo-900/20 group-hover:border-indigo-100 dark:group-hover:border-indigo-500/20">
+                              <FiUserCheck className="w-4 h-4 text-slate-400 dark:text-slate-500 mb-1 group-hover:text-indigo-500 dark:group-hover:text-indigo-400" />
+                              <span className="text-xs font-bold text-slate-900 dark:text-white">{project.projectManagers?.length || 0}</span>
+                              <span className="text-[10px] text-slate-400 dark:text-slate-500 uppercase font-bold tracking-tighter">Managers</span>
                             </div>
                           </div>
-                          <div className="flex items-center justify-between pt-4 border-t border-gray-50 dark:border-gray-800">
+                          <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800">
                             <div className="flex -space-x-2">
                               {[1, 2, 3].slice(0, project.employees?.length || 0).map(i => (
-                                <div key={i} className="w-6 h-6 rounded-full border-2 border-white dark:border-gray-900 bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center text-[10px] font-bold text-indigo-600 dark:text-indigo-300">
+                                <div key={i} className="w-6 h-6 rounded-full border-2 border-white dark:border-slate-900 bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center text-[10px] font-bold text-indigo-600 dark:text-indigo-300">
                                   {String.fromCharCode(64 + i)}
                                 </div>
                               ))}
                               {project.employees?.length > 3 && (
-                                <div className="w-6 h-6 rounded-full border-2 border-white dark:border-gray-900 bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-[10px] font-bold text-gray-500 dark:text-gray-400">
+                                <div className="w-6 h-6 rounded-full border-2 border-white dark:border-slate-900 bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-500 dark:text-slate-400">
                                   +{project.employees.length - 3}
                                 </div>
                               )}
@@ -913,17 +969,10 @@ function ProjectManagement() {
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleEdit(project._id || project.id); }}
                                 className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-all"
+                                title="Edit Project"
                               >
                                 <FiEdit2 className="w-4 h-4" />
                               </button>
-                              {project.projectName !== 'Ready-to-deploy resources' && (
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); handleDeleteClick(project); }}
-                                  className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-all"
-                                >
-                                  <FiTrash2 className="w-4 h-4" />
-                                </button>
-                              )}
                             </div>
                           </div>
                         </div>
@@ -1031,21 +1080,21 @@ function ProjectManagement() {
 
   // RETURN 3: Add/Edit Project Form
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors">
+      <div className={`mx-auto px-4 sm:px-6 lg:px-8 py-8 ${editingProject ? 'max-w-3xl' : 'max-w-6xl'}`}>
         <div className="mb-8 flex items-center justify-between">
           <div className="flex items-center gap-5">
             <button
               onClick={() => { resetForm(); setShowForm(false); }}
-              className="group p-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all shadow-sm active:scale-95"
+              className="group p-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm active:scale-95"
             >
               <FiArrowLeft className="w-5 h-5 text-gray-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors" />
             </button>
             <div>
-              <h1 className="text-2xl font-extrabold text-gray-900 dark:text-gray-100 tracking-tight uppercase">
+              <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight uppercase">
                 {editingProject ? 'Edit Project Profile' : 'Configure New Project'}
               </h1>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
+              <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-0.5">
                 {editingProject ? `Modifying project ${formData.projectId}` : 'Initialize a new workspace for your team'}
               </p>
             </div>
@@ -1065,28 +1114,28 @@ function ProjectManagement() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden transition-colors">
+        <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-900/50 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden transition-colors">
           <div className="p-8">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
               <div className="space-y-6">
-                <div className="flex items-center gap-2 mb-2 p-1 border-b border-gray-50 dark:border-gray-800 pb-3">
+                <div className="flex items-center gap-2 mb-2 p-1 border-b border-slate-100 dark:border-slate-800 pb-3">
                   <FiInfo className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
-                  <h3 className="text-[11px] font-extrabold text-gray-900 dark:text-gray-100 uppercase tracking-widest">General Information</h3>
+                  <h3 className="text-[11px] font-extrabold text-slate-900 dark:text-white uppercase tracking-widest">General Information</h3>
                 </div>
                 <div>
-                  <label className="block text-[10px] font-extrabold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 px-1">Project Name <span className="text-red-500">*</span></label>
-                  <input type="text" name="projectName" value={formData.projectName} onChange={handleChange} required placeholder="e.g. Apollo Mission Control" className="w-full px-4 py-3 bg-gray-50/50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-medium text-gray-900 dark:text-gray-100" />
+                  <label className="block text-[10px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 px-1">Project Name <span className="text-red-500">*</span></label>
+                  <input type="text" name="projectName" value={formData.projectName} onChange={handleChange} required placeholder="e.g. Apollo Mission Control" className="w-full px-4 py-3 bg-slate-50/50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-medium text-slate-900 dark:text-white" />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-extrabold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 px-1">System Reference (ID) <span className="text-red-500">*</span></label>
+                  <label className="block text-[10px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 px-1">System Reference (ID) <span className="text-red-500">*</span></label>
                   <div className="relative group">
-                    <FiHash className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 w-4 h-4" />
-                    <input type="text" name="projectId" value={formData.projectId} onChange={handleChange} required placeholder="PROJ-001" disabled={!!editingProject} className={`w-full pl-11 pr-4 py-3 bg-gray-50/50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-medium text-gray-900 dark:text-gray-100 ${editingProject ? 'opacity-60 cursor-not-allowed bg-gray-100 dark:bg-gray-900' : ''}`} />
+                    <FiHash className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 w-4 h-4" />
+                    <input type="text" name="projectId" value={formData.projectId} onChange={handleChange} required placeholder="PROJ-001" disabled={!!editingProject} className={`w-full pl-11 pr-4 py-3 bg-slate-50/50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-medium text-slate-900 dark:text-white ${editingProject ? 'opacity-60 cursor-not-allowed bg-slate-100 dark:bg-slate-900' : ''}`} />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-[10px] font-extrabold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 px-1">Lifecycle Status</label>
-                  <select name="status" value={formData.status} onChange={handleChange} className="w-full px-4 py-3 bg-gray-50/50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-bold text-gray-700 dark:text-gray-200 appearance-none cursor-pointer">
+                  <label className="block text-[10px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 px-1">Lifecycle Status</label>
+                  <select name="status" value={formData.status} onChange={handleChange} className="w-full px-4 py-3 bg-slate-50/50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-bold text-slate-700 dark:text-slate-200 appearance-none cursor-pointer">
                     <option value="active">ACTIVE</option>
                     <option value="inactive">INACTIVE</option>
                     <option value="completed">COMPLETED</option>
