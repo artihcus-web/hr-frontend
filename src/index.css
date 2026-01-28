@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+@variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  html {
+    transition: background-color 0.3s ease;
+  }
+
+  body {
+    @apply bg-white text-gray-900 transition-colors duration-300;
+  }
+
+  .dark body {
+    @apply bg-slate-950 text-slate-200;
+  }
+}
+
+/* Custom scrollbar for dark mode */
+.dark ::-webkit-scrollbar {
+  width: 10px;
+}
+
+.dark ::-webkit-scrollbar-track {
+  @apply bg-slate-950;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  @apply bg-slate-800 rounded-full border-2 border-slate-950 hover:bg-slate-700;
+}
