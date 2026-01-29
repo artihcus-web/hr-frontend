@@ -129,6 +129,7 @@ function UserManagement() {
   const [editingEmployee, setEditingEmployee] = useState(null)
   const [deleteConfirmation, setDeleteConfirmation] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [isNewEntry, setIsNewEntry] = useState(false) // Track if this is a fresh entry creation flow
   const [showImportModal, setShowImportModal] = useState(false)
   const [importing, setImporting] = useState(false)
   const [importProgress, setImportProgress] = useState({ total: 0, success: 0, failed: 0, errors: [] })
@@ -476,9 +477,9 @@ function UserManagement() {
         location: emp.location || '',
         employeeNumberSeries: emp.employeeNumberSeries || '',
         assignedProjects: emp.assignedProjects || [],
-        education: emp.education || '',
-        experience: emp.experience || '',
-        skills: emp.skills || '',
+        education: Array.isArray(emp.education) ? emp.education : [],
+        experience: Array.isArray(emp.experience) ? emp.experience : [],
+        skills: Array.isArray(emp.skills) ? emp.skills : (typeof emp.skills === 'string' && emp.skills ? emp.skills.split(',').map(s => s.trim()) : []),
         salary: emp.salary || '',
         accountNumber: emp.accountNumber || '',
         bankName: emp.bankName || '',
@@ -746,6 +747,27 @@ function UserManagement() {
               employee.childrenDobs = employee.childrenDobs.split(',').map(d => d.trim())
             }
 
+            // Handle Professional Info - Legacy Support for Excel Import
+            if (employee.skills && typeof employee.skills === 'string') {
+              employee.skills = employee.skills.split(',').map(s => s.trim())
+            } else if (!Array.isArray(employee.skills)) {
+              employee.skills = []
+            }
+
+            if (employee.education && typeof employee.education === 'string') {
+              // Best effort: just put the whole string in 'institute'
+              employee.education = [{ institute: employee.education, fromDate: null, toDate: null }]
+            } else if (!Array.isArray(employee.education)) {
+              employee.education = []
+            }
+
+            if (employee.experience && typeof employee.experience === 'string') {
+              // Best effort: just put the whole string in 'organization'
+              employee.experience = [{ organization: employee.experience, fromDate: null, toDate: null }]
+            } else if (!Array.isArray(employee.experience)) {
+              employee.experience = []
+            }
+
             // Convert Boolean fields (Yes/No or true/false)
             const booleanFields = [
               'isPhysicallyChallenged', 'isInternationalEmployee',
@@ -996,9 +1018,9 @@ function UserManagement() {
       grade: '',
       location: '',
       employeeNumberSeries: '',
-      education: '',
-      experience: '',
-      skills: '',
+      education: [],
+      experience: [],
+      skills: [],
       salary: '',
       accountNumber: '',
       bankName: '',
@@ -1051,6 +1073,8 @@ function UserManagement() {
       if (!formData.email) missingFields.push('Email')
       if (!formData.phone) missingFields.push('Phone')
       if (!formData.employeeId) missingFields.push('Employee ID')
+      if (!formData.employeeId) missingFields.push('Employee ID')
+      // Note: Password validation removed here to allow 'Draft' creation with temp password
 
       if (missingFields.length > 0) {
         toast.error(`Initial creation requires: ${missingFields.join(', ')}`)
@@ -1062,6 +1086,14 @@ function UserManagement() {
         toast.error('Employee ID and Email are required')
         return
       }
+    }
+
+
+
+    // Enforce permanent password for Account Setup section (Section 9) if it's a new entry
+    if (sectionId === 9 && isNewEntry && !formData.password) {
+      toast.error('Please set a permanent password for the new account')
+      return
     }
 
     setSubmittingSection(sectionId)
@@ -1080,6 +1112,11 @@ function UserManagement() {
       // Only include password if provided (for new employees or password change)
       if (formData.password) {
         apiData.password = formData.password
+      } else if (!editingEmployee) {
+        // Generate temp password for 'Draft' creation so other info can be saved first
+        const tempPass = `Temp@${formData.phone ? formData.phone.slice(-4) : '1234'}`
+        apiData.password = tempPass
+        toast('Draft created. Temporary password set.', { icon: 'ℹ️' })
       }
 
       if (editingEmployee) {
@@ -1106,6 +1143,39 @@ function UserManagement() {
     }
   }
 
+  // Handle Probation Actions
+  const handleProbationAction = async (action) => {
+    if (!editingEmployee || !formData.joiningDate || !formData.probationPeriod) return
+
+    // Calculate confirmation date (today)
+    const confirmDate = new Date().toISOString().split('T')[0]
+
+    try {
+      if (action === 'accept') {
+        const updatedData = { ...formData, confirmDate }
+        setFormData(updatedData) // specific update to UI state
+        // We can either auto-save or just set state. User requested "confirm the emp there itself".
+        // Let's call the API to save immediately.
+        await axiosInstance.put(`/api/auth/users/${editingEmployee}`, { ...updatedData, role: formData.role }) // role is required field
+        toast.success(`Probation confirmed. Employee confirmed on ${confirmDate}.`)
+        await fetchEmployees()
+      } else if (action === 'reject') {
+        // Reject implies failing probation -> Inactive or Terminated.
+        // User said "reject the emp".
+        if (window.confirm("Are you sure you want to reject this employee's probation? This will set their status to Inactive.")) {
+          const updatedData = { ...formData, employeeStatus: 'Inactive' }
+          setFormData(updatedData)
+          await axiosInstance.put(`/api/auth/users/${editingEmployee}`, { ...updatedData, role: formData.role })
+          toast.success("Probation rejected. Employee status set to Inactive.")
+          await fetchEmployees()
+        }
+      }
+    } catch (error) {
+      console.error('Probation action failed:', error)
+      toast.error('Failed to update probation status')
+    }
+  }
+
 
   // Filter employees based on search and filters
   const filteredEmployees = employees.filter(emp => {
@@ -1119,8 +1189,8 @@ function UserManagement() {
     const matchesRole = filterRole === 'all' || emp.role === filterRole
     const matchesDepartment = filterDepartment === 'all' || (emp.department || '').toLowerCase() === filterDepartment.toLowerCase()
     const matchesStatus = filterStatus === 'all' ||
-      (filterStatus === 'active' && emp.isActive !== false) ||
-      (filterStatus === 'inactive' && emp.isActive === false)
+      (filterStatus === 'probation' && !emp.confirmDate && emp.isActive !== false) ||
+      (filterStatus === 'confirmed' && emp.confirmDate && emp.isActive !== false)
 
     return matchesSearch && matchesRole && matchesDepartment && matchesStatus
   })
@@ -1171,6 +1241,7 @@ function UserManagement() {
                 <button
                   onClick={() => {
                     resetForm()
+                    setIsNewEntry(true) // Start new entry flow
                     setShowForm(true)
                   }}
                   className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm hover:shadow-md focus:outline-none focus:ring-4 focus:ring-indigo-500/30 transition-all active:scale-95"
@@ -1233,8 +1304,8 @@ function UserManagement() {
                   className="w-full sm:w-32 px-3 py-2 text-sm bg-gray-50 dark:bg-gray-800 border-0 rounded-lg text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-indigo-500/20 cursor-pointer font-medium hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                 >
                   <option value="all">All Status</option>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
+                  <option value="probation">Probation</option>
+                  <option value="confirmed">Confirmed</option>
                 </select>
 
                 {/* Clear Filters (Conditional) */}
@@ -1402,6 +1473,7 @@ function UserManagement() {
                                     onClick={(e) => {
                                       e.stopPropagation()
                                       handleEdit(emp._id || emp.id)
+                                      setIsNewEntry(false) // Not a new entry
                                       setOpenActionMenuId(null)
                                     }}
                                     className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
@@ -1712,12 +1784,50 @@ function UserManagement() {
               <FormField label="Role" name="role" type="select" required options={roles} formData={formData} handleChange={handleChange} />
               <FormField label="Employee Status" name="employeeStatus" type="select" required options={['Active', 'Inactive']} formData={formData} handleChange={handleChange} />
               <FormField label="Joining Date" name="joiningDate" type="date" formData={formData} handleChange={handleChange} />
+              <div className="col-span-1">
+                <FormField label="Probation Period (days)" name="probationPeriod" type="number" formData={formData} handleChange={handleChange} />
+                {(() => {
+                  // Probation Action Logic
+                  if (formData.joiningDate && formData.probationPeriod && !formData.confirmDate) {
+                    const joinDate = new Date(formData.joiningDate)
+                    const probDays = parseInt(formData.probationPeriod) || 0
+                    const probationEndDate = new Date(joinDate)
+                    probationEndDate.setDate(joinDate.getDate() + probDays)
+                    const today = new Date()
+                    // If Today >= Probation End Date
+                    // Reset time parts for accurate date comparison
+                    today.setHours(0, 0, 0, 0)
+                    probationEndDate.setHours(0, 0, 0, 0)
+
+                    if (today >= probationEndDate) {
+                      return (
+                        <div className="mt-2 flex gap-2 animate-fadeIn">
+                          <button
+                            type="button"
+                            onClick={() => handleProbationAction('accept')}
+                            className="flex-1 bg-green-600 text-white text-xs font-bold py-1.5 px-2 rounded hover:bg-green-700 transition-colors shadow-sm"
+                          >
+                            Accept
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleProbationAction('reject')}
+                            className="flex-1 bg-red-600 text-white text-xs font-bold py-1.5 px-2 rounded hover:bg-red-700 transition-colors shadow-sm"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      )
+                    }
+                  }
+                  return null
+                })()}
+              </div>
               <FormField label="Employee Exit Date" name="exitDate" type="date" formData={formData} handleChange={handleChange} />
               <FormField label="CID" name="cid" formData={formData} handleChange={handleChange} />
               <FormField label="Manager ID" name="managerId" formData={formData} handleChange={handleChange} />
               <FormField label="Super Manager ID" name="superManagerId" formData={formData} handleChange={handleChange} />
               <FormField label="Confirm Date" name="confirmDate" type="date" formData={formData} handleChange={handleChange} />
-              <FormField label="Probation Period (months)" name="probationPeriod" type="number" formData={formData} handleChange={handleChange} />
               <FormField label="Notice Period (days)" name="noticePeriod" type="number" formData={formData} handleChange={handleChange} />
               <FormField label="Division" name="division" formData={formData} handleChange={handleChange} />
               <FormField label="Cost Center" name="costCenter" formData={formData} handleChange={handleChange} />
@@ -1778,18 +1888,201 @@ function UserManagement() {
               </div>
             </FormSection>
 
-            {/* Professional Information */}
+
+
+            {/* Education Details */}
             <FormSection
-              title="Professional Information"
+              title="Education Details"
               sectionId={3}
               isOpen={expandedSections.includes(3)}
               onToggle={() => toggleSection(3)}
               onSave={handleSubmit}
               isSubmitting={submittingSection === 3}
             >
-              <FormField label="Education" name="education" type="textarea" placeholder="Enter education details (Degree, Institution, Year)" formData={formData} handleChange={handleChange} />
-              <FormField label="Experience" name="experience" type="textarea" placeholder="Enter work experience details (Company, Role, Duration)" formData={formData} handleChange={handleChange} />
-              <FormField label="Skills" name="skills" placeholder="Enter skills (comma-separated)" formData={formData} handleChange={handleChange} />
+              <div className="col-span-full">
+                {formData.education && formData.education.map((edu, index) => (
+                  <div key={index} className="flex flex-col md:flex-row gap-4 mb-4 items-end bg-gray-50 p-3 rounded-lg border border-gray-200">
+                    <div className="flex-1 w-full">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Institute Name</label>
+                      <input
+                        type="text"
+                        value={edu.institute || ''}
+                        onChange={(e) => {
+                          const newEducation = [...formData.education]
+                          newEducation[index].institute = e.target.value
+                          setFormData({ ...formData, education: newEducation })
+                        }}
+                        className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-500"
+                        placeholder="Enter Institute Name"
+                      />
+                    </div>
+                    <div className="w-full md:w-32">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">From</label>
+                      <input
+                        type="date"
+                        value={edu.fromDate ? edu.fromDate.split('T')[0] : ''}
+                        onChange={(e) => {
+                          const newEducation = [...formData.education]
+                          newEducation[index].fromDate = e.target.value
+                          setFormData({ ...formData, education: newEducation })
+                        }}
+                        className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md"
+                      />
+                    </div>
+                    <div className="w-full md:w-32">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">To</label>
+                      <input
+                        type="date"
+                        value={edu.toDate ? edu.toDate.split('T')[0] : ''}
+                        onChange={(e) => {
+                          const newEducation = [...formData.education]
+                          newEducation[index].toDate = e.target.value
+                          setFormData({ ...formData, education: newEducation })
+                        }}
+                        className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newEducation = formData.education.filter((_, i) => i !== index)
+                        setFormData({ ...formData, education: newEducation })
+                      }}
+                      className="p-2 text-red-600 hover:bg-red-50 rounded-md self-end"
+                    >
+                      <FiX className="w-5 h-5" />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, education: [...(formData.education || []), { institute: '', fromDate: '', toDate: '' }] })}
+                  className="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+                >
+                  <FiPlus className="w-4 h-4" /> Add Education
+                </button>
+              </div>
+            </FormSection>
+
+            {/* Experience Details */}
+            <FormSection
+              title="Experience Details"
+              sectionId={10}
+              isOpen={expandedSections.includes(10)}
+              onToggle={() => toggleSection(10)}
+              onSave={handleSubmit}
+              isSubmitting={submittingSection === 10}
+            >
+              <div className="col-span-full">
+                {formData.experience && formData.experience.map((exp, index) => (
+                  <div key={index} className="flex flex-col md:flex-row gap-4 mb-4 items-end bg-gray-50 p-3 rounded-lg border border-gray-200">
+                    <div className="flex-1 w-full">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Organization</label>
+                      <input
+                        type="text"
+                        value={exp.organization || ''}
+                        onChange={(e) => {
+                          const newExperience = [...formData.experience]
+                          newExperience[index].organization = e.target.value
+                          setFormData({ ...formData, experience: newExperience })
+                        }}
+                        className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-500"
+                        placeholder="Enter Organization Name"
+                      />
+                    </div>
+                    <div className="w-full md:w-32">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">From</label>
+                      <input
+                        type="date"
+                        value={exp.fromDate ? exp.fromDate.split('T')[0] : ''}
+                        onChange={(e) => {
+                          const newExperience = [...formData.experience]
+                          newExperience[index].fromDate = e.target.value
+                          setFormData({ ...formData, experience: newExperience })
+                        }}
+                        className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md"
+                      />
+                    </div>
+                    <div className="w-full md:w-32">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">To</label>
+                      <input
+                        type="date"
+                        value={exp.toDate ? exp.toDate.split('T')[0] : ''}
+                        onChange={(e) => {
+                          const newExperience = [...formData.experience]
+                          newExperience[index].toDate = e.target.value
+                          setFormData({ ...formData, experience: newExperience })
+                        }}
+                        className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newExperience = formData.experience.filter((_, i) => i !== index)
+                        setFormData({ ...formData, experience: newExperience })
+                      }}
+                      className="p-2 text-red-600 hover:bg-red-50 rounded-md self-end"
+                    >
+                      <FiX className="w-5 h-5" />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, experience: [...(formData.experience || []), { organization: '', fromDate: '', toDate: '' }] })}
+                  className="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+                >
+                  <FiPlus className="w-4 h-4" /> Add Experience
+                </button>
+              </div>
+            </FormSection>
+
+            {/* Skills */}
+            <FormSection
+              title="Skills"
+              sectionId={11}
+              isOpen={expandedSections.includes(11)}
+              onToggle={() => toggleSection(11)}
+              onSave={handleSubmit}
+              isSubmitting={submittingSection === 11}
+            >
+              <div className="col-span-full">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {formData.skills && formData.skills.map((skill, index) => (
+                    <div key={index} className="flex gap-2 items-center">
+                      <input
+                        type="text"
+                        value={skill || ''}
+                        onChange={(e) => {
+                          const newSkills = [...formData.skills]
+                          newSkills[index] = e.target.value
+                          setFormData({ ...formData, skills: newSkills })
+                        }}
+                        className="flex-1 px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-500"
+                        placeholder="Type here"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newSkills = formData.skills.filter((_, i) => i !== index)
+                          setFormData({ ...formData, skills: newSkills })
+                        }}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-md"
+                      >
+                        <FiX className="w-5 h-5" />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, skills: [...(formData.skills || []), ''] })}
+                    className="flex justify-center items-center gap-2 h-9 border border-dashed border-gray-300 rounded-md text-sm text-gray-500 hover:border-indigo-500 hover:text-indigo-600 transition-colors"
+                  >
+                    <FiPlus className="w-4 h-4" /> Add Skill
+                  </button>
+                </div>
+              </div>
             </FormSection>
 
             {/* Bank Details */}
@@ -1825,8 +2118,6 @@ function UserManagement() {
               <FormField label="Aadhar Number" name="aadharNumber" formData={formData} handleChange={handleChange} />
               <FormField label="PAN Number" name="panNumber" formData={formData} handleChange={handleChange} />
               <FormField label="Passport Number" name="passportNumber" formData={formData} handleChange={handleChange} />
-              <FormField label="Driving License" name="drivingLicense" formData={formData} handleChange={handleChange} />
-              <FormField label="Aadhaar Card Enrolment No" name="aadhaarCardEnrolmentNo" formData={formData} handleChange={handleChange} />
               <FormField label="Name (As on Aadhaar Card)" name="nameAsOnAadhaarCard" formData={formData} handleChange={handleChange} />
             </FormSection>
 
@@ -1893,8 +2184,8 @@ function UserManagement() {
                 label="Password"
                 name="password"
                 type="password"
-                required={!editingEmployee}
-                placeholder={editingEmployee ? "Leave blank to keep current password" : "••••••••"}
+                required={!editingEmployee || isNewEntry}
+                placeholder={(!editingEmployee || isNewEntry) ? "Enter password" : "Leave blank to keep current password"}
                 formData={formData}
                 handleChange={handleChange}
               />

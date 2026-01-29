@@ -170,9 +170,9 @@ export const menuItems = [
     roles: ['super_admin']
   },
   {
-    id: 'employee-management',
-    label: 'Employee Management',
-    icon: FiUsers,
+    id: 'project-management',
+    label: 'Project Management',
+    icon: FiBriefcase,
     path: '/admin/projects',
     roles: ['super_admin']
   },

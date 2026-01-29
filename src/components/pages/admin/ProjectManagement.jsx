@@ -149,10 +149,10 @@ function ProjectManagement() {
   }, [token])
 
   useEffect(() => {
-    if (activeTab === 'bench' && !showForm) {
+    if (!showForm && token) {
       fetchBench()
     }
-  }, [activeTab, fetchBench, showForm])
+  }, [fetchBench, showForm, token])
 
   const handleChange = (e) => {
     const { name, value } = e.target

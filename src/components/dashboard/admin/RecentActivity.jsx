@@ -25,7 +25,7 @@ const RecentActivity = () => {
     useEffect(() => {
         const fetchActivity = async () => {
             try {
-                const res = await axiosInstance.get('/api/activity?limit=10')
+                const res = await axiosInstance.get('/api/activity?limit=3')
                 // Ensure logs is an array to prevent crashes
                 setActivities(res.data.logs && Array.isArray(res.data.logs) ? res.data.logs : [])
             } catch (err) {
@@ -51,15 +51,14 @@ const RecentActivity = () => {
 
     return (
         <div className="bg-white dark:bg-slate-900/50 backdrop-blur-sm rounded-2xl shadow-sm p-6 border border-slate-200 dark:border-slate-800 h-full transition-colors">
-            <div className="flex items-center justify-between mb-6">
+            <div className="mb-6">
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
                     <FiActivity className="text-indigo-500" />
                     Recent Activity
                 </h3>
-                <span className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-widest bg-slate-50 dark:bg-slate-800/50 px-2 py-1 rounded-lg">Live Feed</span>
             </div>
 
-            <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
+            <div className="flex flex-col gap-3">
                 {activities.length === 0 ? (
                     <div className="w-full text-center py-4 text-slate-400 dark:text-slate-500">
                         <FiAlertCircle className="mx-auto h-6 w-6 mb-2 opacity-50" />
@@ -67,7 +66,7 @@ const RecentActivity = () => {
                     </div>
                 ) : (
                     activities.map((log, index) => (
-                        <div key={log._id || index} className="min-w-[240px] p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800 flex flex-col justify-between">
+                        <div key={log._id || index} className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800 flex flex-col justify-between">
                             <div className="flex flex-col gap-2">
                                 <p className="text-sm font-medium text-slate-800 dark:text-slate-200 line-clamp-2">
                                     {log.description}
@@ -87,7 +86,7 @@ const RecentActivity = () => {
                     ))
                 )}
             </div>
-        </div>
+        </div >
     )
 }
 
