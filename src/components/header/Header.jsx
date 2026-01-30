@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { FiArrowLeft, FiSearch, FiPower, FiSun, FiMoon } from 'react-icons/fi'
 import { useAuth } from '../../context/AuthContext'
 import { useTheme } from '../../context/ThemeContext'
 
 function Header() {
   const navigate = useNavigate()
-  const location = useLocation()
+
   const { user, logout } = useAuth()
   const [showProfileCard, setShowProfileCard] = useState(false)
   const profileCardRef = useRef(null)
@@ -16,22 +16,7 @@ function Header() {
     navigate('/login')
   }
 
-  const getTitle = () => {
-    if (location.pathname.startsWith('/admin/users')) return 'User Management'
-    if (location.pathname.startsWith('/admin/employee-management/projects')) return 'Projects'
-    if (location.pathname.startsWith('/admin/employee-management')) return 'Employee Management'
-    if (location.pathname.startsWith('/admin')) return 'Admin Dashboard'
-    if (location.pathname.startsWith('/approvals')) return 'Approvals'
-    if (location.pathname.startsWith('/dashboard')) return 'Dashboard'
-    if (location.pathname.startsWith('/projects')) return 'Projects'
-    if (location.pathname.startsWith('/timesheet')) return 'My Timesheets'
-    if (location.pathname.startsWith('/payroll')) return 'Payroll'
-    if (location.pathname.startsWith('/employees')) return 'Employee Management'
-    if (location.pathname.startsWith('/recruitment')) return 'Recruitment'
-    if (location.pathname.startsWith('/holiday-calendar')) return 'Calendar'
 
-    return user?.role === 'admin' ? 'Admin Portal' : 'HR Portal'
-  }
 
   const displayName = user?.fullName || user?.username || 'User'
   const avatarInitials = displayName
@@ -70,10 +55,10 @@ function Header() {
     <nav className="bg-white dark:bg-gray-900 shadow-sm sticky top-0 z-50 transition-colors border-b border-gray-100 dark:border-gray-800">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 gap-4">
-          {/* Left: page title */}
+          {/* Left: page title (Hidden as per request) */}
           <div className="flex items-center">
             <h1 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap">
-              {getTitle()}
+              {/* No title displayed */}
             </h1>
           </div>
 

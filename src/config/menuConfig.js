@@ -1,5 +1,9 @@
-import { FiHome, FiUser, FiClock, FiCalendar, FiUsers, FiCheckCircle, FiDollarSign, FiFileText, FiPlus, FiPieChart, FiSettings, FiBriefcase, FiTrendingUp, FiFolder } from 'react-icons/fi'
-import { HiOutlineChartBar } from 'react-icons/hi'
+import { FiHome, FiUser, FiClock, FiCalendar, FiUsers, FiCheckCircle, FiDollarSign, FiFileText, FiPlus, FiPieChart, FiSettings, FiBriefcase, FiTrendingUp, FiFolder, FiAlertCircle, FiMonitor } from 'react-icons/fi'
+
+
+
+
+
 
 // Menu configuration based on HR_PORTAL_ARCHITECTURE.md
 // Maps backend roles to frontend roles for menu filtering
@@ -37,6 +41,13 @@ export const menuItems = [
     icon: FiFileText,
     path: '/timesheet',
     roles: ['employee', 'manager', 'hr_admin', 'team_lead']
+  },
+  {
+    id: 'grievance',
+    label: 'Grievance',
+    icon: FiBriefcase,
+    path: '/grievance',
+    roles: ['employee', 'Employee', 'manager', 'hr_admin', 'hr', 'team_lead', 'tl']
   },
   {
     id: 'holiday-calendar',
@@ -176,8 +187,21 @@ export const menuItems = [
     path: '/admin/projects',
     roles: ['super_admin']
   },
+  {
+    id: 'grievance',
+    label: 'Grievance Portal',
+    icon: FiAlertCircle,
+    path: '/grievance', // Admin access to global grievance view
+    roles: ['super_admin']
+  },
+  {
+    id: 'grievance-config',
+    label: 'Ticket Configuration',
+    icon: FiMonitor,
+    path: '/admin/grievance-config',
+    roles: ['super_admin']
+  },
 
 
 
 ]
-

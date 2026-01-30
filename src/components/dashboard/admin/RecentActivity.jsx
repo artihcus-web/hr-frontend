@@ -50,28 +50,28 @@ const RecentActivity = () => {
     }
 
     return (
-        <div className="bg-white dark:bg-slate-900/50 backdrop-blur-sm rounded-2xl shadow-sm p-6 border border-slate-200 dark:border-slate-800 h-full transition-colors">
-            <div className="mb-6">
+        <div className="bg-white dark:bg-slate-900/50 backdrop-blur-sm rounded-2xl shadow-sm p-5 border border-slate-200 dark:border-slate-800 h-full transition-colors">
+            <div className="mb-4">
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
                     <FiActivity className="text-indigo-500" />
                     Recent Activity
                 </h3>
             </div>
 
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2">
                 {activities.length === 0 ? (
                     <div className="w-full text-center py-4 text-slate-400 dark:text-slate-500">
                         <FiAlertCircle className="mx-auto h-6 w-6 mb-2 opacity-50" />
                         <p className="text-sm">No recent activity</p>
                     </div>
                 ) : (
-                    activities.map((log, index) => (
-                        <div key={log._id || index} className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800 flex flex-col justify-between">
-                            <div className="flex flex-col gap-2">
-                                <p className="text-sm font-medium text-slate-800 dark:text-slate-200 line-clamp-2">
+                    activities.slice(0, 3).map((log, index) => (
+                        <div key={log._id || index} className="py-2.5 px-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800 flex flex-col justify-between">
+                            <div className="flex flex-col gap-1">
+                                <p className="text-sm font-medium text-slate-800 dark:text-slate-200 line-clamp-1" title={log.description}>
                                     {log.description}
                                 </p>
-                                <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-500 mt-2">
+                                <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-500 mt-1">
                                     <span className="flex items-center gap-1">
                                         <FiUser className="w-3 h-3" />
                                         <span className="truncate max-w-[80px]">{log.user?.fullName || 'User'}</span>

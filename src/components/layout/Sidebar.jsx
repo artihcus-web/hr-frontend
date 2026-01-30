@@ -16,7 +16,9 @@ function Sidebar() {
 
   useEffect(() => {
     if (user && user.role) {
+      console.log('User Role:', user.role)
       const filtered = filterMenuByRole(menuItems, user.role)
+      console.log('Filtered Menu:', filtered)
       setFilteredMenu(filtered)
 
       const currentPath = location.pathname

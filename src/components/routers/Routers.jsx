@@ -12,6 +12,8 @@ import ForgotPassword from '../pages/ForgotPassword'
 import ResetPassword from '../pages/ResetPassword'
 import ProjectView from '../pages/c-suite/ProjectView'
 import HolidayCalendar from '../pages/HolidayCalendar'
+import Grievance from '../pages/common/Grievance'
+import GrievanceConfig from '../pages/admin/GrievanceConfig'
 import ProtectedRoute from './ProtectedRoute'
 import { Routes, Route, Navigate } from 'react-router-dom'
 
@@ -29,7 +31,9 @@ function Routers() {
           <Route path='/dashboard' element={<Dashboard />} />
           <Route path='/projects' element={<UserProjects />} />
           <Route path='/timesheet' element={<Timesheet />} />
+          <Route path='/timesheet' element={<Timesheet />} />
           <Route path='/holiday-calendar' element={<HolidayCalendar />} />
+          <Route path='/grievance' element={<Grievance />} />
         </Route>
 
         {/* Manager/HR Protected Routes */}
@@ -46,6 +50,7 @@ function Routers() {
           <Route path='/admin/projects' element={<ProjectManagement />} />
           <Route path='/admin/employee-management/projects' element={<Navigate to='/admin/projects' replace />} />
           <Route path='/admin/employee-management' element={<Navigate to='/admin/projects' replace />} />
+          <Route path='/admin/grievance-config' element={<GrievanceConfig />} />
         </Route>
 
         {/* C-Suite Protected Routes */}
