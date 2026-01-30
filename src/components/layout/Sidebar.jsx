@@ -8,17 +8,19 @@ import Logo from '../../assets/artihcus-logo1.svg'
 
 function Sidebar() {
   const location = useLocation()
-  const { user } = useAuth()
+  const { user, activeRole } = useAuth()
   const [filteredMenu, setFilteredMenu] = useState([])
   const [expandedItems, setExpandedItems] = useState({})
   const [isMobileOpen, setIsMobileOpen] = useState(false)
   const [isCollapsed, setIsCollapsed] = useState(false)
 
   useEffect(() => {
-    if (user && user.role) {
-      console.log('User Role:', user.role)
-      const filtered = filterMenuByRole(menuItems, user.role)
-      console.log('Filtered Menu:', filtered)
+    // Use activeRole if available (for project context), otherwise user.role
+    const roleToUse = activeRole || user?.role
+
+    if (user && roleToUse) {
+      console.log('Filtering Menu for Role:', roleToUse)
+      const filtered = filterMenuByRole(menuItems, roleToUse)
       setFilteredMenu(filtered)
 
       const currentPath = location.pathname
@@ -33,7 +35,7 @@ function Sidebar() {
       })
       setExpandedItems(autoExpand)
     }
-  }, [location.pathname, user])
+  }, [location.pathname, user, activeRole])
 
   const toggleExpand = (itemId) => {
     setExpandedItems(prev => ({

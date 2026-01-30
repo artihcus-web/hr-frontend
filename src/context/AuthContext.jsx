@@ -71,8 +71,76 @@ export const AuthProvider = ({ children }) => {
     fetchUser()
   }
 
+  const [myProjects, setMyProjects] = useState([])
+  const [activeProject, setActiveProject] = useState(null)
+
+  // Derived active role (checks if user is PM in active project)
+  // Logic: 
+  // 1. If admin, always admin (handled in filtered menu)
+  // 2. If PM in active project -> 'manager'
+  // 3. Else -> 'employee'
+  const activeRole = React.useMemo(() => {
+    if (!user) return null
+    if (user.role === 'admin' || user.role === 'super_admin') return user.role
+
+    if (activeProject) {
+      // Check if user is in projectManagers list of active project
+      // Note: Project model populates projectManagers, so we check _id
+      const isManager = activeProject.projectManagers?.some(
+        pm => (pm._id === user._id || pm === user._id || pm.id === user.id)
+      )
+      return isManager ? 'manager' : 'employee'
+    }
+
+    return user.role // Fallback to default role
+  }, [user, activeProject])
+
+  // Fetch user's projects
+  const fetchMyProjects = useCallback(async () => {
+    if (!token) return
+    try {
+      const res = await axiosInstance.get('/api/projects/my-projects')
+      const projects = res.data.projects || []
+      setMyProjects(projects)
+
+      // Auto-select first project if none selected
+      if (projects.length > 0 && !activeProject) {
+        // Prefer "Ready-to-deploy resources" if user is HR/Manager logic? 
+        // No, just pick the first one for now or restore from localStorage if implemented later.
+        setActiveProject(projects[0])
+      }
+    } catch (error) {
+      console.error("Failed to fetch my projects", error)
+    }
+  }, [token, activeProject])
+
+  // Fetch projects when user is loaded
+  useEffect(() => {
+    if (user && token && user.role !== 'admin') {
+      fetchMyProjects()
+    }
+  }, [user, token, fetchMyProjects])
+
+  const switchProject = (projectId) => {
+    const project = myProjects.find(p => p._id === projectId || p.id === projectId)
+    if (project) {
+      setActiveProject(project)
+    }
+  }
+
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, logout, refreshUser }}>
+    <AuthContext.Provider value={{
+      user,
+      token,
+      loading,
+      login,
+      logout,
+      refreshUser,
+      myProjects,
+      activeProject,
+      activeRole,
+      switchProject
+    }}>
       {children}
     </AuthContext.Provider>
   )

@@ -23,16 +23,14 @@ function ProjectManagement() {
     description: '',
     status: 'active',
     employees: [],
-    projectManagers: []
+    projectManagers: [],
+    clients: [] // Existing client IDs
   })
 
   const [submitting, setSubmitting] = useState(false)
   const [selectedProject, setSelectedProject] = useState(null)
-  const [availableEmployees, setAvailableEmployees] = useState([])
-  const [availableManagers, setAvailableManagers] = useState([])
-  // const [loadingAvailableUsers, setLoadingAvailableUsers] = useState(false) // Removed: unused
+  const [availableEmployees, setAvailableEmployees] = useState([]) // Reformatted to handle all users
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState([])
-  const [selectedManagerIds, setSelectedManagerIds] = useState([])
 
   const [assigningEmployees, setAssigningEmployees] = useState(false)
   const [assigningManagers, setAssigningManagers] = useState(false)
@@ -48,6 +46,11 @@ function ProjectManagement() {
   const [creationTeamIds, setCreationTeamIds] = useState([])
   const [allUsers, setAllUsers] = useState([])
   const [builderSearchQuery, setBuilderSearchQuery] = useState('')
+  const [builderSelectedIds, setBuilderSelectedIds] = useState([])
+
+  // Client Management State
+  const [clientsData, setClientsData] = useState([]) // For new clients to add
+  const [newClient, setNewClient] = useState({ email: '', password: '', name: '' })
   // const [loadingAllUsers, setLoadingAllUsers] = useState(false) // Removed: unused
 
   // Filter projects based on search
@@ -162,15 +165,52 @@ function ProjectManagement() {
     }))
   }
 
-  const handleMultiSelectToggle = (field, id) => {
+
+
+  const handleBuilderAssign = (role) => {
+    // role: 'employees' | 'projectManagers' | null (remove)
+    if (builderSelectedIds.length === 0) return
+
     setFormData(prev => {
-      const current = prev[field] || []
-      const exists = current.includes(id)
+      const newEmployees = new Set(prev.employees || [])
+      const newManagers = new Set(prev.projectManagers || [])
+
+      builderSelectedIds.forEach(id => {
+        // Remove from both first to ensure no duplicates across roles
+        newEmployees.delete(id)
+        newManagers.delete(id)
+
+        // Add to target role if specified
+        if (role === 'employees') newEmployees.add(id)
+        if (role === 'projectManagers') newManagers.add(id)
+      })
+
       return {
         ...prev,
-        [field]: exists ? current.filter(item => item !== id) : [...current, id]
+        employees: Array.from(newEmployees),
+        projectManagers: Array.from(newManagers)
       }
     })
+    setBuilderSelectedIds([]) // Clear selection after action
+  }
+
+  const handleAddClient = () => {
+    if (!newClient.email || !newClient.password) {
+      toast.error("Email and Password are required")
+      return
+    }
+    // Simple email validation
+    if (!newClient.email.includes('@')) {
+      toast.error("Invalid email address")
+      return
+    }
+
+    setClientsData(prev => [...prev, { ...newClient }])
+    setNewClient({ email: '', password: '', name: '' })
+  }
+
+  const handleRemoveClient = (index) => {
+    setClientsData(prev => prev.filter((_, i) => i !== index))
   }
 
   // Load project data into form for editing
@@ -193,8 +233,19 @@ function ProjectManagement() {
           description: data.project.description || '',
           status: data.project.status || 'active',
           employees: data.project.employees?.map(e => e._id || e) || [],
-          projectManagers: data.project.projectManagers?.map(m => m._id || m) || []
+          projectManagers: data.project.projectManagers?.map(m => m._id || m) || [],
+          clients: data.project.clients?.map(c => c._id || c) || []
         })
+
+        // Populate existing clients into the list for visual consistency
+        // Note: Passwords won't be visible for existing clients, which is expected.
+        const existingClients = data.project.clients?.map(c => ({
+          _id: c._id || c.id,
+          email: c.email,
+          name: c.fullName,
+          password: '' // Placeholder, won't update unless changed? (Actually, we won't allow pw update this way easily)
+        })) || []
+        setClientsData(existingClients)
 
         setEditingProject(projectId)
         setShowForm(true)
@@ -256,9 +307,13 @@ function ProjectManagement() {
     setFormData({
       projectName: '',
       projectId: '',
+
       description: '',
-      status: 'active'
+      status: 'active',
+      clients: []
     })
+    setClientsData([])
+    setNewClient({ email: '', password: '', name: '' })
     setEditingProject(null)
     setError(null)
     setMessage(null)
@@ -316,13 +371,20 @@ function ProjectManagement() {
         : `${API_URL}/api/projects`
 
       // 1. Create/Update Project
+      const payload = {
+        ...formData,
+        employees: formData.employees,
+        projectManagers: formData.projectManagers, // Ensure these are arrays of IDs
+        clientsData: clientsData // Send the full list of client objects (new & existing)
+      }
+
       const res = await fetch(url, {
         method: editingProject ? 'PUT' : 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(payload)
       })
 
       const data = await res.json()
@@ -399,8 +461,7 @@ function ProjectManagement() {
 
       const data = await res.json()
       if (res.ok) {
-        setAvailableEmployees(data.employees || [])
-        setAvailableManagers(data.managers || [])
+        setAvailableEmployees(data.users || [])
       } else {
         toast.error(data.message || 'Failed to fetch available users')
       }
@@ -428,7 +489,7 @@ function ProjectManagement() {
 
       const data = await res.json()
       if (res.ok) {
-        toast.success('Employees assigned successfully')
+        toast.success('Team members assigned successfully')
         setSelectedEmployeeIds([])
         await fetchProjects(true)
         await fetchAvailableUsers(selectedProject._id || selectedProject.id)
@@ -442,9 +503,8 @@ function ProjectManagement() {
     }
   }
 
-  const handleAssignManagers = async (ids = null) => {
-    const idsToAssign = Array.isArray(ids) ? ids : selectedManagerIds
-    if (!selectedProject || idsToAssign.length === 0) return
+  const handleAssignManagersFromList = async () => {
+    if (!selectedProject || selectedEmployeeIds.length === 0) return
 
     setAssigningManagers(true)
     try {
@@ -455,13 +515,13 @@ function ProjectManagement() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ managerIds: idsToAssign })
+        body: JSON.stringify({ managerIds: selectedEmployeeIds })
       })
 
       const data = await res.json()
       if (res.ok) {
         toast.success('Project managers assigned successfully')
-        setSelectedManagerIds([])
+        setSelectedEmployeeIds([]) // Clear selection main list
         await fetchProjects(true)
         await fetchAvailableUsers(selectedProject._id || selectedProject.id)
       } else {
@@ -473,6 +533,8 @@ function ProjectManagement() {
       setAssigningManagers(false)
     }
   }
+
+
 
 
 
@@ -572,9 +634,7 @@ function ProjectManagement() {
   const closeProjectDetail = () => {
     setSelectedProject(null)
     setAvailableEmployees([])
-    setAvailableManagers([])
     setSelectedEmployeeIds([])
-    setSelectedManagerIds([])
   }
 
   // RETURN 1: Project Detail View
@@ -754,67 +814,61 @@ function ProjectManagement() {
                 <div className="p-5 space-y-6">
                   <div>
                     <div className="flex items-center justify-between mb-4">
-                      <label className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">Available Employees ({availableEmployees.length})</label>
+                      <label className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">Available Resources ({availableEmployees.length})</label>
                     </div>
-                    <div className="max-h-48 overflow-y-auto border border-gray-50 rounded-xl bg-gray-50/50 p-2 space-y-1">
-                      {availableEmployees.map(emp => (
-                        <label key={emp._id || emp.id} className="flex items-center gap-3 p-2 bg-white rounded-lg border border-transparent hover:border-indigo-100 cursor-pointer transition-all shadow-sm">
+                    <div className="max-h-96 overflow-y-auto border border-gray-50 rounded-xl bg-gray-50/50 p-2 space-y-1">
+                      {availableEmployees.map(user => (
+                        <label key={user._id || user.id} className="flex items-center gap-3 p-2 bg-white rounded-lg border border-transparent hover:border-indigo-100 cursor-pointer transition-all shadow-sm">
                           <input
                             type="checkbox"
-                            checked={selectedEmployeeIds.includes(emp._id || emp.id)}
+                            checked={selectedEmployeeIds.includes(user._id || user.id)}
                             onChange={(e) => {
-                              const val = emp._id || emp.id;
+                              const val = user._id || user.id;
                               setSelectedEmployeeIds(prev => e.target.checked ? [...prev, val] : prev.filter(id => id !== val));
                             }}
                             className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                           />
                           <div className="min-w-0">
-                            <p className="text-xs font-bold text-gray-900 truncate">{emp.fullName}</p>
-                            <p className="text-[9px] text-gray-400 truncate">{emp.email}</p>
+                            <p className="text-xs font-bold text-gray-900 truncate">{user.fullName}</p>
+                            <p className="text-[9px] text-gray-400 truncate flex items-center gap-2">
+                              <span className='uppercase font-bold bg-gray-100 px-1 py-0.5 rounded text-[8px]'>{user.role}</span>
+                              {user.email}
+                            </p>
+                            {user.currentAssignments && user.currentAssignments.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {user.currentAssignments.map((assign, idx) => (
+                                  <span key={idx} className="text-[8px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-100 flex items-center gap-1">
+                                    <span className="font-bold max-w-[60px] truncate">{assign.projectName}</span>
+                                    <span className="opacity-75 text-[7px] uppercase tracking-wider">({assign.role === 'Manager' ? 'Lead' : 'Mem'})</span>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </label>
                       ))}
                       {availableEmployees.length === 0 && <p className="text-[10px] text-center py-6 text-gray-400 italic font-medium">All resources allocated</p>}
                     </div>
-                    <button
-                      onClick={handleAssignEmployees}
-                      disabled={selectedEmployeeIds.length === 0 || assigningEmployees}
-                      className="w-full mt-3 py-2.5 bg-indigo-600 text-white text-[10px] font-bold rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-lg shadow-indigo-100 uppercase"
-                    >
-                      {assigningEmployees ? 'Allocating...' : 'Assign Members'}
-                    </button>
+
+                    <div className="grid grid-cols-2 gap-2 mt-4">
+                      <button
+                        onClick={handleAssignEmployees}
+                        disabled={selectedEmployeeIds.length === 0 || assigningEmployees || assigningManagers}
+                        className="py-2.5 bg-indigo-50 text-indigo-700 border border-indigo-100 text-[10px] font-bold rounded-xl hover:bg-indigo-100 disabled:opacity-50 transition-all uppercase"
+                      >
+                        {assigningEmployees ? 'Docs...' : 'Assign Member'}
+                      </button>
+                      <button
+                        onClick={handleAssignManagersFromList}
+                        disabled={selectedEmployeeIds.length === 0 || assigningEmployees || assigningManagers}
+                        className="py-2.5 bg-indigo-600 text-white text-[10px] font-bold rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-lg shadow-indigo-100 uppercase"
+                      >
+                        {assigningManagers ? 'Docs...' : 'Assign Manager'}
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="border-t border-gray-50 pt-6">
-                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-4">Available Leaders ({availableManagers.length})</label>
-                    <div className="max-h-48 overflow-y-auto border border-gray-50 rounded-xl bg-gray-50/50 p-2 space-y-1">
-                      {availableManagers.map(mgr => (
-                        <label key={mgr._id || mgr.id} className="flex items-center gap-3 p-2 bg-white rounded-lg border border-transparent hover:border-indigo-100 cursor-pointer transition-all shadow-sm">
-                          <input
-                            type="checkbox"
-                            checked={selectedManagerIds.includes(mgr._id || mgr.id)}
-                            onChange={(e) => {
-                              const val = mgr._id || mgr.id;
-                              setSelectedManagerIds(prev => e.target.checked ? [...prev, val] : prev.filter(id => id !== val));
-                            }}
-                            className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                          />
-                          <div className="min-w-0">
-                            <p className="text-xs font-bold text-gray-900 truncate">{mgr.fullName}</p>
-                            <p className="text-[9px] text-indigo-400 font-extrabold uppercase tracking-tighter">{mgr.role}</p>
-                          </div>
-                        </label>
-                      ))}
-                      {availableManagers.length === 0 && <p className="text-[10px] text-center py-6 text-gray-400 italic font-medium">No managers available</p>}
-                    </div>
-                    <button
-                      onClick={() => handleAssignManagers()}
-                      disabled={selectedManagerIds.length === 0 || assigningManagers}
-                      className="w-full mt-3 py-2.5 bg-white border border-gray-200 text-gray-700 text-[10px] font-bold rounded-xl hover:bg-gray-50 disabled:opacity-50 transition-all uppercase"
-                    >
-                      {assigningManagers ? 'Adding...' : 'Assign Leaders'}
-                    </button>
-                  </div>
+
                 </div>
               </div>
 
@@ -1168,62 +1222,189 @@ function ProjectManagement() {
                   </div>
                 </div>
               </div>
-              {/* Narrative - Col Span 8 */}
+              {/* Client Access - Col Span 8 */}
               <div className="lg:col-span-8 flex flex-col">
                 <div className="flex items-center gap-2 pb-2 border-b border-slate-100 dark:border-slate-800 mb-4">
-                  <FiEdit3 className="w-4 h-4 text-indigo-500" />
-                  <h3 className="text-[11px] font-extrabold text-slate-900 dark:text-white uppercase tracking-widest">Narrative</h3>
+                  <FiUsers className="w-4 h-4 text-indigo-500" />
+                  <h3 className="text-[11px] font-extrabold text-slate-900 dark:text-white uppercase tracking-widest">Client Access</h3>
                 </div>
-                <textarea name="description" value={formData.description} onChange={handleChange} placeholder="Project objective and scope..." className="flex-1 w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-indigo-500/20 text-sm resize-none min-h-[140px]" />
+
+                <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800 p-4 flex flex-col h-full">
+                  {/* Add Client Inputs */}
+                  <div className="grid grid-cols-12 gap-3 mb-4">
+                    <div className="col-span-5">
+                      <input
+                        type="text"
+                        placeholder="Client Name (Optional)"
+                        value={newClient.name || ''}
+                        onChange={e => setNewClient(prev => ({ ...prev, name: e.target.value }))}
+                        className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      />
+                    </div>
+                    <div className="col-span-7">
+                      <input
+                        type="email"
+                        placeholder="Email Address *"
+                        value={newClient.email || ''}
+                        onChange={e => setNewClient(prev => ({ ...prev, email: e.target.value }))}
+                        className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      />
+                    </div>
+                    <div className="col-span-8">
+                      <input
+                        type="password"
+                        placeholder="Password *"
+                        value={newClient.password || ''}
+                        onChange={e => setNewClient(prev => ({ ...prev, password: e.target.value }))}
+                        className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      />
+                    </div>
+                    <div className="col-span-4">
+                      <button
+                        type="button"
+                        onClick={handleAddClient}
+                        className="w-full h-full bg-indigo-600 text-white text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+                      >
+                        Add Client
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Client List */}
+                  <div className="flex-1 min-h-[100px] overflow-y-auto space-y-2 pr-1">
+                    {clientsData.length === 0 ? (
+                      <p className="text-center text-[10px] text-gray-400 italic py-4">No clients assigned to this project.</p>
+                    ) : (
+                      clientsData.map((client, idx) => (
+                        <div key={idx} className="flex items-center justify-between p-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700 shadow-sm">
+                          <div className="flex items-center gap-3 overflow-hidden">
+                            <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 text-xs font-bold shrink-0">
+                              {client.name ? client.name[0] : (client.email ? client.email[0].toUpperCase() : 'C')}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-[11px] font-bold text-slate-800 dark:text-slate-200 truncate">{client.name || 'Client'}</p>
+                              <p className="text-[9px] text-slate-500 truncate">{client.email}</p>
+                              {client._id && <span className="text-[8px] px-1.5 py-0.5 bg-green-50 text-green-600 rounded">Existing</span>}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveClient(idx)}
+                            className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                          >
+                            <FiTrash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
 
             </div>
 
             {/* Bottom Row: Team Management */}
+            {/* Bottom Row: Team Management (Unified Builder) */}
             <div>
-              <div className="flex items-center gap-2 pb-2 border-b border-slate-100 dark:border-slate-800 mb-4">
-                <FiUsers className="w-4 h-4 text-indigo-500" />
-                <h3 className="text-[11px] font-extrabold text-slate-900 dark:text-white uppercase tracking-widest">Team Management</h3>
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800 mb-4">
+                <div className="flex items-center gap-2">
+                  <FiUsers className="w-4 h-4 text-indigo-500" />
+                  <h3 className="text-[11px] font-extrabold text-slate-900 dark:text-white uppercase tracking-widest">Team Management</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{allUsers.length} Resources</span>
+                  <input
+                    type="text"
+                    placeholder="Search resources..."
+                    value={builderSearchQuery}
+                    onChange={e => setBuilderSearchQuery(e.target.value)}
+                    className="w-40 px-3 py-1 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  />
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Managers */}
-                <div className="bg-slate-50/50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800 p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-[10px] font-extrabold text-slate-400 uppercase">Managers</label>
-                    <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 rounded-full">{formData.projectManagers?.length || 0}</span>
-                  </div>
-                  <div className="h-40 overflow-y-auto space-y-1 pr-1">
-                    {allUsers.filter(u => ['manager', 'hr', 'supermanager'].includes(u.role)).map(user => (
-                      <label key={user._id || user.id} className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-all ${(formData.projectManagers || []).includes(user._id || user.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-transparent hover:border-slate-200'
-                        }`}>
-                        <input type="checkbox" className="rounded text-indigo-600 w-3.5 h-3.5" checked={(formData.projectManagers || []).includes(user._id || user.id)} onChange={() => handleMultiSelectToggle('projectManagers', user._id || user.id)} />
-                        <span className="text-xs font-bold truncate flex-1">{user.fullName}</span>
-                        <span className="text-[9px] text-slate-400 uppercase">{user.role}</span>
-                      </label>
-                    ))}
-                  </div>
+              <div className="bg-slate-50/50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800 p-4">
+                {/* Action Bar */}
+                <div className="flex items-center gap-3 mb-4">
+                  <button
+                    type="button"
+                    onClick={() => handleBuilderAssign('employees')}
+                    disabled={builderSelectedIds.length === 0}
+                    className="px-4 py-2 bg-white border border-slate-200 text-indigo-600 text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-indigo-50 disabled:opacity-50 transition-colors shadow-sm"
+                  >
+                    Assign Member
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleBuilderAssign('projectManagers')}
+                    disabled={builderSelectedIds.length === 0}
+                    className="px-4 py-2 bg-indigo-600 text-white text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-sm"
+                  >
+                    Assign Manager
+                  </button>
+                  {/* Optional: Unassign Button */}
+                  <button
+                    type="button"
+                    onClick={() => handleBuilderAssign(null)}
+                    disabled={builderSelectedIds.length === 0}
+                    className="ml-auto px-4 py-2 bg-red-50 text-red-600 border border-red-100 text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-red-100 disabled:opacity-50 transition-colors"
+                  >
+                    Remove
+                  </button>
                 </div>
 
-                {/* Employees */}
-                <div className="bg-slate-50/50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800 p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-[10px] font-extrabold text-slate-400 uppercase">Team Members</label>
-                    <input type="text" placeholder="Search..." value={builderSearchQuery} onChange={e => setBuilderSearchQuery(e.target.value)} className="w-24 px-2 py-0.5 text-[10px] bg-white border rounded focus:outline-none" />
-                  </div>
-                  <div className="h-40 overflow-y-auto space-y-1 pr-1">
-                    {allUsers
-                      .filter(u => !['admin', 'manager', 'hr', 'supermanager', 'c-suite'].includes(u.role))
-                      .filter(u => u.fullName?.toLowerCase().includes(builderSearchQuery.toLowerCase()))
-                      .map(user => (
-                        <label key={user._id || user.id} className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-all ${(formData.employees || []).includes(user._id || user.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-transparent hover:border-slate-200'
-                          }`}>
-                          <input type="checkbox" className="rounded text-indigo-600 w-3.5 h-3.5" checked={(formData.employees || []).includes(user._id || user.id)} onChange={() => handleMultiSelectToggle('employees', user._id || user.id)} />
-                          <span className="text-xs font-bold truncate flex-1">{user.fullName}</span>
-                          <span className="text-[9px] text-slate-400 truncate max-w-[60px]">{user.designation || 'Emp'}</span>
+                {/* Unified List */}
+                <div className="h-64 overflow-y-auto space-y-1 pr-1 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 p-2">
+                  {allUsers
+                    .filter(u => u.fullName?.toLowerCase().includes(builderSearchQuery.toLowerCase()) || u.email?.toLowerCase().includes(builderSearchQuery.toLowerCase()))
+                    .map(user => {
+                      const isManager = (formData.projectManagers || []).includes(user._id || user.id);
+                      const isEmployee = (formData.employees || []).includes(user._id || user.id);
+                      const isSelected = builderSelectedIds.includes(user._id || user.id);
+
+                      return (
+                        <label key={user._id || user.id} className={`flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-all ${isSelected ? 'bg-indigo-50/50 border-indigo-200' : 'hover:bg-slate-50 border-transparent border-b-slate-50'
+                          } ${isManager || isEmployee ? 'bg-slate-50/30' : ''}`}>
+
+                          <input
+                            type="checkbox"
+                            className="rounded text-indigo-600 w-4 h-4"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              const id = user._id || user.id
+                              setBuilderSelectedIds(prev => e.target.checked ? [...prev, id] : prev.filter(x => x !== id))
+                            }}
+                          />
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{user.fullName}</span>
+                              <span className="text-[9px] text-slate-400 uppercase tracking-wider bg-slate-100 px-1.5 py-0.5 rounded">{user.role}</span>
+                            </div>
+                            <div className="text-[10px] text-slate-400 truncate">{user.email}</div>
+
+                            {user.currentAssignments && user.currentAssignments.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {user.currentAssignments.map((assign, idx) => (
+                                  <span key={idx} className="text-[8px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-100 flex items-center gap-1">
+                                    <span className="font-bold max-w-[60px] truncate">{assign.projectName}</span>
+                                    <span className="opacity-75 text-[7px] uppercase tracking-wider">({assign.role === 'Manager' ? 'Lead' : 'Mem'})</span>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Status Badge */}
+                          <div>
+                            {isManager && <span className="px-2 py-1 bg-purple-100 text-purple-700 text-[9px] font-bold uppercase tracking-wider rounded-md">Manager</span>}
+                            {isEmployee && <span className="px-2 py-1 bg-blue-100 text-blue-700 text-[9px] font-bold uppercase tracking-wider rounded-md">Member</span>}
+                            {!isManager && !isEmployee && <span className="px-2 py-1 bg-slate-100 text-slate-500 text-[9px] font-bold uppercase tracking-wider rounded-md opacity-50">Unassigned</span>}
+                          </div>
                         </label>
-                      ))}
-                  </div>
+                      )
+                    })}
+                  {allUsers.length === 0 && <p className="text-center py-10 text-xs text-gray-400 italic">No users available.</p>}
                 </div>
               </div>
             </div>

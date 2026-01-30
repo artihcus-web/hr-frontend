@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FiArrowLeft, FiSearch, FiPower, FiSun, FiMoon } from 'react-icons/fi'
+import { FiArrowLeft, FiSearch, FiPower, FiSun, FiMoon, FiChevronDown } from 'react-icons/fi'
 import { useAuth } from '../../context/AuthContext'
 import { useTheme } from '../../context/ThemeContext'
 
 function Header() {
   const navigate = useNavigate()
 
-  const { user, logout } = useAuth()
+  const { user, logout, activeProject, myProjects, switchProject } = useAuth()
   const [showProfileCard, setShowProfileCard] = useState(false)
   const profileCardRef = useRef(null)
 
@@ -62,8 +62,64 @@ function Header() {
             </h1>
           </div>
 
-          {/* Center: search bar */}
+          {/* Center: Project Switcher */}
+          <div className="flex-1 flex justify-center">
+            {user?.role !== 'admin' && myProjects.length > 0 && (
+              <div className="relative group">
+                <button className="flex items-center gap-2 px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-100 dark:border-gray-700">
+                  <div className="w-6 h-6 rounded-lg bg-indigo-500 flex items-center justify-center text-white text-xs font-bold">
+                    {activeProject?.projectName?.[0] || 'P'}
+                  </div>
+                  <div className="text-left hidden sm:block">
+                    <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider leading-none mb-0.5">Current Project</p>
+                    <p className="text-sm font-bold text-gray-900 dark:text-gray-100 leading-none truncate max-w-[150px]">
+                      {activeProject?.projectName || 'Select Project'}
+                    </p>
+                  </div>
+                  <FiChevronDown className="w-4 h-4 text-gray-400 group-hover:text-indigo-500 transition-colors ml-2" />
+                </button>
 
+                {/* Dropdown Menu */}
+                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-64 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 p-2 hidden group-hover:block animate-fade-in z-50">
+                  <div className="px-3 py-2 border-b border-gray-50 dark:border-gray-700 mb-1">
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Switch Project</span>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto custom-scrollbar space-y-1">
+                    {myProjects.map(project => (
+                      <button
+                        key={project._id || project.id}
+                        onClick={() => switchProject(project._id || project.id)}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left
+                          ${(activeProject?._id === project._id || activeProject?.id === project.id)
+                            ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400'
+                            : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300'
+                          }
+                        `}
+                      >
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0
+                          ${(activeProject?._id === project._id || activeProject?.id === project.id)
+                            ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400'
+                            : 'bg-gray-100 dark:bg-gray-700 text-gray-500'
+                          }
+                        `}>
+                          {project.projectName[0]}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold truncate">{project.projectName}</p>
+                          <p className="text-[10px] opacity-70 truncate uppercase tracking-wider">
+                            {project.projectId}
+                          </p>
+                        </div>
+                        {(activeProject?._id === project._id || activeProject?.id === project.id) && (
+                          <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 ml-auto"></div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Right: bell, user profile, power button */}
           <div className="flex items-center gap-3">
