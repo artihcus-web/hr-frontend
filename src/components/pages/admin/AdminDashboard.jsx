@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../../../context/AuthContext'
-import { FiUsers, FiBriefcase } from 'react-icons/fi'
+import { FiUsers, FiBriefcase, FiTrendingUp, FiAlertCircle } from 'react-icons/fi'
 import axiosInstance from '../../../utils/axiosInstance'
 import LoadingSpinner from '../../common/LoadingSpinner'
 import Calendar from '../../common/Calendar'
 import RecentActivity from '../../dashboard/admin/RecentActivity'
-import TicketStatsGraph from '../../dashboard/admin/TicketStatsGraph'
 
 function AdminDashboard() {
   const navigate = useNavigate()
@@ -14,6 +13,8 @@ function AdminDashboard() {
   const [totalUsers, setTotalUsers] = useState(0)
   const [loadingUsers, setLoadingUsers] = useState(true)
   const [selectedDate, setSelectedDate] = useState(new Date())
+  const [stats, setStats] = useState(null)
+  const [loadingStats, setLoadingStats] = useState(true)
 
   useEffect(() => {
     if (!loading && !user) {
@@ -49,6 +50,135 @@ function AdminDashboard() {
     }
   }, [user, token])
 
+  // Fetch Stats
+  useEffect(() => {
+    const fetchStats = async () => {
+      if (!token || !user || user.role !== 'admin') return
+      try {
+        const res = await axiosInstance.get('/api/grievance/admin/stats')
+        setStats(res.data.stats)
+      } catch (error) {
+        console.error('Failed to fetch ticket stats', error)
+      } finally {
+        setLoadingStats(false)
+      }
+    }
+
+    if (user && user.role === 'admin' && token) {
+      fetchStats()
+    }
+  }, [user, token])
+
+  const renderGraph = () => {
+    if (loadingStats) {
+      return (
+        <div className="bg-white dark:bg-slate-900/50 backdrop-blur-sm rounded-2xl shadow-sm p-6 border border-slate-200 dark:border-slate-800 flex items-center justify-center min-h-[200px]">
+          <LoadingSpinner />
+        </div>
+      )
+    }
+
+    if (!stats || !stats.trend || stats.trend.length === 0) {
+      return (
+        <div className="bg-white dark:bg-slate-900/50 backdrop-blur-sm rounded-2xl shadow-sm p-6 border border-slate-200 dark:border-slate-800 flex flex-col items-center justify-center min-h-[200px] text-slate-400">
+          <FiAlertCircle className="w-8 h-8 mb-2 opacity-50" />
+          <p>No data available</p>
+        </div>
+      )
+    }
+
+    // Chart Dimensions
+    const height = 210 // Increased height to balance with Activity Card
+    const width = 500
+    const paddingX = 30
+    const paddingY = 20 // Reduced bottom padding
+
+    // Scale Data
+    const maxVal = Math.max(...stats.trend.map(d => d.count), 5) // Min cap 5 for scale
+    const points = stats.trend.map((d, i) => {
+      // X Axis = Days (Left to Right)
+      const x = (i / (stats.trend.length - 1)) * (width - paddingX * 2) + paddingX
+      // Y Axis = Count (Bottom to Top)
+      const y = height - paddingY - (d.count / maxVal) * (height - paddingY * 2)
+      return { x, y, val: d.count, label: d.day }
+    })
+
+    // Generate Path (Standard Curve)
+    const pathData = points.reduce((acc, point, i, a) => {
+      if (i === 0) return `M ${point.x},${point.y}`
+      const prev = a[i - 1]
+      // Curve Logic: Control points midway horizontally (X)
+      const midX = (prev.x + point.x) / 2
+      return `${acc} C ${midX},${prev.y} ${midX},${point.y} ${point.x},${point.y}`
+    }, '')
+
+    return (
+      <div className="bg-white dark:bg-slate-900/50 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 h-full transition-colors flex flex-col">
+        <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2 p-5 pb-0">
+          <FiTrendingUp className="text-indigo-500" />
+          Ticket Trends
+        </h3>
+
+        <div className="relative w-full min-h-[210px] p-2">
+          <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible">
+            {/* Grid Lines (Horizontal for Y-axis Counts) */}
+            {[0, 0.25, 0.5, 0.75, 1].map((tick) => {
+              const y = height - paddingY - tick * (height - paddingY * 2)
+              return (
+                <g key={tick}>
+                  <line x1={paddingX} y1={y} x2={width - paddingX} y2={y} stroke="#e2e8f0" strokeWidth="1" strokeDasharray="4 4" className="dark:stroke-slate-700" />
+                  <text x={paddingX - 10} y={y + 4} textAnchor="end" className="text-[10px] fill-slate-400">
+                    {Math.round(tick * maxVal)}
+                  </text>
+                </g>
+              )
+            })}
+
+            {/* The Line */}
+            <path
+              d={pathData}
+              fill="none"
+              stroke="#6366f1"
+              strokeWidth="3"
+              strokeLinecap="round"
+              className="drop-shadow-sm"
+            />
+
+            {/* Data Points */}
+            {points.map((point, i) => (
+              <g key={i} className="group cursor-pointer">
+                {/* Vertical Guide Line on Hover */}
+                <line x1={point.x} y1={height - paddingY} x2={point.x} y2={point.y} stroke="#6366f1" strokeWidth="1" strokeDasharray="2 2" className="opacity-0 group-hover:opacity-50 transition-opacity" />
+
+                <circle
+                  cx={point.x}
+                  cy={point.y}
+                  r="4"
+                  fill="white"
+                  stroke="#6366f1"
+                  strokeWidth="2"
+                  className="transition-all duration-300 group-hover:r-6 dark:fill-slate-800"
+                />
+
+                {/* X Axis Labels (Days) */}
+                <text x={point.x} y={height - 10} textAnchor="middle" className="text-[10px] fill-slate-500 font-medium">
+                  {point.label}
+                </text>
+
+                {/* Tooltip */}
+                <foreignObject x={point.x - 20} y={point.y - 35} width="40" height="30" className="opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                  <div className="bg-slate-800 text-white text-xs rounded px-1.5 py-0.5 text-center shadow-lg">
+                    {point.val}
+                  </div>
+                </foreignObject>
+              </g>
+            ))}
+          </svg>
+        </div>
+      </div>
+    )
+  }
+
   if (loading) {
     return <LoadingSpinner fullScreen />
   }
@@ -73,8 +203,8 @@ function AdminDashboard() {
           {/* LEFT MAIN AREA (Span 9) */}
           <div className="lg:col-span-9 grid grid-cols-1 md:grid-cols-12 gap-6 h-full">
 
-            {/* LEFT COLUMN (Span 4 of 12) - Metrics */}
-            <div className="md:col-span-4 flex flex-col gap-6">
+            {/* LEFT COLUMN (Span 6 of 12) - Metrics */}
+            <div className="md:col-span-6 flex flex-col gap-6">
               {/* Total Employees Widget */}
               <div className="bg-white dark:bg-slate-900/50 backdrop-blur-sm rounded-2xl shadow-sm p-6 border border-slate-200 dark:border-slate-800 transition-colors">
                 <div className="flex items-center justify-between mb-2">
@@ -92,12 +222,12 @@ function AdminDashboard() {
 
               {/* Dynamic Graph */}
               <div className="flex-1">
-                <TicketStatsGraph />
+                {renderGraph()}
               </div>
             </div>
 
-            {/* RIGHT COLUMN (Span 8 of 12) - Actions & Activity */}
-            <div className="md:col-span-8 flex flex-col gap-6">
+            {/* RIGHT COLUMN (Span 6 of 12) - Actions & Activity */}
+            <div className="md:col-span-6 flex flex-col gap-6">
               {/* Feature Cards Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 {/* User Management */}

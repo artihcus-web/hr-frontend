@@ -3,7 +3,7 @@ import { FiPlus, FiUsers, FiCheck, FiX, FiBriefcase } from 'react-icons/fi'
 import axiosInstance from '../../../utils/axiosInstance'
 import { toast } from 'react-hot-toast'
 import LoadingSpinner from '../../common/LoadingSpinner'
-import { useAuth } from '../../../context/AuthContext'
+
 
 const GrievanceConfig = () => {
     const [types, setTypes] = useState([])

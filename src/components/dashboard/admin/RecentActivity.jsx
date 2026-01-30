@@ -66,8 +66,8 @@ const RecentActivity = () => {
                     </div>
                 ) : (
                     activities.slice(0, 3).map((log, index) => (
-                        <div key={log._id || index} className="py-2.5 px-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800 flex flex-col justify-between">
-                            <div className="flex flex-col gap-1">
+                        <div key={log._id || index} className="py-2 px-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800 flex flex-col justify-between">
+                            <div className="flex flex-col gap-0.5">
                                 <p className="text-sm font-medium text-slate-800 dark:text-slate-200 line-clamp-1" title={log.description}>
                                     {log.description}
                                 </p>
