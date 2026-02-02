@@ -11,7 +11,7 @@ import LoadingSpinner from '../common/LoadingSpinner'
 const Dashboard = () => {
   const navigate = useNavigate()
   const { user, loading, activeProject, myProjects, switchProject, activeRole } = useAuth()
-  const [pendingCount, setPendingCount] = React.useState(0)
+
   const [myTimesheets, setMyTimesheets] = React.useState([])
   const [greeting, setGreeting] = React.useState('')
   const [showHistoryModal, setShowHistoryModal] = useState(false)
@@ -40,16 +40,9 @@ const Dashboard = () => {
     const fetchStats = async () => {
       if (!user) return
       try {
-        const roleToCheck = activeRole || user.role
 
-        // Pending counts for managers (Check activeRole as well)
-        if (['manager', 'hr', 'supermanager'].includes(roleToCheck)) {
-          const res = await axiosInstance.get('/api/timesheet/pending')
-          setPendingCount(res.data.timesheets?.length || 0)
-        } else {
-          // Reset if not in a manager role context
-          setPendingCount(0)
-        }
+
+
 
         // My timesheets for everyone
         const timesheetRes = await axiosInstance.get('/api/timesheet/my-timesheets')
