@@ -136,11 +136,23 @@ function ProjectManagement() {
       const res = await axiosInstance.get('/api/auth/users')
       const allUsers = res.data.users || []
 
-      // Filter for users who are NOT in any project
-      // Note: Backend user object usually has 'assignedProjects' array
+      // Gather IDs of all users currently assigned to an active project (Employee OR Manager)
+      const assignedUserIds = new Set()
+      projects.forEach(p => {
+        // projects state already excludes 'Ready-to-deploy resources' based on fetchProjects filter
+        if (p.employees) {
+          p.employees.forEach(e => assignedUserIds.add(typeof e === 'string' ? e : (e._id || e.id)))
+        }
+        if (p.projectManagers) {
+          p.projectManagers.forEach(m => assignedUserIds.add(typeof m === 'string' ? m : (m._id || m.id)))
+        }
+      })
+
+      // Filter for users who are NOT in any active project AND not restricted roles
+      const restrictedRoles = ['admin', 'client', 'c-suite', 'hr'];
       const unassigned = allUsers.filter(u =>
-        u.role !== 'admin' &&
-        (!u.assignedProjects || u.assignedProjects.length === 0)
+        !restrictedRoles.includes(u.role) &&
+        !assignedUserIds.has(u._id || u.id)
       )
       setBenchEmployees(unassigned)
     } catch (error) {
@@ -149,7 +161,7 @@ function ProjectManagement() {
     } finally {
       setLoadingBench(false)
     }
-  }, [token])
+  }, [token, projects])
 
   useEffect(() => {
     if (!showForm && token) {

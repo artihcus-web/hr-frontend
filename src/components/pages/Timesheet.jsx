@@ -432,30 +432,6 @@ const Timesheet = () => {
             totalHours: "0 : 00"
           });
 
-          // Append Half Day Leave (Always)
-          initialRows.push({
-            id: initialRows.length + 1,
-            chargeCode: "Half Day Leave",
-            description: "Half Day Leave",
-            avatar: user?.avatar,
-            initials: getInitials(user?.fullName || "User"),
-            status: "Draft",
-            dailyHours: Array(7).fill("0 : 00"),
-            totalHours: "0 : 00"
-          });
-
-          // Append Full Day Leave (Always)
-          initialRows.push({
-            id: initialRows.length + 1,
-            chargeCode: "Full Day Leave",
-            description: "Full Day Leave",
-            avatar: user?.avatar,
-            initials: getInitials(user?.fullName || "User"),
-            status: "Draft",
-            dailyHours: Array(7).fill("0 : 00"),
-            totalHours: "0 : 00"
-          });
-
           setRows(initialRows);
 
 
@@ -477,7 +453,7 @@ const Timesheet = () => {
   useEffect(() => {
     // Hydrate projects if they loaded late or if only Self Learning/Leave rows exist (handled when proj array > 0)
     // Check if we are missing project rows
-    const hasProjects = rows.some(r => r.chargeCode !== 'Self Learning' && r.chargeCode !== 'Half Day Leave' && r.chargeCode !== 'Full Day Leave');
+    const hasProjects = rows.some(r => r.chargeCode !== 'Self Learning');
 
     if (timesheetFetched && !hasProjects && availableProjects.length > 0) {
       const initialRows = availableProjects.map((proj, idx) => ({
@@ -497,30 +473,6 @@ const Timesheet = () => {
         id: initialRows.length + 1,
         chargeCode: "Self Learning",
         description: "Self Learning",
-        avatar: user?.avatar,
-        initials: getInitials(user?.fullName || "User"),
-        status: "Draft",
-        dailyHours: Array(7).fill("0 : 00"),
-        totalHours: "0 : 00"
-      });
-
-      // Append Half Day Leave
-      initialRows.push({
-        id: initialRows.length + 1,
-        chargeCode: "Half Day Leave",
-        description: "Half Day Leave",
-        avatar: user?.avatar,
-        initials: getInitials(user?.fullName || "User"),
-        status: "Draft",
-        dailyHours: Array(7).fill("0 : 00"),
-        totalHours: "0 : 00"
-      });
-
-      // Append Full Day Leave
-      initialRows.push({
-        id: initialRows.length + 1,
-        chargeCode: "Full Day Leave",
-        description: "Full Day Leave",
         avatar: user?.avatar,
         initials: getInitials(user?.fullName || "User"),
         status: "Draft",
@@ -867,15 +819,19 @@ const Timesheet = () => {
       }
     }
 
-    // Validation 4: Check for Half Day Leave and Full Day Leave
-    const halfDayLeaveRow = rows.find(r => r.chargeCode === 'Half Day Leave');
-    const fullDayLeaveRow = rows.find(r => r.chargeCode === 'Full Day Leave');
-    const hasHalfDayLeave = halfDayLeaveRow && parseDuration(halfDayLeaveRow.dailyHours[editingCell.dayIndex]) > 0;
-    const hasFullDayLeave = fullDayLeaveRow && parseDuration(fullDayLeaveRow.dailyHours[editingCell.dayIndex]) > 0;
+    // Validation 4: Check for Half Day Leave and Full Day Leave (Check ANY row/cell for this day)
+    // We check if *other* rows have these flags set for the current day
+    const hasHalfDayLeave = rows.some(r => r.id !== editingCell.rowId && r.dailyHours[editingCell.dayIndex] && r.dailyHours[editingCell.dayIndex].includes('(HD)'));
+    const hasFullDayLeave = rows.some(r => r.id !== editingCell.rowId && r.dailyHours[editingCell.dayIndex] === 'FL');
 
-    // If Full Day Leave is applied, don't allow any hours entry
-    if (hasFullDayLeave && row.chargeCode !== 'Full Day Leave') {
-      toast.error("Full Day Leave is applied for this day. Cannot enter hours.");
+    // If Full Day Leave is applied elsewhere, don't allow editing (unless we are setting it to FL or WO ourselves?)
+    // Actually, if FL is applied elsewhere, we shouldn't be here or should be blocked.
+    // If THIS cell is 'FL', we are editing it.
+    if (hasFullDayLeave) {
+      // If another cell has FL, we can't add hours here.
+      // Unless we are clearing it?
+      // Let's rely on total hours validation mostly, but FL implies 0 hours elsewhere.
+      toast.error("Full Day Leave is applied for this day.");
       return;
     }
 
@@ -894,8 +850,10 @@ const Timesheet = () => {
     }
 
     // If Half Day Leave is applied, limit to 4 hours (240 mins)
-    const maxDailyMins = hasHalfDayLeave ? 240 : 480;
-    const maxDailyHours = hasHalfDayLeave ? '4 : 00' : '8 : 00';
+    // If we are SETTING Half Day Leave (popoverData.leaveType === 'HD'), max is 4 hours too (but checked later).
+    const isHalfDayApplied = hasHalfDayLeave || popoverData.leaveType === 'HD';
+    const maxDailyMins = isHalfDayApplied ? 240 : 480;
+    const maxDailyHours = isHalfDayApplied ? '4 : 00' : '8 : 00';
 
     if (currentDayTotalMins > maxDailyMins) {
       toast.error(`Daily limit exceeded! Total: ${formatDuration(currentDayTotalMins)} / ${maxDailyHours}${hasHalfDayLeave ? ' (Half Day Leave)' : ''}`);
@@ -1078,15 +1036,17 @@ const Timesheet = () => {
         return;
       }
 
-      // VALIDATION: Check Daily Totals
-      // Calculate total hours per day (Mon-Sun)
+      // Check Daily Totals
       const dailyTotals = Array(7).fill(0);
-      const halfDayLeaveRow = rows.find(r => r.chargeCode === 'Half Day Leave');
-      const fullDayLeaveRow = rows.find(r => r.chargeCode === 'Full Day Leave');
+
+      const dayHasHalfDay = Array(7).fill(false);
+      const dayHasFullLeave = Array(7).fill(false);
 
       rows.forEach(row => {
         row.dailyHours.forEach((hourStr, idx) => {
           dailyTotals[idx] += parseDuration(hourStr);
+          if (hourStr && hourStr.includes && hourStr.includes('(HD)')) dayHasHalfDay[idx] = true;
+          if (hourStr === 'FL') dayHasFullLeave[idx] = true;
         });
       });
 
@@ -1097,8 +1057,8 @@ const Timesheet = () => {
       const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
       dailyTotals.forEach((mins, idx) => {
-        const hasHalfDayLeave = halfDayLeaveRow && parseDuration(halfDayLeaveRow.dailyHours[idx]) > 0;
-        const hasFullDayLeave = fullDayLeaveRow && parseDuration(fullDayLeaveRow.dailyHours[idx]) > 0;
+        const hasHalfDayLeave = dayHasHalfDay[idx];
+        const hasFullDayLeave = dayHasFullLeave[idx];
         const expectedMins = hasHalfDayLeave ? 240 : 480;
 
         // Skip validation for days with Full Day Leave (should be 0 hours)
@@ -1548,10 +1508,8 @@ const Timesheet = () => {
               <div className="flex-1 grid grid-cols-8">
                 {weekDays.map((day, index) => {
                   const isDayWeekOff = rows.some(r => r.dailyHours[index] === 'WO');
-                  const fullDayLeaveRow = rows.find(r => r.chargeCode === 'Full Day Leave');
-                  const halfDayLeaveRow = rows.find(r => r.chargeCode === 'Half Day Leave');
-                  const hasFullDayLeave = fullDayLeaveRow && parseDuration(fullDayLeaveRow.dailyHours[index]) > 0;
-                  const hasHalfDayLeave = halfDayLeaveRow && parseDuration(halfDayLeaveRow.dailyHours[index]) > 0;
+                  const hasFullDayLeave = rows.some(r => r.dailyHours[index] === 'FL');
+                  const hasHalfDayLeave = rows.some(r => r.dailyHours[index] && r.dailyHours[index].includes('(HD)'));
 
                   // Calculate Daily Total
                   let dailyTotalMins = 0;
@@ -1653,9 +1611,8 @@ const Timesheet = () => {
                           const isHalfDay = hours.includes && hours.includes('(HD)');
                           const isSelfLearning = hours.includes && hours.includes('(SL)');
 
-                          // Check for Full Day Leave from Full Day Leave row
-                          const fullDayLeaveRow = rows.find(r => r.chargeCode === 'Full Day Leave');
-                          const hasFullDayLeave = fullDayLeaveRow && parseDuration(fullDayLeaveRow.dailyHours[index]) > 0;
+                          // Check for Full Day Leave anywhere in this day
+                          const hasFullDayLeave = rows.some(r => r.dailyHours[index] === 'FL');
 
                           let display = hours;
                           let subText = null;
@@ -1668,13 +1625,8 @@ const Timesheet = () => {
                             display = hours.replace(" (SL)", "");
                             subText = <span className="block text-[10px] text-blue-500 font-bold leading-tight">Self Learning</span>;
                           } else if (isFullDay) {
-                            display = "0 : 00";
-                            subText = <span className="block text-[10px] text-red-500 font-bold leading-tight">Full Leave</span>;
-                          } else if (row.chargeCode === 'Half Day Leave' && parseDuration(hours) > 0) {
-                            subText = <span className="block text-[10px] text-orange-500 font-bold leading-tight">Half Day Leave</span>;
-                          } else if (row.chargeCode === 'Full Day Leave' && parseDuration(hours) > 0) {
                             display = "Leave";
-                            subText = <span className="block text-[10px] text-red-500 dark:text-red-400 font-bold leading-tight">Full Day Leave</span>;
+                            subText = <span className="block text-[10px] text-red-500 font-bold leading-tight">Full Leave</span>;
                           }
 
                           let isFuture = false;
@@ -1691,13 +1643,13 @@ const Timesheet = () => {
                             if (ws < earliestEditableWeekStart) isLockedWeek = true;
                           }
 
-                          // Disable if: future days, past weeks, or if Full Day Leave is applied (unless editing the Full Day Leave row itself)
-                          const isDisabled = isFuture || isLockedWeek || (hasFullDayLeave && row.chargeCode !== 'Full Day Leave');
+                          // Disable if: future days, past weeks, or if Full Day Leave is applied (unless editing THIS cell which is FL)
+                          const isDisabled = isFuture || isLockedWeek || (hasFullDayLeave && !isFullDay);
 
                           return (
                             <div
                               key={index}
-                              className={`relative border-r border-gray-100 dark:border-gray-800 p-3 flex flex-col items-center justify-center transition-all ${isDisabled ? 'bg-gray-50 dark:bg-gray-800/50 cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/80'} ${isWeekOff ? 'bg-gray-50/50 dark:bg-gray-800/30' : ''} ${hasFullDayLeave && row.chargeCode !== 'Full Day Leave' ? 'bg-gray-100 dark:bg-gray-800' : ''}`}
+                              className={`relative border-r border-gray-100 dark:border-gray-800 p-3 flex flex-col items-center justify-center transition-all ${isDisabled ? 'bg-gray-50 dark:bg-gray-800/50 cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/80'} ${isWeekOff ? 'bg-gray-50/50 dark:bg-gray-800/30' : ''} ${hasFullDayLeave && !isFullDay ? 'bg-gray-100 dark:bg-gray-800' : ''}`}
                               onClick={(e) => !isDisabled && handleCellClick(e, row, index)}
                             >
                               <span className={`text-sm font-medium transition-colors ${isWeekOff || (hasFullDayLeave && row.chargeCode !== 'Full Day Leave') ? 'text-gray-400 dark:text-gray-600' : 'text-gray-700 dark:text-gray-300'}`}>
@@ -1849,6 +1801,26 @@ const Timesheet = () => {
                         onChange={(e) => setPopoverData({ ...popoverData, leaveType: e.target.checked ? 'WO' : '', hours: e.target.checked ? "0 : 00" : "8 : 00" })}
                       />
                       <span className="text-xs text-gray-500 dark:text-gray-400 font-medium whitespace-nowrap transition-colors">Week Off</span>
+                    </label>
+
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="rounded border-gray-300 dark:border-gray-700 text-[#F43F5E] focus:ring-[#F43F5E] bg-white dark:bg-gray-800 transition-colors"
+                        checked={popoverData.leaveType === 'HD'}
+                        onChange={(e) => setPopoverData({ ...popoverData, leaveType: e.target.checked ? 'HD' : '', hours: e.target.checked ? "4 : 00" : "8 : 00" })}
+                      />
+                      <span className="text-xs text-gray-500 dark:text-gray-400 font-medium whitespace-nowrap transition-colors">Half Day</span>
+                    </label>
+
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="rounded border-gray-300 dark:border-gray-700 text-[#F43F5E] focus:ring-[#F43F5E] bg-white dark:bg-gray-800 transition-colors"
+                        checked={popoverData.leaveType === 'FL'}
+                        onChange={(e) => setPopoverData({ ...popoverData, leaveType: e.target.checked ? 'FL' : '', hours: e.target.checked ? "0 : 00" : "8 : 00" })}
+                      />
+                      <span className="text-xs text-gray-500 dark:text-gray-400 font-medium whitespace-nowrap transition-colors">Leave</span>
                     </label>
                   </div>
 
