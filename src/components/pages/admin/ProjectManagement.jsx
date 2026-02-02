@@ -43,6 +43,7 @@ function ProjectManagement() {
   const [benchSearch, setBenchSearch] = useState('')
   const [deployMenuOpen, setDeployMenuOpen] = useState(null) // ID of employee whose deploy menu is open
   const [viewingProject, setViewingProject] = useState(null) // Project object for read-only view
+  const [hrUsers, setHrUsers] = useState([]) // List of available HR users
 
   // Create Project Builder State
   const [creationTeamIds, setCreationTeamIds] = useState([])
@@ -61,20 +62,21 @@ function ProjectManagement() {
     project.projectId.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
-  const handleUpdateHR = async (employeeId, newHR) => {
+  const handleUpdateHR = async (employeeId, newHRId) => {
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
 
       // Optimistic update
       setBenchEmployees(prev => prev.map(emp =>
-        (emp._id === employeeId || emp.id === employeeId) ? { ...emp, businessUnitHR: newHR } : emp
+        (emp._id === employeeId || emp.id === employeeId) ? { ...emp, managerId: newHRId } : emp
       ))
 
       await axiosInstance.put(`/api/employees/${employeeId}/assign-hr`, {
-        businessUnitHR: newHR
+        hrId: newHRId
       })
 
-      toast.success(`Assigned to ${newHR}`)
+      const hrName = hrUsers.find(h => h._id === newHRId)?.fullName || 'HR'
+      toast.success(`Assigned to ${hrName}`)
     } catch (error) {
       console.error("Assign HR Error", error)
       toast.error("Failed to update HR assignment")
@@ -158,6 +160,10 @@ function ProjectManagement() {
       // Using axiosInstance based on UserManagement pattern for consistency
       const res = await axiosInstance.get('/api/auth/users')
       const allUsers = res.data.users || []
+
+      // Extract HR users for the dropdown
+      const hrs = allUsers.filter(u => u.role === 'hr')
+      setHrUsers(hrs)
 
       // Gather IDs of all users currently assigned to an active project (Employee OR Manager)
       const assignedUserIds = new Set()
@@ -1141,14 +1147,14 @@ function ProjectManagement() {
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="relative inline-block">
                                 <select
-                                  value={emp.businessUnitHR || ""}
+                                  value={emp.managerId || ""}
                                   onChange={(e) => handleUpdateHR(emp._id || emp.id, e.target.value)}
-                                  className="appearance-none w-28 text-xs font-semibold text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg pl-3 pr-8 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer hover:border-indigo-300 dark:hover:border-indigo-700 shadow-sm"
+                                  className="appearance-none w-40 text-xs font-semibold text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg pl-3 pr-8 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer hover:border-indigo-300 dark:hover:border-indigo-700 shadow-sm"
                                 >
-                                  <option value="" disabled>Select BU</option>
-                                  <option value="BU1">BU1</option>
-                                  <option value="BU2">BU2</option>
-                                  <option value="BU3">BU3</option>
+                                  <option value="" disabled>Assign HR</option>
+                                  {hrUsers.map(hr => (
+                                    <option key={hr._id} value={hr._id}>{hr.fullName || hr.username}</option>
+                                  ))}
                                 </select>
                                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400">
                                   <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
