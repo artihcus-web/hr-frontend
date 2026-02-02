@@ -270,17 +270,7 @@ const TimesheetApprovals = () => {
                                                     )}
 
                                                     {/* Request Changes Button (Always visible) */}
-                                                    <button
-                                                        onClick={() => initiateAction(timesheet._id, 'rejected-edit')}
-                                                        disabled={processingId === timesheet._id}
-                                                        className={`p-1.5 rounded-full transition-colors ${activeAction.id === timesheet._id && activeAction.type === 'rejected-edit'
-                                                            ? 'bg-orange-100 text-orange-700 ring-2 ring-orange-500'
-                                                            : 'text-gray-400 hover:text-orange-600 hover:bg-orange-50'
-                                                            }`}
-                                                        title="Request Changes"
-                                                    >
-                                                        <FiEdit className="w-5 h-5" />
-                                                    </button>
+
                                                 </div>
                                             </td>
                                             <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">

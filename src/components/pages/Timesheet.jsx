@@ -168,8 +168,11 @@ const Timesheet = () => {
         } else if (userRes.data.user?.managerName) {
           // Priority 2: Direct Manager (Assigned by Admin)
           displayManager = userRes.data.user.managerName;
+        } else if (userRes.data.user?.businessUnitHR) {
+          // Priority 3: Business Unit HR (if assigned)
+          displayManager = `BU: ${userRes.data.user.businessUnitHR}`;
         } else {
-          // Priority 3: Project Manager (from assigned projects)
+          // Priority 4: Project Manager (from assigned projects)
           // Exclude Ready-to-deploy if looking for generic PM, passing over it if no mapping found
           const activeProject = projects.find(p => p.projectName !== 'Ready-to-deploy resources' && p.projectManagers?.length > 0);
 

@@ -1782,6 +1782,7 @@ function UserManagement() {
               <FormField label="Department" name="department" formData={formData} handleChange={handleChange} />
               <FormField label="Designation" name="designation" formData={formData} handleChange={handleChange} />
               <FormField label="Role" name="role" type="select" required options={roles} formData={formData} handleChange={handleChange} />
+              <FormField label="Business Unit HR (Assignment)" name="businessUnitHR" type="select" options={['BU1', 'BU2', 'BU3']} formData={formData} handleChange={handleChange} />
               <FormField label="Employee Status" name="employeeStatus" type="select" required options={['Active', 'Inactive']} formData={formData} handleChange={handleChange} />
               <FormField label="Joining Date" name="joiningDate" type="date" formData={formData} handleChange={handleChange} />
               <div className="col-span-1">
