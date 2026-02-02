@@ -72,7 +72,10 @@ export const AuthProvider = ({ children }) => {
   }
 
   const [myProjects, setMyProjects] = useState([])
-  const [activeProject, setActiveProject] = useState(null)
+  const [activeProject, setActiveProject] = useState(() => {
+    const saved = localStorage.getItem('activeProject')
+    return saved ? JSON.parse(saved) : null
+  })
 
   // Derived active role (checks if user is PM in active project)
   // Logic: 
@@ -85,10 +88,12 @@ export const AuthProvider = ({ children }) => {
 
     if (activeProject) {
       // Check if user is in projectManagers list of active project
-      // Note: Project model populates projectManagers, so we check _id
-      const isManager = activeProject.projectManagers?.some(
-        pm => (pm._id === user._id || pm === user._id || pm.id === user.id)
-      )
+      // Safe ID comparison
+      const isManager = activeProject.projectManagers?.some(pm => {
+        const pmId = pm._id || pm.id || pm
+        const userId = user._id || user.id
+        return pmId?.toString() === userId?.toString()
+      })
       return isManager ? 'manager' : 'employee'
     }
 
@@ -103,11 +108,15 @@ export const AuthProvider = ({ children }) => {
       const projects = res.data.projects || []
       setMyProjects(projects)
 
-      // Auto-select first project if none selected
+      // Auto-select first project if none selected AND none in localStorage
       if (projects.length > 0 && !activeProject) {
-        // Prefer "Ready-to-deploy resources" if user is HR/Manager logic? 
-        // No, just pick the first one for now or restore from localStorage if implemented later.
-        setActiveProject(projects[0])
+        const saved = localStorage.getItem('activeProject')
+        if (saved) {
+          setActiveProject(JSON.parse(saved))
+        } else {
+          setActiveProject(projects[0])
+          localStorage.setItem('activeProject', JSON.stringify(projects[0]))
+        }
       }
     } catch (error) {
       console.error("Failed to fetch my projects", error)
@@ -125,6 +134,7 @@ export const AuthProvider = ({ children }) => {
     const project = myProjects.find(p => p._id === projectId || p.id === projectId)
     if (project) {
       setActiveProject(project)
+      localStorage.setItem('activeProject', JSON.stringify(project))
     }
   }
 

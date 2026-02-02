@@ -3,18 +3,19 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import axiosInstance from '../../utils/axiosInstance'
 import { Link } from 'react-router-dom'
-import { FiClock, FiCheckCircle, FiXCircle, FiAlertCircle, FiInbox, FiUsers, FiFolder, FiExternalLink, FiSearch, FiFilter, FiCalendar, FiPlus } from 'react-icons/fi'
+import { FiClock, FiCheckCircle, FiXCircle, FiAlertCircle, FiInbox, FiUsers, FiFolder, FiExternalLink, FiSearch, FiFilter, FiCalendar, FiPlus, FiChevronDown } from 'react-icons/fi'
 import Calendar from '../common/Calendar'
 import LoadingSpinner from '../common/LoadingSpinner'
 
 
 const Dashboard = () => {
   const navigate = useNavigate()
-  const { user, loading } = useAuth()
+  const { user, loading, activeProject, myProjects, switchProject, activeRole } = useAuth()
   const [pendingCount, setPendingCount] = React.useState(0)
   const [myTimesheets, setMyTimesheets] = React.useState([])
   const [greeting, setGreeting] = React.useState('')
   const [showHistoryModal, setShowHistoryModal] = useState(false)
+  const [showProjectDropdown, setShowProjectDropdown] = useState(false)
 
   // Super Manager State
   const [allTimesheets, setAllTimesheets] = useState([])
@@ -39,10 +40,15 @@ const Dashboard = () => {
     const fetchStats = async () => {
       if (!user) return
       try {
-        // Pending counts for managers
-        if (['manager', 'hr', 'supermanager'].includes(user.role)) {
+        const roleToCheck = activeRole || user.role
+
+        // Pending counts for managers (Check activeRole as well)
+        if (['manager', 'hr', 'supermanager'].includes(roleToCheck)) {
           const res = await axiosInstance.get('/api/timesheet/pending')
           setPendingCount(res.data.timesheets?.length || 0)
+        } else {
+          // Reset if not in a manager role context
+          setPendingCount(0)
         }
 
         // My timesheets for everyone
@@ -84,7 +90,7 @@ const Dashboard = () => {
     }
 
     if (user) fetchStats()
-  }, [user])
+  }, [user, activeRole])
 
   // --- Helpers for Super Manager View ---
   const filteredAllTimesheets = allTimesheets.filter(ts => {
@@ -194,7 +200,7 @@ const Dashboard = () => {
       <div className="max-w-6xl mx-auto space-y-8">
 
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">
               {greeting}, <span className="text-indigo-600 dark:text-indigo-400">{user.fullName || user.username}</span>
@@ -203,199 +209,179 @@ const Dashboard = () => {
               <span>{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
             </p>
           </div>
+
+          {/* Project Switcher (Excel-like Basic Design) */}
+          {user?.role !== 'admin' && myProjects.length > 0 && (
+            <div className="relative z-40 min-w-[200px]">
+              {/* Trigger Button - Basic Input Style */}
+              <button
+                onClick={() => setShowProjectDropdown(!showProjectDropdown)}
+                className={`flex items-center justify-between w-full px-3 py-1.5 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-400 dark:border-gray-600 ${showProjectDropdown ? 'rounded-t-md border-b-0' : 'rounded-md'} transition-none`}
+              >
+                <span className="text-sm text-gray-800 dark:text-gray-200 truncate">
+                  {activeProject?.projectName || 'Select Project'}
+                </span>
+                <FiChevronDown className="w-4 h-4 text-gray-600 shrink-0 ml-2" />
+              </button>
+
+              {/* Dropdown Menu - Attached, Box-like */}
+              {showProjectDropdown && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowProjectDropdown(false)}></div>
+                  <div className="absolute top-full left-0 w-full bg-white dark:bg-gray-800 border border-gray-400 dark:border-gray-600 border-t-0 rounded-b-md shadow-sm z-50">
+                    <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
+                      {myProjects.map(project => {
+                        const isActive = (activeProject?._id === project._id || activeProject?.id === project.id);
+                        return (
+                          <button
+                            key={project._id || project.id}
+                            onClick={() => {
+                              switchProject(project._id || project.id);
+                              setShowProjectDropdown(false);
+                            }}
+                            className={`w-full text-left px-3 py-1.5 text-sm whitespace-nowrap
+                              ${isActive
+                                ? 'bg-blue-600 text-white'
+                                : 'text-gray-800 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-gray-700'
+                              }
+                            `}
+                          >
+                            <div className="truncate">{project.projectName}</div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        < div className="grid grid-cols-1 lg:grid-cols-3 gap-8" >
 
           {/* Left Column - Stats & Cards */}
-          <div className="lg:col-span-2 space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Pending Approvals Card (Manager/HR Only) */}
-              {['manager', 'hr', 'supermanager'].includes(user.role) && (
-                <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-800 hover:border-indigo-100 dark:hover:border-indigo-900 transition-colors group">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Pending Approvals</p>
-                      <h3 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mt-2">{pendingCount}</h3>
-                    </div>
-                    <div className={`p-3 rounded-xl ${pendingCount > 0 ? 'bg-orange-50 dark:bg-orange-950/30 text-orange-600 dark:text-orange-400' : 'bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-500'}`}>
-                      <FiAlertCircle className="w-6 h-6" />
-                    </div>
+          < div className="lg:col-span-2 space-y-8" >
+
+
+
+            {/* COLORFUL FEATURE CARDS (Employee Dashboard Style) */}
+            < div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" >
+
+              {/* Projects Card - Blue */}
+              < Link to="/projects" className="group relative overflow-hidden bg-blue-500 rounded-2xl p-6 text-white shadow-lg transition-transform hover:-translate-y-1 hover:shadow-xl" >
+                <div className="relative z-10 flex flex-col h-full bg-blue-500">
+                  <div className="bg-white/20 w-12 h-12 rounded-lg flex items-center justify-center mb-4 text-white backdrop-blur-sm">
+                    <FiFolder className="w-6 h-6" />
                   </div>
-                  <div className="mt-4">
-                    <Link
-                      to="/approvals/timesheet"
-                      className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 flex items-center group-hover:translate-x-1 transition-transform"
-                    >
-                      Review Requests &rarr;
-                    </Link>
+                  <h3 className="text-lg font-bold mb-1">My Projects</h3>
+                  <p className="text-blue-100 text-sm font-medium mb-4">View Assigned</p>
+                  <div className="mt-auto">
+                    <span className="text-3xl font-bold">{myProjects.length}</span>
+                    <span className="text-blue-200 text-sm ml-2">Active</span>
                   </div>
                 </div>
-              )}
+                {/* Decorative Icon Background */}
+                <FiFolder className="absolute -bottom-4 -right-4 w-32 h-32 text-white/10 rotate-12 group-hover:scale-110 group-hover:rotate-6 transition-transform duration-500" />
+              </Link >
 
-              {/* Timesheet Card */}
-              <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-800 relative overflow-hidden group hover:border-indigo-100 dark:hover:border-indigo-900 transition-colors">
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-4">Timesheet</h3>
-                <Link
-                  to="/timesheet"
-                  className="w-full flex items-center justify-center gap-2 bg-indigo-600 dark:bg-indigo-500 hover:bg-indigo-700 dark:hover:bg-indigo-600 text-white py-3 rounded-xl transition-colors font-medium mb-6"
-                >
-                  <FiPlus className="w-5 h-5" />
-                  <span>New Timesheet</span>
-                </Link>
+              {/* Timesheet Card - Pink/Rose */}
+              < Link to="/timesheet" className="group relative overflow-hidden bg-rose-500 rounded-2xl p-6 text-white shadow-lg transition-transform hover:-translate-y-1 hover:shadow-xl" >
+                <div className="relative z-10 flex flex-col h-full bg-rose-500">
+                  <div className="bg-white/20 w-12 h-12 rounded-lg flex items-center justify-center mb-4 text-white backdrop-blur-sm">
+                    <FiClock className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-lg font-bold mb-1">Timesheets</h3>
+                  <p className="text-rose-100 text-sm font-medium mb-4">Track Hours</p>
+                  <div className="mt-auto flex items-end justify-between">
+                    <div>
+                      <span className="text-3xl font-bold">{myTimesheets.length > 0 ? 1 : 0}</span>
+                      <span className="text-rose-200 text-sm ml-2">Pending</span>
+                    </div>
+                    {/* Status Badge of last timesheet */}
+                    {myTimesheets.length > 0 && (
+                      <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider backdrop-blur-md bg-black/20 text-white`}>
+                        {myTimesheets[0].status}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {/* Decorative Icon Background */}
+                <FiClock className="absolute -bottom-4 -right-4 w-32 h-32 text-white/10 rotate-12 group-hover:scale-110 group-hover:rotate-6 transition-transform duration-500" />
+              </Link >
 
-                <div>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 mb-2 font-medium uppercase tracking-wider">Last Submitted Timesheet</p>
+              {/* Grievance Card - Teal/Emerald */}
+              < Link to="/grievance" className="group relative overflow-hidden bg-emerald-500 rounded-2xl p-6 text-white shadow-lg transition-transform hover:-translate-y-1 hover:shadow-xl" >
+                <div className="relative z-10 flex flex-col h-full bg-emerald-500">
+                  <div className="bg-white/20 w-12 h-12 rounded-lg flex items-center justify-center mb-4 text-white backdrop-blur-sm">
+                    <FiAlertCircle className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-lg font-bold mb-1">Grievance</h3>
+                  <p className="text-emerald-100 text-sm font-medium mb-4">Support & Help</p>
+                  <div className="mt-auto">
+                    <span className="text-sm font-bold bg-white/20 px-3 py-1.5 rounded-lg backdrop-blur-sm hover:bg-white/30 transition-colors">
+                      Raise Ticket &rarr;
+                    </span>
+                  </div>
+                </div>
+              </Link >
+            </div >
+
+            {/* Recent Activity Section */}
+            {
+              user.role !== 'supermanager' && user.role !== 'admin' && (
+                <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden transition-colors">
+                  <div className="px-6 py-4 border-b border-gray-50 dark:border-gray-800 flex justify-between items-center">
+                    <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Recent Activity</h2>
+                    <button onClick={() => setShowHistoryModal(true)} className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium">
+                      View All History
+                    </button>
+                  </div>
                   {myTimesheets.length > 0 ? (
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 transition-colors">
-                      <div className={`h-10 w-10 rounded-full flex items-center justify-center ${myTimesheets[0].status === 'approved' ? 'bg-green-50 dark:bg-green-950/30 text-green-600 dark:text-green-400' :
-                        myTimesheets[0].status === 'rejected' ? 'bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400' :
-                          'bg-yellow-50 dark:bg-yellow-950/30 text-yellow-600 dark:text-yellow-400'
-                        }`}>
-                        {myTimesheets[0].status === 'approved' ? <FiCheckCircle /> :
-                          myTimesheets[0].status === 'rejected' ? <FiXCircle /> : <FiClock />}
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{myTimesheets[0].month}</p>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-xs font-semibold capitalize ${myTimesheets[0].status === 'approved' ? 'text-green-600 dark:text-green-400' :
-                            myTimesheets[0].status === 'rejected' ? 'text-red-600 dark:text-red-400' :
-                              'text-yellow-600 dark:text-yellow-400'
-                            }`}>
-                            {myTimesheets[0].status}
-                          </span>
-                          <span className="text-xs text-gray-400 dark:text-gray-500">• {new Date(myTimesheets[0].submittedAt).toLocaleDateString()}</span>
+                    <div className="divide-y divide-gray-50 dark:divide-gray-800">
+                      {myTimesheets.slice(0, 3).map((ts) => (
+                        <div key={ts._id} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors">
+                          <div className="flex items-center gap-4">
+                            <div className={`h-10 w-10 rounded-full flex items-center justify-center ${ts.status === 'approved' ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400' :
+                              ts.status === 'rejected' ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400' :
+                                'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400'
+                              }`}>
+                              {ts.status === 'approved' ? <FiCheckCircle /> :
+                                ts.status === 'rejected' ? <FiXCircle /> : <FiClock />}
+                            </div>
+                            <div>
+                              <p className="font-medium text-gray-900 dark:text-gray-100">{ts.month} Timesheet</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">Submitted on {new Date(ts.submittedAt).toLocaleDateString()}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <span className={`px-3 py-1 rounded-full text-xs font-semibold capitalize ${ts.status === 'approved' ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300' :
+                              ts.status === 'rejected' ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300' :
+                                'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300'
+                              }`}>
+                              {ts.status}
+                            </span>
+                          </div>
                         </div>
-                      </div>
+                      ))}
                     </div>
                   ) : (
-                    <div className="text-center py-2">
-                      <p className="text-sm text-gray-400 dark:text-gray-500">No submissions found</p>
+                    <div className="p-8 text-center bg-gray-50/50 dark:bg-gray-800/50">
+                      <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-700 mb-4 text-gray-400">
+                        <FiInbox className="w-6 h-6" />
+                      </div>
+                      <p className="text-gray-500 dark:text-gray-400 font-medium">No recent activity found</p>
+                      <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">Your recent timesheet submissions will appear here</p>
                     </div>
                   )}
                 </div>
-              </div>
+              )
+            }
+          </div >
 
-              {/* Upcoming Holidays Card */}
-              <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-800 hover:border-indigo-100 dark:hover:border-indigo-900 transition-colors group">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Upcoming Holiday</p>
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mt-2">
-                      {(() => {
-                        const holidays = [
-                          { month: 0, day: 1, name: "New Year", dateStr: "Thursday, January 1" },
-                          { month: 0, day: 14, name: "Sankranti/Pongal", dateStr: "Wednesday, January 14" },
-                          { month: 0, day: 26, name: "Republic Day", dateStr: "Monday, January 26" },
-                          { month: 2, day: 19, name: "Ugadi", dateStr: "Thursday, March 19" },
-                          { month: 4, day: 1, name: "May Day", dateStr: "Friday, May 1" },
-                          { month: 8, day: 14, name: "Ganesh Chaturthi", dateStr: "Monday, September 14" },
-                          { month: 9, day: 2, name: "Gandhi Jayanti", dateStr: "Friday, October 2" },
-                          { month: 9, day: 21, name: "Dussehra", dateStr: "Wednesday, October 21" },
-                          { month: 10, day: 9, name: "Diwali", dateStr: "Monday, November 09" },
-                          { month: 11, day: 25, name: "Christmas", dateStr: "Friday, December 25" },
-                        ];
-                        const today = new Date();
-                        const currentYear = 2026;
-                        const nextHoliday = holidays.find(h => {
-                          const hDate = new Date(currentYear, h.month, h.day);
-                          return hDate >= new Date(currentYear, today.getMonth(), today.getDate());
-                        });
-                        return nextHoliday ? nextHoliday.name : "No more holidays";
-                      })()}
-                    </h3>
-                    <p className="text-xs text-gray-400 mt-1">
-                      {(() => {
-                        const holidays = [
-                          { month: 0, day: 1, name: "New Year", dateStr: "Thu, Jan 1" },
-                          { month: 0, day: 14, name: "Sankranti/Pongal", dateStr: "Wed, Jan 14" },
-                          { month: 0, day: 26, name: "Republic Day", dateStr: "Mon, Jan 26" },
-                          { month: 2, day: 19, name: "Ugadi", dateStr: "Thu, Mar 19" },
-                          { month: 4, day: 1, name: "May Day", dateStr: "Fri, May 1" },
-                          { month: 8, day: 14, name: "Ganesh Chaturthi", dateStr: "Mon, Sep 14" },
-                          { month: 9, day: 2, name: "Gandhi Jayanti", dateStr: "Fri, Oct 2" },
-                          { month: 9, day: 21, name: "Dussehra", dateStr: "Wed, Oct 21" },
-                          { month: 10, day: 9, name: "Diwali", dateStr: "Mon, Nov 09" },
-                          { month: 11, day: 25, name: "Christmas", dateStr: "Fri, Dec 25" },
-                        ];
-                        const today = new Date();
-                        const currentYear = 2026;
-                        const nextHoliday = holidays.find(h => {
-                          const hDate = new Date(currentYear, h.month, h.day);
-                          return hDate >= new Date(currentYear, today.getMonth(), today.getDate());
-                        });
-                        return nextHoliday ? nextHoliday.dateStr : "";
-                      })()}
-                    </p>
-                  </div>
-                  <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
-                    <FiCalendar className="w-6 h-6" />
-                  </div>
-                </div>
-                <div className="mt-4">
-                  <Link
-                    to="/holiday-calendar"
-                    className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 flex items-center group-hover:translate-x-1 transition-transform"
-                  >
-                    View Full Calendar &rarr;
-                  </Link>
-                </div>
-              </div>
-            </div>
-
-            {/* Regular Recent Activity (For everyone else) */}
-            {user.role !== 'supermanager' && user.role !== 'admin' && (
-              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden transition-colors">
-                <div className="px-6 py-4 border-b border-gray-50 dark:border-gray-800 flex justify-between items-center">
-                  <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Recent Activity</h2>
-                  <button onClick={() => setShowHistoryModal(true)} className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium">
-                    View All History
-                  </button>
-                </div>
-                {myTimesheets.length > 0 ? (
-                  <div className="divide-y divide-gray-50">
-                    {myTimesheets.slice(0, 3).map((ts) => (
-                      <div key={ts._id} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors">
-                        <div className="flex items-center gap-4">
-                          <div className={`h-10 w-10 rounded-full flex items-center justify-center ${ts.status === 'approved' ? 'bg-green-50 text-green-600' :
-                            ts.status === 'rejected' ? 'bg-red-50 text-red-600' :
-                              'bg-yellow-50 text-yellow-600'
-                            }`}>
-                            {ts.status === 'approved' ? <FiCheckCircle /> :
-                              ts.status === 'rejected' ? <FiXCircle /> : <FiClock />}
-                          </div>
-                          <div>
-                            <p className="font-medium text-gray-900">{ts.month} Timesheet</p>
-                            <p className="text-xs text-gray-500">Submitted on {new Date(ts.submittedAt).toLocaleDateString()}</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <span className={`px-3 py-1 rounded-full text-xs font-semibold capitalize ${ts.status === 'approved' ? 'bg-green-50 text-green-700' :
-                            ts.status === 'rejected' ? 'bg-red-50 text-red-700' :
-                              'bg-yellow-50 text-yellow-700'
-                            }`}>
-                            {ts.status}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="p-8 text-center bg-gray-50/50">
-                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 mb-4 text-gray-400">
-                      <FiInbox className="w-6 h-6" />
-                    </div>
-                    <p className="text-gray-500 font-medium">No recent activity found</p>
-                    <p className="text-sm text-gray-400 mt-1">Your recent timesheet submissions will appear here</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Right Column - Calendar */}
-          <div className="space-y-6">
+          {/* Right Column - Calendar & Holidays */}
+          < div className="space-y-6" >
             <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden p-1 max-w-[280px] mx-auto w-full transition-colors">
               <Calendar
                 selectedDate={selectedDate}
@@ -404,135 +390,187 @@ const Dashboard = () => {
               />
             </div>
 
-            {/* <Link ... /> and Holiday Card removed from here */}
-          </div>
-        </div>
-
-        {/* --- SUPER MANAGER: ALL TIMESHEETS SECTION --- */}
-        {(user.role === 'supermanager' || user.role === 'admin') && (
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden transition-colors">
-            <div className="px-6 py-4 border-b border-gray-50 dark:border-gray-800 flex flex-col md:flex-row justify-between items-center gap-4">
-              <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">All Timesheets (Organization View)</h2>
-
-              {/* Filters */}
-              <div className="flex items-center gap-2">
-                <div className="relative">
-                  <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
-                  <input
-                    type="text"
-                    placeholder="Search..."
-                    className="pl-9 pr-3 py-1.5 text-sm border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-colors"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
+            {/* Upcoming Holidays Mini List */}
+            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden transition-colors p-5">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg">
+                  <FiCalendar className="w-5 h-5" />
                 </div>
-                <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-lg transition-colors">
-                  <button
-                    onClick={() => setStatusFilter('submitted')}
-                    className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${statusFilter === 'submitted' ? 'bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
-                  >
-                    Pending
-                  </button>
-                  <button
-                    onClick={() => setStatusFilter('approved')}
-                    className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${statusFilter === 'approved' ? 'bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
-                  >
-                    Approved
-                  </button>
-                  <button
-                    onClick={() => setStatusFilter('all')}
-                    className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${statusFilter === 'all' ? 'bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
-                  >
-                    All
-                  </button>
-                </div>
+                <h3 className="font-bold text-gray-900 dark:text-gray-100">Upcoming Holidays</h3>
               </div>
-            </div>
+              <div className="space-y-4">
+                {(() => {
+                  const holidays = [
+                    { month: 0, day: 1, name: "New Year", dateStr: "Thu, Jan 1" },
+                    { month: 0, day: 14, name: "Sankranti/Pongal", dateStr: "Wed, Jan 14" },
+                    { month: 0, day: 26, name: "Republic Day", dateStr: "Mon, Jan 26" },
+                    { month: 2, day: 19, name: "Ugadi", dateStr: "Thu, Mar 19" },
+                    { month: 4, day: 1, name: "May Day", dateStr: "Fri, May 1" },
+                    { month: 8, day: 14, name: "Ganesh Chaturthi", dateStr: "Mon, Sep 14" },
+                    { month: 9, day: 2, name: "Gandhi Jayanti", dateStr: "Fri, Oct 2" },
+                    { month: 9, day: 21, name: "Dussehra", dateStr: "Wed, Oct 21" },
+                    { month: 10, day: 9, name: "Diwali", dateStr: "Mon, Nov 09" },
+                    { month: 11, day: 25, name: "Christmas", dateStr: "Fri, Dec 25" },
+                  ];
+                  const today = new Date();
+                  const currentYear = 2026;
+                  const nextHolidays = holidays.filter(h => {
+                    const hDate = new Date(currentYear, h.month, h.day);
+                    return hDate >= new Date(currentYear, today.getMonth(), today.getDate());
+                  }).slice(0, 3);
 
-            {loadingAll ? (
-              <div className="p-8 flex justify-center"><LoadingSpinner /></div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-gray-50/50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider text-xs transition-colors">
-                    <tr>
-                      <th className="px-6 py-3">Employee</th>
-                      <th className="px-6 py-3">Project</th>
-                      <th className="px-6 py-3">Month</th>
-                      <th className="px-6 py-3">Submitted</th>
-                      <th className="px-6 py-3">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {filteredAllTimesheets.length > 0 ? filteredAllTimesheets.map(ts => (
-                      <tr key={ts._id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/50 border-b border-gray-50 dark:border-gray-800 transition-colors">
-                        <td className="px-6 py-4 font-medium text-gray-900 dark:text-gray-100">
-                          {ts.employeeId?.fullName || ts.employeeId?.username}
-                        </td>
-                        <td className="px-6 py-4 text-gray-600 dark:text-gray-400">{ts.projectId?.projectName || ts.projectName}</td>
-                        <td className="px-6 py-4 text-gray-600 dark:text-gray-400">{ts.month}</td>
-                        <td className="px-6 py-4 text-gray-400 dark:text-gray-500">{new Date(ts.submittedAt).toLocaleDateString()}</td>
-                        <td className="px-6 py-4">
-                          <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize ${getStatusColor(ts.status)} shadow-sm`}>
-                            {ts.status}
-                          </span>
-                        </td>
-                      </tr>
-                    )) : (
-                      <tr>
-                        <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
-                          No timesheets found.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* History Modal */}
-        {showHistoryModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm">
-            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col animate-scale-in transition-colors">
-              <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-white dark:bg-gray-900 sticky top-0 transition-colors">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Submission History</h3>
-                <button onClick={() => setShowHistoryModal(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300">
-                  <FiXCircle className="w-6 h-6" />
-                </button>
-              </div>
-              <div className="overflow-y-auto p-6 space-y-4">
-                {myTimesheets.map((ts) => (
-                  <div key={ts._id} className="p-4 border border-gray-100 dark:border-gray-800 rounded-xl flex items-center justify-between hover:border-indigo-100 dark:hover:border-indigo-900 hover:shadow-sm transition-all bg-white dark:bg-gray-800/50">
-                    <div className="flex items-center gap-4">
-                      <div className={`h-10 w-10 rounded-full flex items-center justify-center ${ts.status === 'approved' ? 'bg-green-50 dark:bg-green-950/30 text-green-600 dark:text-green-400' :
-                        ts.status === 'rejected' ? 'bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400' :
-                          'bg-yellow-50 dark:bg-yellow-950/30 text-yellow-600 dark:text-yellow-400'
-                        }`}>
-                        {ts.status === 'approved' ? <FiCheckCircle /> :
-                          ts.status === 'rejected' ? <FiXCircle /> : <FiClock />}
+                  return nextHolidays.length > 0 ? nextHolidays.map((h, i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <div className="flex-col flex items-center justify-center w-10 h-10 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase">{new Date(2026, h.month, h.day).toLocaleString('default', { month: 'short' })}</span>
+                        <span className="text-sm font-bold text-gray-900 dark:text-gray-100 leading-none">{h.day}</span>
                       </div>
                       <div>
-                        <p className="font-semibold text-gray-900 dark:text-gray-100">{ts.month} Timesheet</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Submitted on {new Date(ts.submittedAt).toLocaleDateString()}</p>
+                        <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{h.name}</p>
+                        <p className="text-xs text-gray-400">{h.dateStr}</p>
                       </div>
                     </div>
-                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold capitalize ${ts.status === 'approved' ? 'bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300' :
-                      ts.status === 'rejected' ? 'bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300' :
-                        'bg-yellow-50 dark:bg-yellow-950/30 text-yellow-700 dark:text-yellow-300'
-                      }`}>
-                      {ts.status}
-                    </span>
+                  )) : (
+                    <p className="text-sm text-gray-400">No upcoming holidays this year.</p>
+                  );
+                })()}
+              </div>
+              <Link to="/holiday-calendar" className="block text-center text-xs font-bold text-indigo-600 dark:text-indigo-400 mt-4 hover:underline">
+                View Full Calendar
+              </Link>
+            </div>
+          </div >
+        </div >
+
+        {/* --- SUPER MANAGER: ALL TIMESHEETS SECTION --- */}
+        {
+          (user.role === 'supermanager' || user.role === 'admin') && (
+            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden transition-colors">
+              <div className="px-6 py-4 border-b border-gray-50 dark:border-gray-800 flex flex-col md:flex-row justify-between items-center gap-4">
+                <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">All Timesheets (Organization View)</h2>
+
+                {/* Filters */}
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
+                    <input
+                      type="text"
+                      placeholder="Search..."
+                      className="pl-9 pr-3 py-1.5 text-sm border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-colors"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
                   </div>
-                ))}
+                  <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-lg transition-colors">
+                    <button
+                      onClick={() => setStatusFilter('submitted')}
+                      className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${statusFilter === 'submitted' ? 'bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                    >
+                      Pending
+                    </button>
+                    <button
+                      onClick={() => setStatusFilter('approved')}
+                      className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${statusFilter === 'approved' ? 'bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                    >
+                      Approved
+                    </button>
+                    <button
+                      onClick={() => setStatusFilter('all')}
+                      className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${statusFilter === 'all' ? 'bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                    >
+                      All
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {loadingAll ? (
+                <div className="p-8 flex justify-center"><LoadingSpinner /></div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-gray-50/50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider text-xs transition-colors">
+                      <tr>
+                        <th className="px-6 py-3">Employee</th>
+                        <th className="px-6 py-3">Project</th>
+                        <th className="px-6 py-3">Month</th>
+                        <th className="px-6 py-3">Submitted</th>
+                        <th className="px-6 py-3">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {filteredAllTimesheets.length > 0 ? filteredAllTimesheets.map(ts => (
+                        <tr key={ts._id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/50 border-b border-gray-50 dark:border-gray-800 transition-colors">
+                          <td className="px-6 py-4 font-medium text-gray-900 dark:text-gray-100">
+                            {ts.employeeId?.fullName || ts.employeeId?.username}
+                          </td>
+                          <td className="px-6 py-4 text-gray-600 dark:text-gray-400">{ts.projectId?.projectName || ts.projectName}</td>
+                          <td className="px-6 py-4 text-gray-600 dark:text-gray-400">{ts.month}</td>
+                          <td className="px-6 py-4 text-gray-400 dark:text-gray-500">{new Date(ts.submittedAt).toLocaleDateString()}</td>
+                          <td className="px-6 py-4">
+                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize ${getStatusColor(ts.status)} shadow-sm`}>
+                              {ts.status}
+                            </span>
+                          </td>
+                        </tr>
+                      )) : (
+                        <tr>
+                          <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
+                            No timesheets found.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )
+        }
+
+        {/* History Modal */}
+        {
+          showHistoryModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm">
+              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col animate-scale-in transition-colors">
+                <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-white dark:bg-gray-900 sticky top-0 transition-colors">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Submission History</h3>
+                  <button onClick={() => setShowHistoryModal(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300">
+                    <FiXCircle className="w-6 h-6" />
+                  </button>
+                </div>
+                <div className="overflow-y-auto p-6 space-y-4">
+                  {myTimesheets.map((ts) => (
+                    <div key={ts._id} className="p-4 border border-gray-100 dark:border-gray-800 rounded-xl flex items-center justify-between hover:border-indigo-100 dark:hover:border-indigo-900 hover:shadow-sm transition-all bg-white dark:bg-gray-800/50">
+                      <div className="flex items-center gap-4">
+                        <div className={`h-10 w-10 rounded-full flex items-center justify-center ${ts.status === 'approved' ? 'bg-green-50 dark:bg-green-950/30 text-green-600 dark:text-green-400' :
+                          ts.status === 'rejected' ? 'bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400' :
+                            'bg-yellow-50 dark:bg-yellow-950/30 text-yellow-600 dark:text-yellow-400'
+                          }`}>
+                          {ts.status === 'approved' ? <FiCheckCircle /> :
+                            ts.status === 'rejected' ? <FiXCircle /> : <FiClock />}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-gray-900 dark:text-gray-100">{ts.month} Timesheet</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Submitted on {new Date(ts.submittedAt).toLocaleDateString()}</p>
+                        </div>
+                      </div>
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold capitalize ${ts.status === 'approved' ? 'bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300' :
+                        ts.status === 'rejected' ? 'bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300' :
+                          'bg-yellow-50 dark:bg-yellow-950/30 text-yellow-700 dark:text-yellow-300'
+                        }`}>
+                        {ts.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )
+        }
 
-      </div>
-    </div>
+      </div >
+    </div >
   )
 }
 

@@ -3,7 +3,7 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 
 const ProtectedRoute = ({ allowedRoles = [] }) => {
-    const { user, loading, token } = useAuth()
+    const { user, loading, token, activeRole } = useAuth()
     const location = useLocation()
 
     if (loading) {
@@ -20,10 +20,14 @@ const ProtectedRoute = ({ allowedRoles = [] }) => {
         return <Navigate to={`/login?redirect=${redirect}`} replace />
     }
 
+    // Determine effective role (project-specific role takes precedence)
+    const currentRole = activeRole || user.role
+
     // Authenticated but not authorized for this route
-    if (allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
+    if (allowedRoles.length > 0 && !allowedRoles.includes(currentRole)) {
         // Redirect based on role or to a generic unauthorized page
         // For now, redirecting to dashboard which is safe for all authenticated users
+        console.warn(`Access denied. Role: ${currentRole}, Allowed: ${allowedRoles}`)
         return <Navigate to="/dashboard" replace />
     }
 
