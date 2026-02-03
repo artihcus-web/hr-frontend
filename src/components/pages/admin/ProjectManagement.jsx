@@ -1382,20 +1382,20 @@ function ProjectManagement() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors">
       <div className={`mx-auto px-4 sm:px-6 lg:px-8 py-8 ${editingProject ? 'w-full max-w-full' : 'max-w-6xl'}`}>
-        <div className="mb-8 flex items-center justify-between">
-          <div className="flex items-center gap-5">
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
             <button
               onClick={() => { resetForm(); setShowForm(false); }}
-              className="group p-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm active:scale-95"
+              className="group p-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm active:scale-95"
             >
-              <FiArrowLeft className="w-5 h-5 text-gray-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors" />
+              <FiArrowLeft className="w-4 h-4 text-gray-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors" />
             </button>
             <div>
-              <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight uppercase">
+              <h1 className="text-lg font-extrabold text-slate-900 dark:text-white tracking-tight uppercase">
                 {editingProject ? 'Edit Project Profile' : 'Configure New Project'}
               </h1>
-              <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-0.5">
-                {editingProject ? `Modifying project ${formData.projectId}` : 'Initialize a new workspace for your team'}
+              <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                {editingProject ? `Modifying project ${formData.projectId}` : 'Initialize a new workspace'}
               </p>
             </div>
           </div>
@@ -1426,19 +1426,19 @@ function ProjectManagement() {
 
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Project Name <span className="text-red-500">*</span></label>
-                    <input type="text" name="projectName" value={formData.projectName} onChange={handleChange} required className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-sm font-bold focus:ring-2 focus:ring-indigo-500/20" placeholder="Project Name" />
+                    <label className="block text-[9px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">Project Name <span className="text-red-500">*</span></label>
+                    <input type="text" name="projectName" value={formData.projectName} onChange={handleChange} required className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-md text-xs font-bold focus:ring-2 focus:ring-indigo-500/20" placeholder="Project Name" />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Project ID <span className="text-red-500">*</span></label>
+                    <label className="block text-[9px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">Project ID <span className="text-red-500">*</span></label>
                     <div className="relative">
-                      <FiHash className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-3 h-3" />
-                      <input type="text" name="projectId" value={formData.projectId} onChange={handleChange} required disabled={!!editingProject} className="w-full pl-8 pr-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 disabled:opacity-60" placeholder="ID" />
+                      <FiHash className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 w-3 h-3" />
+                      <input type="text" name="projectId" value={formData.projectId} onChange={handleChange} required disabled={!!editingProject} className="w-full pl-7 pr-2.5 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-md text-xs font-bold focus:ring-2 focus:ring-indigo-500/20 disabled:opacity-60" placeholder="ID" />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Status</label>
-                    <select name="status" value={formData.status} onChange={handleChange} className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-sm font-bold focus:ring-2 focus:ring-indigo-500/20">
+                    <label className="block text-[9px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">Status</label>
+                    <select name="status" value={formData.status} onChange={handleChange} className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-md text-xs font-bold focus:ring-2 focus:ring-indigo-500/20">
                       <option value="active">ACTIVE</option>
                       <option value="inactive">INACTIVE</option>
                       <option value="completed">COMPLETED</option>
@@ -1456,41 +1456,41 @@ function ProjectManagement() {
 
                 <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800 p-4 flex flex-col h-full">
                   {/* Add Client Inputs */}
-                  <div className="grid grid-cols-12 gap-3 mb-4">
-                    <div className="col-span-5">
+                  <div className="grid grid-cols-12 gap-2 mb-3">
+                    <div className="col-span-12 md:col-span-3">
                       <input
                         type="text"
-                        placeholder="Client Name (Optional)"
+                        placeholder="Client Name"
                         value={newClient.name || ''}
                         onChange={e => setNewClient(prev => ({ ...prev, name: e.target.value }))}
-                        className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                        className="w-full px-2.5 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-medium"
                       />
                     </div>
-                    <div className="col-span-7">
+                    <div className="col-span-12 md:col-span-4">
                       <input
                         type="email"
                         placeholder="Email Address *"
                         value={newClient.email || ''}
                         onChange={e => setNewClient(prev => ({ ...prev, email: e.target.value }))}
-                        className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                        className="w-full px-2.5 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-medium"
                       />
                     </div>
-                    <div className="col-span-8">
+                    <div className="col-span-12 md:col-span-3">
                       <input
                         type="password"
                         placeholder="Password *"
                         value={newClient.password || ''}
                         onChange={e => setNewClient(prev => ({ ...prev, password: e.target.value }))}
-                        className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                        className="w-full px-2.5 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-medium"
                       />
                     </div>
-                    <div className="col-span-4">
+                    <div className="col-span-12 md:col-span-2">
                       <button
                         type="button"
                         onClick={handleAddClient}
-                        className="w-full h-full bg-indigo-600 text-white text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+                        className="w-full h-full py-1.5 bg-indigo-600 text-white text-[10px] font-bold uppercase tracking-wider rounded-md hover:bg-indigo-700 transition-colors shadow-sm flex items-center justify-center gap-1"
                       >
-                        Add Client
+                        <FiPlus className="w-3 h-3" /> Add
                       </button>
                     </div>
                   </div>
@@ -1548,14 +1548,14 @@ function ProjectManagement() {
                 </div>
               </div>
 
-              <div className="bg-slate-50/50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800 p-4">
+              <div className="bg-slate-50/50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800 p-3">
                 {/* Action Bar */}
-                <div className="flex items-center gap-3 mb-4">
+                <div className="flex items-center gap-2 mb-3">
                   <button
                     type="button"
                     onClick={() => handleBuilderAssign('employees')}
                     disabled={builderSelectedIds.length === 0}
-                    className="px-4 py-2 bg-white border border-slate-200 text-indigo-600 text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-indigo-50 disabled:opacity-50 transition-colors shadow-sm"
+                    className="px-3 py-1.5 bg-white border border-slate-200 text-indigo-600 text-[9px] font-bold uppercase tracking-wider rounded-md hover:bg-indigo-50 disabled:opacity-50 transition-colors shadow-sm"
                   >
                     Assign Member
                   </button>
@@ -1563,7 +1563,7 @@ function ProjectManagement() {
                     type="button"
                     onClick={() => handleBuilderAssign('projectManagers')}
                     disabled={builderSelectedIds.length === 0}
-                    className="px-4 py-2 bg-indigo-600 text-white text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-sm"
+                    className="px-3 py-1.5 bg-indigo-600 text-white text-[9px] font-bold uppercase tracking-wider rounded-md hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-sm"
                   >
                     Assign Manager
                   </button>
@@ -1572,71 +1572,67 @@ function ProjectManagement() {
                     type="button"
                     onClick={() => handleBuilderAssign(null)}
                     disabled={builderSelectedIds.length === 0}
-                    className="ml-auto px-4 py-2 bg-red-50 text-red-600 border border-red-100 text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-red-100 disabled:opacity-50 transition-colors"
+                    className="ml-auto px-3 py-1.5 bg-red-50 text-red-600 border border-red-100 text-[9px] font-bold uppercase tracking-wider rounded-md hover:bg-red-100 disabled:opacity-50 transition-colors"
                   >
                     Remove
                   </button>
                 </div>
 
-                {/* Unified List */}
-                <div className="h-64 overflow-y-auto space-y-1 pr-1 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 p-2">
-                  {allUsers
-                    .filter(u => u.fullName?.toLowerCase().includes(builderSearchQuery.toLowerCase()) || u.email?.toLowerCase().includes(builderSearchQuery.toLowerCase()))
-                    .map(user => {
-                      const isManager = (formData.projectManagers || []).includes(user._id || user.id);
-                      const isEmployee = (formData.employees || []).includes(user._id || user.id);
-                      const isSelected = builderSelectedIds.includes(user._id || user.id);
+                {/* Unified List - COMPACT GRID */}
+                <div className="h-48 overflow-y-auto pr-1 bg-white dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-800 p-2">
+                  <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+                    {allUsers
+                      .filter(u => u.fullName?.toLowerCase().includes(builderSearchQuery.toLowerCase()) || u.email?.toLowerCase().includes(builderSearchQuery.toLowerCase()))
+                      .map(user => {
+                        const isManager = (formData.projectManagers || []).includes(user._id || user.id);
+                        const isEmployee = (formData.employees || []).includes(user._id || user.id);
+                        const isSelected = builderSelectedIds.includes(user._id || user.id);
 
-                      return (
-                        <label key={user._id || user.id} className={`flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-all ${isSelected ? 'bg-indigo-50/50 border-indigo-200' : 'hover:bg-slate-50 border-transparent border-b-slate-50'
-                          } ${isManager || isEmployee ? 'bg-slate-50/30' : ''}`}>
+                        return (
+                          <label key={user._id || user.id} className={`flex items-start gap-2 p-1.5 rounded border cursor-pointer transition-all h-full ${isSelected ? 'bg-indigo-50/50 border-indigo-200' : 'hover:bg-slate-50 border-transparent border-slate-50'
+                            } ${isManager || isEmployee ? 'bg-slate-50/30' : ''}`}>
 
-                          <input
-                            type="checkbox"
-                            className="rounded text-indigo-600 w-4 h-4"
-                            checked={isSelected}
-                            onChange={(e) => {
-                              const id = user._id || user.id
-                              setBuilderSelectedIds(prev => e.target.checked ? [...prev, id] : prev.filter(x => x !== id))
-                            }}
-                          />
+                            <input
+                              type="checkbox"
+                              className="rounded text-indigo-600 w-3 h-3 mt-0.5"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                const id = user._id || user.id
+                                setBuilderSelectedIds(prev => e.target.checked ? [...prev, id] : prev.filter(x => x !== id))
+                              }}
+                            />
 
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{user.fullName}</span>
-                              <span className="text-[9px] text-slate-400 uppercase tracking-wider bg-slate-100 px-1.5 py-0.5 rounded">{user.role}</span>
-                            </div>
-                            <div className="text-[10px] text-slate-400 truncate">{user.email}</div>
-
-                            {user.currentAssignments && user.currentAssignments.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {user.currentAssignments.map((assign, idx) => (
-                                  <span key={idx} className="text-[8px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-100 flex items-center gap-1">
-                                    <span className="font-bold max-w-[60px] truncate">{assign.projectName}</span>
-                                    <span className="opacity-75 text-[7px] uppercase tracking-wider">({assign.role === 'Manager' ? 'Lead' : 'Mem'})</span>
-                                  </span>
-                                ))}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-1 mb-0.5">
+                                <span className="text-[10px] font-bold text-slate-700 dark:text-slate-200 truncate" title={user.fullName}>{user.fullName}</span>
+                                {isManager && <div className="w-1.5 h-1.5 rounded-full bg-purple-500" title="Manager"></div>}
+                                {isEmployee && <div className="w-1.5 h-1.5 rounded-full bg-blue-500" title="Member"></div>}
                               </div>
-                            )}
-                          </div>
+                              <div className="text-[8px] text-slate-400 truncate">{user.email}</div>
 
-                          {/* Status Badge */}
-                          <div>
-                            {isManager && <span className="px-2 py-1 bg-purple-100 text-purple-700 text-[9px] font-bold uppercase tracking-wider rounded-md">Manager</span>}
-                            {isEmployee && <span className="px-2 py-1 bg-blue-100 text-blue-700 text-[9px] font-bold uppercase tracking-wider rounded-md">Member</span>}
-                            {!isManager && !isEmployee && <span className="px-2 py-1 bg-slate-100 text-slate-500 text-[9px] font-bold uppercase tracking-wider rounded-md opacity-50">Unassigned</span>}
-                          </div>
-                        </label>
-                      )
-                    })}
-                  {allUsers.length === 0 && <p className="text-center py-10 text-xs text-gray-400 italic">No users available.</p>}
+                              {user.currentAssignments && user.currentAssignments.length > 0 && (
+                                <div className="flex flex-wrap gap-0.5 mt-0.5">
+                                  {user.currentAssignments.slice(0, 2).map((assign, idx) => (
+                                    <span key={idx} className="text-[7px] px-1 py-0 rounded bg-amber-50 text-amber-700 border border-amber-100 truncate max-w-[50px]">
+                                      {assign.projectName}
+                                    </span>
+                                  ))}
+                                  {user.currentAssignments.length > 2 && <span className="text-[7px] text-slate-400">+{user.currentAssignments.length - 2}</span>}
+                                </div>
+                              )}
+                            </div>
+                          </label>
+                        )
+                      })}
+                  </div>
+                  {allUsers.length === 0 && <p className="text-center py-10 text-xs text-gray-400 italic col-span-full">No users available.</p>}
                 </div>
               </div>
             </div>
           </div>
-          <div className="px-8 py-5 bg-gray-50/50 dark:bg-gray-800/50 border-t border-gray-50 dark:border-gray-800 flex justify-end gap-4 transition-colors">
-            <button type="button" onClick={() => { resetForm(); setShowForm(false); }} className="px-6 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 text-[10px] font-extrabold uppercase tracking-widest rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">Discard</button>
-            <button type="submit" disabled={submitting} className="flex items-center gap-2 px-8 py-2.5 bg-indigo-600 text-white text-[10px] font-extrabold uppercase tracking-widest rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-lg">
+          <div className="sticky bottom-0 z-10 px-8 py-3 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-t border-gray-100 dark:border-gray-800 flex justify-end gap-3 transition-colors shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] rounded-b-2xl">
+            <button type="button" onClick={() => { resetForm(); setShowForm(false); }} className="px-5 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 text-[10px] font-extrabold uppercase tracking-widest rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">Discard</button>
+            <button type="submit" disabled={submitting} className="flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white text-[10px] font-extrabold uppercase tracking-widest rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-md">
               {submitting ? 'Securing...' : (editingProject ? 'Save Changes' : 'Initialize Project')}
             </button>
           </div>
