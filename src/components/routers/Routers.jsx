@@ -14,6 +14,7 @@ import ProjectView from '../pages/c-suite/ProjectView'
 import HolidayCalendar from '../pages/HolidayCalendar'
 import Grievance from '../pages/common/Grievance'
 import GrievanceConfig from '../pages/admin/GrievanceConfig'
+import FormBuilder from '../pages/admin/FormBuilder'
 import ProtectedRoute from './ProtectedRoute'
 import { Routes, Route, Navigate } from 'react-router-dom'
 
@@ -44,13 +45,14 @@ function Routers() {
 
 
         {/* Admin Protected Routes */}
-        <Route element={<ProtectedRoute allowedRoles={['admin', 'super_admin']} />}>
+        <Route element={<ProtectedRoute allowedRoles={['admin', 'super_admin', 'hr']} />}>
           <Route path='/admin' element={<AdminDashboard />} />
           <Route path='/admin/users' element={<UserManagement />} />
           <Route path='/admin/projects' element={<ProjectManagement />} />
           <Route path='/admin/employee-management/projects' element={<Navigate to='/admin/projects' replace />} />
           <Route path='/admin/employee-management' element={<Navigate to='/admin/projects' replace />} />
           <Route path='/admin/grievance-config' element={<GrievanceConfig />} />
+          <Route path='/admin/form-builder' element={<FormBuilder />} />
         </Route>
 
         {/* C-Suite Protected Routes */}

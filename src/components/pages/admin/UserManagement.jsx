@@ -4,15 +4,15 @@ import { useAuth } from '../../../context/AuthContext'
 import { FiEdit2, FiTrash2, FiUpload, FiX, FiSearch, FiFilter, FiDownload, FiChevronDown, FiChevronUp, FiSave, FiPlus, FiMoreVertical } from 'react-icons/fi'
 import * as XLSX from 'xlsx'
 import toast from 'react-hot-toast'
+import { countryCodes } from '../../../utils/countryCodes'
 import axiosInstance from '../../../utils/axiosInstance'
 import LoadingSpinner from '../../common/LoadingSpinner'
 
 const roles = ['admin', 'c-suite', 'hr', 'manager', 'supermanager', 'tl', 'employee', 'client']
 const genders = ['Male', 'Female', 'Other']
 const maritalStatuses = ['Single', 'Married', 'Divorced', 'Widowed']
-const accountTypes = ['Savings', 'Current', 'Salary']
+const accountTypes = ['Savings', 'Current']
 const paymentModes = ['Bank Transfer', 'Cheque', 'Cash']
-const verificationStatuses = ['Pending', 'In Progress', 'Completed', 'Failed']
 
 // const sections = [ // Removed unused
 //   { id: 1, title: 'Basic Information', slug: 'basic' },
@@ -27,61 +27,76 @@ const verificationStatuses = ['Pending', 'In Progress', 'Completed', 'Failed']
 // ]
 
 // FormField component - moved outside to prevent re-creation on every render
-const FormField = ({ label, name, type = 'text', required = false, placeholder = '', options = null, formData, handleChange, ...props }) => (
-  <div>
-    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-      {label} {required && <span className="text-red-500">*</span>}
-    </label>
-    {type === 'select' ? (
-      <select
-        name={name}
-        value={formData[name] || ''}
-        onChange={handleChange}
-        required={required}
-        className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-        {...props}
-      >
-        <option value="">Select {label.toLowerCase()}</option>
-        {options?.map(opt => (
-          <option key={opt} value={opt}>{opt}</option>
-        ))}
-      </select>
-    ) : type === 'checkbox' ? (
-      <div className="flex items-center">
-        <input
-          type="checkbox"
+const FormField = ({ label, name, type = 'text', required, formData, handleChange, options, placeholder, ...props }) => {
+  // Helper to get nested value
+  const getValue = (obj, path) => {
+    if (!path || !obj) return ''
+    if (path.includes('.')) {
+      return path.split('.').reduce((acc, part) => acc && acc[part], obj) || ''
+    }
+    return obj[path] || ''
+  }
+
+  const value = getValue(formData, name)
+
+  return (
+    <div className="flex flex-col">
+      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      {type === 'select' ? (
+        <select
           name={name}
-          checked={formData[name] || false}
+          value={value}
           onChange={handleChange}
-          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded transition-colors"
+          required={required}
+          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors appearance-none"
+          {...props}
+        >
+          <option value="">Select {label}</option>
+          {options.map((opt, index) => (
+            <option key={index} value={opt}>
+              {opt}
+            </option>
+          ))}
+        </select>
+      ) : type === 'checkbox' ? (
+        <div className="flex items-center">
+          <input
+            type="checkbox"
+            name={name}
+            checked={value === true}
+            onChange={handleChange}
+            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded transition-colors"
+          />
+          <label className="ml-2 text-xs text-gray-700 dark:text-gray-300">{label}</label>
+        </div>
+      ) : type === 'textarea' ? (
+        <textarea
+          name={name}
+          value={value}
+          onChange={handleChange}
+          required={required}
+          placeholder={placeholder}
+          rows={2}
+          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+          {...props}
         />
-        <label className="ml-2 text-xs text-gray-700 dark:text-gray-300">{label}</label>
-      </div>
-    ) : type === 'textarea' ? (
-      <textarea
-        name={name}
-        value={formData[name] || ''}
-        onChange={handleChange}
-        required={required}
-        placeholder={placeholder}
-        rows={2}
-        className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-        {...props}
-      />
-    ) : (
-      <input
-        type={type}
-        name={name}
-        value={formData[name] || ''}
-        onChange={handleChange}
-        required={required}
-        placeholder={placeholder}
-        className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-        {...props}
-      />
-    )}
-  </div>
-)
+      ) : (
+        <input
+          type={type}
+          name={name}
+          value={value}
+          onChange={handleChange}
+          required={required}
+          placeholder={placeholder}
+          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+          {...props}
+        />
+      )}
+    </div>
+  )
+}
 
 // FormSection component - refactored for Accordion mode
 const FormSection = ({ title, children, isOpen, onToggle, onSave, isSubmitting, sectionId }) => {
@@ -123,8 +138,7 @@ function UserManagement() {
   const { user, token, loading } = useAuth()
   const [employees, setEmployees] = useState([])
   const [loadingEmployees, setLoadingEmployees] = useState(true)
-  const [availableProjects, setAvailableProjects] = useState([])
-  const [projectSearchQuery, setProjectSearchQuery] = useState('')
+
   const [showForm, setShowForm] = useState(false)
   const [editingEmployee, setEditingEmployee] = useState(null)
   const [deleteConfirmation, setDeleteConfirmation] = useState(null)
@@ -162,36 +176,32 @@ function UserManagement() {
     middleName: '',
     lastName: '',
     employeeName: '', // Auto-generated
-    email: '',
+    email: '', // Personal Email
+    alternativeEmail: '',
+    officialEmail: '',
     phone: '',
+    primaryCountryCode: '+91',
+    secondaryCountryCode: '+91',
     employeeId: '',
     dateOfBirth: '',
     gender: '',
     maritalStatus: '',
     bloodGroup: '',
     emergencyContact: '',
-    presentAddress: '',
-    nickName: '',
-    employeeRefNumber: '',
-    birthdayDate: '',
-    marriageDate: '',
-    secondaryContact: '',
-    officeEmail: '',
-    fathersName: '',
-    spouseName: '',
-    spouseDob: '',
-    loginUsername: '',
-    ipAddress: '',
-    permanentAddress: '',
+    presentAddress: { line1: '', line2: '', pincode: '', district: '', state: '', country: '' },
+    permanentAddress: { line1: '', line2: '', pincode: '', district: '', state: '', country: '' },
+    aadhaarAddress: { line1: '', line2: '', pincode: '', district: '', state: '', country: '' },
+    sameAsPresent: false, // UI state for checkbox
+    aadhaarAddressOption: 'none', // 'present', 'permanent', 'none'
     emergencyContactName: '',
     emergencyContactNumber: '',
     isPhysicallyChallenged: false,
+    physicallyChallengedDetails: '',
     isInternationalEmployee: false,
     countryOfOrigin: '',
     cityLocation: '',
     mobileNumber: '',
-    numberOfChildren: 0,
-    childrenDobs: [],
+    familyDetails: [],
 
     // Employment Information
     department: '',
@@ -214,38 +224,27 @@ function UserManagement() {
     assignedProjects: [],
 
     // Professional Information
-    education: '',
+    education: [],
+    languages: [],
     experience: '',
-    skills: '',
     salary: '',
 
     // Bank Details
     accountNumber: '',
+    confirmAccountNumber: '',
     bankName: '',
     ifscCode: '',
     accountType: '',
     branchName: '',
     bankBranch: '',
     salaryPaymentMode: '',
-    ddPayableAt: '',
     nameAsPerBankRecords: '',
     iban: '',
+    swiftCode: '',
 
     // Documents
-    aadharNumber: '',
-    panNumber: '',
-    passportNumber: '',
-    drivingLicense: '',
-    aadhaarCardEnrolmentNo: '',
-    nameAsOnAadhaarCard: '',
-    universalAccountNumber: '',
-
-    // Background Verification
-    verificationStatus: '',
-    verificationIndication: '',
-    completedOn: '',
-    agencyName: '',
-    remarks: '',
+    // Documents
+    documents: [],
 
     // PF Details
     isEligibleForPF: false,
@@ -306,26 +305,13 @@ function UserManagement() {
     }
   }, [token])
 
-  // Fetch available projects
-  const fetchProjects = useCallback(async () => {
-    if (!token) return
 
-    try {
-      // Endpoint is /api/projects
-      const res = await axiosInstance.get('/api/projects')
-      const data = res.data
-      setAvailableProjects(data.projects || [])
-    } catch (error) {
-      console.error('Error fetching projects:', error)
-    }
-  }, [token])
 
   useEffect(() => {
     if (user && user.role === 'admin' && token && !showForm) {
       fetchEmployees()
-      fetchProjects()
     }
-  }, [user, token, showForm, fetchEmployees, fetchProjects])
+  }, [user, token, showForm, fetchEmployees])
 
   // Whenever the multi-step form is opened (Add/Edit), reset progress
   // and scroll the main content container to the top.
@@ -348,25 +334,28 @@ function UserManagement() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.firstName, formData.middleName, formData.lastName, formData.employeeName])
 
-  const handleChildCountChange = (e) => {
-    const count = parseInt(e.target.value) || 0
-    setFormData(prev => {
-      const currentDobs = prev.childrenDobs || []
-      let newDobs = [...currentDobs]
-      if (count > newDobs.length) {
-        for (let i = newDobs.length; i < count; i++) newDobs.push('')
-      } else {
-        newDobs = newDobs.slice(0, count)
-      }
-      return { ...prev, numberOfChildren: count, childrenDobs: newDobs }
-    })
+
+
+  // Family Details Handlers
+  const addFamilyMember = () => {
+    setFormData(prev => ({
+      ...prev,
+      familyDetails: [...prev.familyDetails, { name: '', relation: '', dob: '' }]
+    }))
   }
 
-  const handleChildDobChange = (index, value) => {
+  const removeFamilyMember = (index) => {
+    setFormData(prev => ({
+      ...prev,
+      familyDetails: prev.familyDetails.filter((_, i) => i !== index)
+    }))
+  }
+
+  const handleFamilyDetailChange = (index, field, value) => {
     setFormData(prev => {
-      const newDobs = [...(prev.childrenDobs || [])]
-      newDobs[index] = value
-      return { ...prev, childrenDobs: newDobs }
+      const newDetails = [...prev.familyDetails]
+      newDetails[index] = { ...newDetails[index], [field]: value }
+      return { ...prev, familyDetails: newDetails }
     })
   }
 
@@ -404,10 +393,46 @@ function UserManagement() {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
+
+    if (name.includes('.')) {
+      const [parent, child] = name.split('.')
+      setFormData(prev => ({
+        ...prev,
+        [parent]: {
+          ...prev[parent],
+          [child]: value
+        }
+      }))
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: type === 'checkbox' ? checked : value
+      }))
+    }
+  }
+
+  // Address Copy Helpers
+  const handleSameAsPresentChange = (e) => {
+    const checked = e.target.checked
     setFormData(prev => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : value
+      sameAsPresent: checked,
+      permanentAddress: checked ? { ...prev.presentAddress } : prev.permanentAddress
     }))
+  }
+
+  const handleAadhaarAddressOptionChange = (e) => {
+    const option = e.target.value
+    setFormData(prev => {
+      let newAddr = prev.aadhaarAddress
+      if (option === 'present') newAddr = { ...prev.presentAddress }
+      if (option === 'permanent') newAddr = { ...prev.permanentAddress }
+      return {
+        ...prev,
+        aadhaarAddressOption: option,
+        aadhaarAddress: newAddr
+      }
+    })
   }
 
   // Load employee data into form for editing
@@ -427,32 +452,41 @@ function UserManagement() {
 
       // Populate form with employee data
       setFormData({
+        employeeName: `${emp.firstName || ''} ${emp.lastName || ''}`.trim(),
         firstName: emp.firstName || '',
         middleName: emp.middleName || '',
         lastName: emp.lastName || '',
         email: emp.email || '',
+        alternativeEmail: emp.alternativeEmail || '',
+        officialEmail: emp.officialEmail || '',
         phone: emp.phone || '',
+        primaryCountryCode: emp.primaryCountryCode || '+91',
+        secondaryCountryCode: emp.secondaryCountryCode || '+91',
         employeeId: emp.employeeId || '',
         dateOfBirth: formatDate(emp.dateOfBirth),
         gender: emp.gender || '',
         maritalStatus: emp.maritalStatus || '',
         bloodGroup: emp.bloodGroup || '',
         emergencyContact: emp.emergencyContact || '',
-        presentAddress: emp.presentAddress || '',
+        presentAddress: emp.presentAddress || { line1: '', line2: '', pincode: '', district: '', state: '', country: '' },
+        permanentAddress: emp.permanentAddress || { line1: '', line2: '', pincode: '', district: '', state: '', country: '' },
+        aadhaarAddress: emp.aadhaarAddress || { line1: '', line2: '', pincode: '', district: '', state: '', country: '' },
         nickName: emp.nickName || '',
         employeeRefNumber: emp.employeeRefNumber || '',
         birthdayDate: formatDate(emp.birthdayDate),
         marriageDate: formatDate(emp.marriageDate),
         fathersName: emp.fathersName || '',
+        familyDetails: emp.familyDetails || [],
         secondaryContact: emp.secondaryContact || '',
         officeEmail: emp.officeEmail || '',
         spouseName: emp.spouseName || '',
         loginUsername: emp.loginUsername || emp.username || '',
         ipAddress: emp.ipAddress || '',
-        permanentAddress: emp.permanentAddress || '',
+        // permanentAddress handled above
         emergencyContactName: emp.emergencyContactName || '',
         emergencyContactNumber: emp.emergencyContactNumber || '',
         isPhysicallyChallenged: emp.isPhysicallyChallenged || false,
+        physicallyChallengedDetails: emp.physicallyChallengedDetails || '',
         isInternationalEmployee: emp.isInternationalEmployee || false,
         countryOfOrigin: emp.countryOfOrigin || '',
         cityLocation: emp.cityLocation || '',
@@ -462,11 +496,12 @@ function UserManagement() {
         department: emp.department || '',
         designation: emp.designation || '',
         role: emp.role || 'employee',
-        employeeStatus: emp.employeeStatus || 'Active',
+        employeeStatus: emp.isActive === false ? 'Inactive' : 'Active', // Map isActive to employeeStatus
         joiningDate: formatDate(emp.joiningDate),
         exitDate: formatDate(emp.exitDate),
         cid: emp.cid || '',
         managerId: emp.managerId || '',
+        businessUnitHR: emp.businessUnitHR || '',
         superManagerId: emp.superManagerId || '',
         confirmDate: formatDate(emp.confirmDate),
         probationPeriod: emp.probationPeriod || '',
@@ -477,11 +512,18 @@ function UserManagement() {
         location: emp.location || '',
         employeeNumberSeries: emp.employeeNumberSeries || '',
         assignedProjects: emp.assignedProjects || [],
-        education: Array.isArray(emp.education) ? emp.education : [],
+        education: Array.isArray(emp.education) ? emp.education.map(edu => ({
+          ...edu,
+          fromDate: formatDate(edu.fromDate),
+          toDate: formatDate(edu.toDate),
+          fileName: edu.fileName || '',
+          fileUrl: edu.fileUrl || ''
+        })) : [],
+        languages: Array.isArray(emp.languages) ? emp.languages : [],
         experience: Array.isArray(emp.experience) ? emp.experience : [],
-        skills: Array.isArray(emp.skills) ? emp.skills : (typeof emp.skills === 'string' && emp.skills ? emp.skills.split(',').map(s => s.trim()) : []),
         salary: emp.salary || '',
         accountNumber: emp.accountNumber || '',
+        confirmAccountNumber: emp.accountNumber || '',
         bankName: emp.bankName || '',
         ifscCode: emp.ifscCode || '',
         accountType: emp.accountType || '',
@@ -491,18 +533,8 @@ function UserManagement() {
         ddPayableAt: emp.ddPayableAt || '',
         nameAsPerBankRecords: emp.nameAsPerBankRecords || '',
         iban: emp.iban || '',
-        aadharNumber: emp.aadharNumber || '',
-        panNumber: emp.panNumber || '',
-        passportNumber: emp.passportNumber || '',
-        drivingLicense: emp.drivingLicense || '',
-        aadhaarCardEnrolmentNo: emp.aadhaarCardEnrolmentNo || '',
-        nameAsOnAadhaarCard: emp.nameAsOnAadhaarCard || '',
-        universalAccountNumber: emp.universalAccountNumber || '',
-        verificationStatus: emp.verificationStatus || '',
-        verificationIndication: emp.verificationIndication || '',
-        completedOn: formatDate(emp.completedOn),
-        agencyName: emp.agencyName || '',
-        remarks: emp.remarks || '',
+        swiftCode: emp.swiftCode || '',
+        documents: Array.isArray(emp.documents) ? emp.documents : [],
         isEligibleForPF: emp.isEligibleForPF || false,
         pfNumber: emp.pfNumber || '',
         pfScheme: emp.pfScheme || '',
@@ -552,6 +584,17 @@ function UserManagement() {
 
   const handleDeleteCancel = () => {
     setDeleteConfirmation(null)
+  }
+
+  // Account Number Masking State
+  const [isAccountNumberFocused, setIsAccountNumberFocused] = useState(false)
+
+  const getMaskedAccountNumber = (number) => {
+    if (!number) return ''
+    if (number.length <= 3) return number
+    const visibleDigits = 3
+    const maskedLength = number.length - visibleDigits
+    return '•'.repeat(maskedLength) + number.slice(-visibleDigits)
   }
 
   // Handle Excel file import
@@ -970,18 +1013,25 @@ function UserManagement() {
 
   const resetForm = () => {
     setFormData({
+      employeeName: '',
       firstName: '',
       middleName: '',
       lastName: '',
       email: '',
       phone: '',
+      primaryCountryCode: '+91',
+      secondaryCountryCode: '+91',
       employeeId: '',
       dateOfBirth: '',
       gender: '',
       maritalStatus: '',
       bloodGroup: '',
       emergencyContact: '',
-      presentAddress: '',
+      presentAddress: { line1: '', line2: '', pincode: '', district: '', state: '', country: '' },
+      permanentAddress: { line1: '', line2: '', pincode: '', district: '', state: '', country: '' },
+      aadhaarAddress: { line1: '', line2: '', pincode: '', district: '', state: '', country: '' },
+      sameAsPresent: false,
+      aadhaarAddressOption: 'none',
       nickName: '',
       employeeRefNumber: '',
       birthdayDate: '',
@@ -991,16 +1041,18 @@ function UserManagement() {
       spouseDob: '',
       loginUsername: '',
       ipAddress: '',
-      permanentAddress: '',
+      // permanentAddress handled above
       emergencyContactName: '',
       emergencyContactNumber: '',
       isPhysicallyChallenged: false,
+      physicallyChallengedDetails: '',
       isInternationalEmployee: false,
       countryOfOrigin: '',
       cityLocation: '',
       mobileNumber: '',
       numberOfChildren: 0,
       childrenDobs: [],
+      familyDetails: [],
       department: '',
       designation: '',
       role: 'employee',
@@ -1019,8 +1071,8 @@ function UserManagement() {
       location: '',
       employeeNumberSeries: '',
       education: [],
+      languages: [],
       experience: [],
-      skills: [],
       salary: '',
       accountNumber: '',
       bankName: '',
@@ -1070,9 +1122,9 @@ function UserManagement() {
     if (!editingEmployee) {
       const missingFields = []
       if (!formData.firstName) missingFields.push('First Name')
+      if (!formData.lastName) missingFields.push('Last Name')
       if (!formData.email) missingFields.push('Email')
       if (!formData.phone) missingFields.push('Phone')
-      if (!formData.employeeId) missingFields.push('Employee ID')
       if (!formData.employeeId) missingFields.push('Employee ID')
       // Note: Password validation removed here to allow 'Draft' creation with temp password
 
@@ -1081,18 +1133,24 @@ function UserManagement() {
         return
       }
     } else {
-      // For updates, at least ensure ID and Email aren't wiped accidentally (though they are usually disabled/pre-filled)
-      if (!formData.employeeId || !formData.email) {
-        toast.error('Employee ID and Email are required')
+      // For updates, at least ensure ID and Official Email aren't wiped accidentally
+      if (!formData.employeeId) {
+        toast.error('Employee ID is required')
         return
       }
     }
 
 
 
-    // Enforce permanent password for Account Setup section (Section 9) if it's a new entry
-    if (sectionId === 9 && isNewEntry && !formData.password) {
+    // Enforce permanent password for Account Setup section (Section 8) if it's a new entry
+    if (sectionId === 8 && isNewEntry && !formData.password) {
       toast.error('Please set a permanent password for the new account')
+      return
+    }
+
+    // Account Number Validation
+    if (sectionId === 4 && formData.accountNumber !== formData.confirmAccountNumber) {
+      toast.error('Account Number and Confirm Account Number do not match')
       return
     }
 
@@ -1103,8 +1161,12 @@ function UserManagement() {
       const apiData = {
         username: formData.loginUsername || formData.employeeId,
         email: formData.email,
+        officialEmail: formData.officialEmail,
+        alternativeEmail: formData.alternativeEmail,
         fullName: `${formData.firstName} ${formData.lastName}`.trim(),
         role: formData.role,
+        // Map employeeStatus (Active/Inactive) to isActive (boolean)
+        isActive: formData.employeeStatus === 'Active',
         // Include all other fields
         ...formData
       }
@@ -1430,7 +1492,7 @@ function UserManagement() {
                                   {fullName}
                                 </div>
                                 <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                                  {emp.email || 'No email'}
+                                  {emp.officialEmail || emp.email || 'No email'}
                                 </div>
                               </div>
                             </div>
@@ -1496,19 +1558,21 @@ function UserManagement() {
                                       <span>Download</span>
                                     </div>
                                   </button>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      handleDeleteClick(emp)
-                                      setOpenActionMenuId(null)
-                                    }}
-                                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-red-600 dark:hover:text-red-400 transition-colors"
-                                  >
-                                    <div className="flex items-center gap-2">
-                                      <FiTrash2 className="w-4 h-4" />
-                                      <span>Delete</span>
-                                    </div>
-                                  </button>
+                                  {emp.isActive !== false && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleDeleteClick(emp)
+                                        setOpenActionMenuId(null)
+                                      }}
+                                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <FiTrash2 className="w-4 h-4" />
+                                        <span>Delete</span>
+                                      </div>
+                                    </button>
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -1697,6 +1761,7 @@ function UserManagement() {
         <form onSubmit={handleSubmit}>
           <div className="space-y-4">
             {/* Basic Information */}
+            {/* Basic Information (Refined) */}
             <FormSection
               title="Basic Information"
               sectionId={1}
@@ -1705,70 +1770,346 @@ function UserManagement() {
               onSave={handleSubmit}
               isSubmitting={submittingSection === 1}
             >
-              {/* Identity */}
-              <FormField label="First Name" name="firstName" required formData={formData} handleChange={handleChange} />
-              <FormField label="Middle Name" name="middleName" formData={formData} handleChange={handleChange} />
-              <FormField label="Last Name" name="lastName" required formData={formData} handleChange={handleChange} />
-              <FormField
-                label="Employee Name"
-                name="employeeName"
-                formData={formData}
-                handleChange={handleChange}
-                readOnly
-                className="bg-gray-100 cursor-not-allowed w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none"
-              />
-              <FormField label="Nick Name" name="nickName" formData={formData} handleChange={handleChange} />
+              {/* Employee Name - Read Only Display */}
+              <div className="col-span-full">
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                  Employee Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="employeeName"
+                  value={formData.employeeName || ''}
+                  readOnly
+                  className="w-full px-3 py-2 text-base font-bold border border-gray-200 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 cursor-default focus:outline-none"
+                />
+              </div>
+
+              {/* Name Parts Inputs */}
+              <div className="col-span-full grid grid-cols-1 md:grid-cols-3 gap-4">
+                <FormField
+                  label="First Name"
+                  name="firstName"
+                  required
+                  formData={formData}
+                  handleChange={handleChange}
+                  placeholder="First Name"
+                />
+                <FormField
+                  label="Middle Name"
+                  name="middleName"
+                  formData={formData}
+                  handleChange={handleChange}
+                  placeholder="Middle Name"
+                />
+                <FormField
+                  label="Last Name"
+                  name="lastName"
+                  required
+                  formData={formData}
+                  handleChange={handleChange}
+                  placeholder="Last Name"
+                />
+              </div>
+
+              {/* Row 2: Gender & Blood Group */}
               <FormField label="Gender" name="gender" type="select" required options={genders} formData={formData} handleChange={handleChange} />
-              <FormField label="Blood Group" name="bloodGroup" formData={formData} handleChange={handleChange} />
+              <FormField label="Blood Group" name="bloodGroup" type="select" options={['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']} formData={formData} handleChange={handleChange} />
+
+              {/* Row 3: DOBs */}
+              <FormField label="DOB as per Aadhaar" name="birthdayDate" type="date" formData={formData} handleChange={handleChange} />
+              <FormField label="Date of Birth (Actual)" name="dateOfBirth" type="date" formData={formData} handleChange={handleChange} />
+
+              {/* Row 4: Marital Status */}
               <FormField label="Marital Status" name="maritalStatus" type="select" options={maritalStatuses} formData={formData} handleChange={handleChange} />
               <FormField label="Marriage Date" name="marriageDate" type="date" formData={formData} handleChange={handleChange} />
-              <FormField label="Date of Birth" name="dateOfBirth" type="date" formData={formData} handleChange={handleChange} />
-              <FormField label="DOB as per Aadhaar" name="birthdayDate" type="date" formData={formData} handleChange={handleChange} />
-              <FormField label="Is Physically Challenged" name="isPhysicallyChallenged" type="checkbox" formData={formData} handleChange={handleChange} />
 
-              {/* Contact */}
-              <FormField label="Email" name="email" type="email" required formData={formData} handleChange={handleChange} />
-              <FormField label="Office Mail ID" name="officeEmail" type="email" formData={formData} handleChange={handleChange} />
-              <FormField label="Primary Contact" name="phone" type="tel" required formData={formData} handleChange={handleChange} />
-              <FormField label="Secondary Contact" name="secondaryContact" type="tel" formData={formData} handleChange={handleChange} />
-
-              {/* Address */}
-              <FormField label="Present Address" name="presentAddress" type="textarea" required formData={formData} handleChange={handleChange} />
-              <FormField label="Permanent Address" name="permanentAddress" type="textarea" formData={formData} handleChange={handleChange} />
-              <FormField label="Country of Origin" name="countryOfOrigin" formData={formData} handleChange={handleChange} />
-              <FormField label="Location (City)" name="cityLocation" formData={formData} handleChange={handleChange} />
-              <FormField label="Is International Employee" name="isInternationalEmployee" type="checkbox" formData={formData} handleChange={handleChange} />
-
-              {/* Emergency */}
-              <FormField label="Emergency Contact Name" name="emergencyContactName" formData={formData} handleChange={handleChange} />
-              <FormField label="Emergency Contact" name="emergencyContact" required formData={formData} handleChange={handleChange} />
-
-              {/* Family */}
-              <FormField label="Father's Name" name="fathersName" formData={formData} handleChange={handleChange} />
-              <FormField label="Spouse Name" name="spouseName" formData={formData} handleChange={handleChange} />
-              <FormField label="Spouse DOB" name="spouseDob" type="date" formData={formData} handleChange={handleChange} />
-              <FormField label="Number of Children" name="numberOfChildren" type="number" min="0" formData={formData} handleChange={handleChildCountChange} />
-
-              {/* Dynamic Children DOBs */}
-              {formData.childrenDobs && formData.childrenDobs.map((dob, index) => (
-                <div key={index}>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Child {index + 1} DOB
-                  </label>
+              {/* Physically Challenged - Conditional */}
+              <div className="col-span-full">
+                <div className="flex items-center mb-2">
                   <input
-                    type="date"
-                    value={dob || ''}
-                    onChange={(e) => handleChildDobChange(index, e.target.value)}
-                    className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    type="checkbox"
+                    id="isPhysicallyChallenged"
+                    name="isPhysicallyChallenged"
+                    checked={formData.isPhysicallyChallenged || false}
+                    onChange={handleChange}
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                   />
+                  <label htmlFor="isPhysicallyChallenged" className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Is Physically Challenged?
+                  </label>
+                </div>
+
+                {formData.isPhysicallyChallenged && (
+                  <div className="mt-2 animate-fadeIn">
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Details (Please specify)
+                    </label>
+                    <textarea
+                      name="physicallyChallengedDetails"
+                      value={formData.physicallyChallengedDetails || ''}
+                      onChange={handleChange}
+                      rows={2}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      placeholder="Provide details about the physical challenge..."
+                    />
+                  </div>
+                )}
+              </div>
+            </FormSection>
+
+            {/* Contact Information (New Section) */}
+            <FormSection
+              title="Contact Information"
+              sectionId={12}
+              isOpen={expandedSections.includes(12)}
+              onToggle={() => toggleSection(12)}
+              onSave={handleSubmit}
+              isSubmitting={submittingSection === 12}
+            >
+              {/* Primary Contact */}
+              <div className="col-span-full md:col-span-1 flex gap-2 w-full">
+                <div className="w-1/2">
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Code</label>
+                  <select
+                    name="primaryCountryCode"
+                    value={formData.primaryCountryCode || '+91'}
+                    onChange={handleChange}
+                    className="w-full px-2 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  >
+                    {countryCodes.map((country, index) => (
+                      <option key={`${country.code}-${index}`} value={country.code}>
+                        {country.name} ({country.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex-1">
+                  <FormField label="Primary Contact" name="phone" type="tel" required formData={formData} handleChange={handleChange} />
+                </div>
+              </div>
+
+              {/* Secondary Contact */}
+              <div className="col-span-full md:col-span-1 flex gap-2 w-full">
+                <div className="w-1/2">
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Code</label>
+                  <select
+                    name="secondaryCountryCode"
+                    value={formData.secondaryCountryCode || '+91'}
+                    onChange={handleChange}
+                    className="w-full px-2 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  >
+                    {countryCodes.map((country, index) => (
+                      <option key={`${country.code}-${index}`} value={country.code}>
+                        {country.name} ({country.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex-1">
+                  <FormField label="Secondary Contact" name="secondaryContact" type="tel" formData={formData} handleChange={handleChange} />
+                </div>
+              </div>
+
+              {/* Emergency Contact */}
+              <FormField label="Emergency Contact Number" name="emergencyContact" required formData={formData} handleChange={handleChange} />
+              <FormField label="Emergency Contact Name" name="emergencyContactName" required formData={formData} handleChange={handleChange} />
+
+              {/* Emails */}
+              <FormField label="Personal Email ID" name="email" type="email" formData={formData} handleChange={handleChange} />
+              <FormField label="Alternative Email ID" name="alternativeEmail" type="email" formData={formData} handleChange={handleChange} />
+
+            </FormSection>
+
+            {/* Communication Details (Refined) */}
+            <FormSection
+              title="Communication Details"
+              sectionId={16}
+              isOpen={expandedSections.includes(16)}
+              onToggle={() => toggleSection(16)}
+              onSave={handleSubmit}
+              isSubmitting={submittingSection === 16}
+            >
+              {/* Present Address */}
+              <div className="col-span-full mt-2 mb-2">
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 border-b pb-1">Present Address</h4>
+              </div>
+              <div className="col-span-full">
+                <FormField label="Address Line 1" name="presentAddress.line1" required formData={formData} handleChange={handleChange} />
+              </div>
+              <div className="col-span-full">
+                <FormField label="Address Line 2" name="presentAddress.line2" formData={formData} handleChange={handleChange} />
+              </div>
+              <FormField label="City" name="presentAddress.district" required formData={formData} handleChange={handleChange} />
+              <FormField label="State/Province/Region" name="presentAddress.state" required formData={formData} handleChange={handleChange} />
+              <FormField label="ZIP/Postal Code" name="presentAddress.pincode" required formData={formData} handleChange={handleChange} />
+              <FormField label="Country" name="presentAddress.country" required formData={formData} handleChange={handleChange} />
+
+              {/* Permanent Address */}
+              <div className="col-span-full mt-4 mb-2 flex flex-col md:flex-row md:items-center justify-between border-b pb-1">
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Permanent Address</h4>
+                <div className="flex items-center mt-2 md:mt-0">
+                  <input
+                    type="checkbox"
+                    id="sameAsPresent"
+                    checked={formData.sameAsPresent}
+                    onChange={handleSameAsPresentChange}
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="sameAsPresent" className="ml-2 text-xs text-gray-600 dark:text-gray-400">Same as Present Address</label>
+                </div>
+              </div>
+              <div className="col-span-full">
+                <FormField label="Address Line 1" name="permanentAddress.line1" required formData={formData} handleChange={handleChange} />
+              </div>
+              <div className="col-span-full">
+                <FormField label="Address Line 2" name="permanentAddress.line2" formData={formData} handleChange={handleChange} />
+              </div>
+              <FormField label="City" name="permanentAddress.district" required formData={formData} handleChange={handleChange} />
+              <FormField label="State/Province/Region" name="permanentAddress.state" required formData={formData} handleChange={handleChange} />
+              <FormField label="ZIP/Postal Code" name="permanentAddress.pincode" required formData={formData} handleChange={handleChange} />
+              <FormField label="Country" name="permanentAddress.country" required formData={formData} handleChange={handleChange} />
+
+              {/* Address as per Aadhaar */}
+              <div className="col-span-full mt-4 mb-2 flex flex-col md:flex-row md:items-center justify-between border-b pb-1">
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Address as per Aadhaar</h4>
+                <div className="flex flex-wrap gap-4 mt-2 md:mt-0 text-xs text-gray-600 dark:text-gray-400">
+                  <label className="flex items-center cursor-pointer">
+                    <input type="radio" name="aadhaarAddressOption" value="present" checked={formData.aadhaarAddressOption === 'present'} onChange={handleAadhaarAddressOptionChange} className="mr-1" />
+                    Same as Present
+                  </label>
+                  <label className="flex items-center cursor-pointer">
+                    <input type="radio" name="aadhaarAddressOption" value="permanent" checked={formData.aadhaarAddressOption === 'permanent'} onChange={handleAadhaarAddressOptionChange} className="mr-1" />
+                    Same as Permanent
+                  </label>
+                  <label className="flex items-center cursor-pointer">
+                    <input type="radio" name="aadhaarAddressOption" value="none" checked={formData.aadhaarAddressOption === 'none'} onChange={handleAadhaarAddressOptionChange} className="mr-1" />
+                    Other
+                  </label>
+                </div>
+              </div>
+              <div className="col-span-full">
+                <FormField label="Address Line 1" name="aadhaarAddress.line1" required formData={formData} handleChange={handleChange} disabled={formData.aadhaarAddressOption !== 'none'} />
+              </div>
+              <div className="col-span-full">
+                <FormField label="Address Line 2" name="aadhaarAddress.line2" formData={formData} handleChange={handleChange} disabled={formData.aadhaarAddressOption !== 'none'} />
+              </div>
+              <FormField label="City" name="aadhaarAddress.district" required formData={formData} handleChange={handleChange} disabled={formData.aadhaarAddressOption !== 'none'} />
+              <FormField label="State/Province/Region" name="aadhaarAddress.state" required formData={formData} handleChange={handleChange} disabled={formData.aadhaarAddressOption !== 'none'} />
+              <FormField label="ZIP/Postal Code" name="aadhaarAddress.pincode" required formData={formData} handleChange={handleChange} disabled={formData.aadhaarAddressOption !== 'none'} />
+              <FormField label="Country" name="aadhaarAddress.country" required formData={formData} handleChange={handleChange} disabled={formData.aadhaarAddressOption !== 'none'} />
+
+
+            </FormSection>
+
+            {/* Family Details (New Section) */}
+            <FormSection
+              title="Family Details"
+              sectionId={13}
+              isOpen={expandedSections.includes(13)}
+              onToggle={() => toggleSection(13)}
+              onSave={handleSubmit}
+              isSubmitting={submittingSection === 13}
+            >
+              {/* Header */}
+              <div className="col-span-full hidden md:grid md:grid-cols-12 gap-4 mb-2 font-semibold text-sm text-gray-700 dark:text-gray-300">
+                <div className="col-span-4">Name</div>
+                <div className="col-span-4">Relationship</div>
+                <div className="col-span-3">DOB</div>
+                <div className="col-span-1">Action</div>
+              </div>
+
+              {(formData.familyDetails || []).map((member, index) => (
+                <div key={index} className="col-span-full grid grid-cols-1 md:grid-cols-12 gap-4 mb-4 items-end border-b pb-4 md:border-0 md:pb-0">
+                  <div className="col-span-4">
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 md:hidden">Name</label>
+                    <input
+                      type="text"
+                      placeholder="Name"
+                      value={member.name}
+                      onChange={(e) => handleFamilyDetailChange(index, 'name', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    />
+                  </div>
+                  <div className="col-span-4">
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 md:hidden">Relationship</label>
+                    {(() => {
+                      const relationshipOptions = ['Father', 'Mother', 'Spouse', 'Son', 'Daughter', 'Brother', 'Sister']
+                      const isCustom = member.relation && !relationshipOptions.includes(member.relation)
+
+                      return (
+                        <div className="space-y-2">
+                          <select
+                            value={isCustom || member.relation === 'Other' ? 'Other' : member.relation}
+                            onChange={(e) => {
+                              const val = e.target.value
+                              if (val === 'Other') {
+                                handleFamilyDetailChange(index, 'relation', 'Other')
+                              } else {
+                                handleFamilyDetailChange(index, 'relation', val)
+                              }
+                            }}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                          >
+                            <option value="">Select Relationship</option>
+                            {relationshipOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                            <option value="Other">Other (Specify)</option>
+                          </select>
+
+                          {(isCustom || member.relation === 'Other') && (
+                            <input
+                              type="text"
+                              placeholder="Specify Relationship"
+                              value={member.relation === 'Other' ? '' : member.relation}
+                              onChange={(e) => handleFamilyDetailChange(index, 'relation', e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                              autoFocus={member.relation === 'Other'}
+                            />
+                          )}
+                        </div>
+                      )
+                    })()}
+                  </div>
+                  <div className="col-span-3">
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 md:hidden">DOB</label>
+                    <input
+                      type="date"
+                      value={member.dob ? new Date(member.dob).toISOString().split('T')[0] : ''}
+                      onChange={(e) => handleFamilyDetailChange(index, 'dob', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    />
+                  </div>
+                  <div className="col-span-1 flex items-center">
+                    <button
+                      type="button"
+                      onClick={() => removeFamilyMember(index)}
+                      className="text-red-600 hover:text-red-800 p-2"
+                      title="Remove"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               ))}
 
-              {/* System */}
-              <FormField label="Employee ID" name="employeeId" required formData={formData} handleChange={handleChange} />
-              <FormField label="Employee Ref Number" name="employeeRefNumber" formData={formData} handleChange={handleChange} />
-              <FormField label="IP Address" name="ipAddress" formData={formData} handleChange={handleChange} />
+              <div className="col-span-full mt-2">
+                <button
+                  type="button"
+                  onClick={addFamilyMember}
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 shadow-sm"
+                >
+                  <svg className="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
+                  </svg>
+                  Add
+                </button>
+              </div>
             </FormSection>
+
+
+
+
 
             {/* Employment Information */}
             <FormSection
@@ -1779,10 +2120,41 @@ function UserManagement() {
               onSave={handleSubmit}
               isSubmitting={submittingSection === 2}
             >
-              <FormField label="Department" name="department" formData={formData} handleChange={handleChange} />
+              <div className="col-span-full">
+                <label className="block text-sm font-bold text-gray-900 dark:text-gray-100 mb-1">
+                  Employee ID <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="employeeId"
+                  value={formData.employeeId || ''}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-3 py-2 border-2 border-indigo-500 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm font-bold dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                />
+              </div>
+
+              <div className="col-span-full">
+                <label className="block text-sm font-bold text-gray-900 dark:text-gray-100 mb-1">
+                  Official Email ID <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  name="officialEmail"
+                  value={formData.officialEmail || ''}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-3 py-2 border-2 border-indigo-500 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm font-bold dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  placeholder="official.email@company.com"
+                />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  This email will be used for login and all system notifications
+                </p>
+              </div>
+
               <FormField label="Designation" name="designation" formData={formData} handleChange={handleChange} />
               <FormField label="Role" name="role" type="select" required options={roles} formData={formData} handleChange={handleChange} />
-              <FormField label="Business Unit HR (Assignment)" name="businessUnitHR" type="select" options={['BU1', 'BU2', 'BU3']} formData={formData} handleChange={handleChange} />
+              <FormField label="Department/Business Unit" name="businessUnitHR" type="select" options={['BU1', 'BU2', 'BU3']} formData={formData} handleChange={handleChange} />
               <FormField label="Employee Status" name="employeeStatus" type="select" required options={['Active', 'Inactive']} formData={formData} handleChange={handleChange} />
               <FormField label="Joining Date" name="joiningDate" type="date" formData={formData} handleChange={handleChange} />
               <div className="col-span-1">
@@ -1825,68 +2197,11 @@ function UserManagement() {
                 })()}
               </div>
               <FormField label="Employee Exit Date" name="exitDate" type="date" formData={formData} handleChange={handleChange} />
-              <FormField label="CID" name="cid" formData={formData} handleChange={handleChange} />
-              <FormField label="Manager ID" name="managerId" formData={formData} handleChange={handleChange} />
-              <FormField label="Super Manager ID" name="superManagerId" formData={formData} handleChange={handleChange} />
+
               <FormField label="Confirm Date" name="confirmDate" type="date" formData={formData} handleChange={handleChange} />
-              <FormField label="Notice Period (days)" name="noticePeriod" type="number" formData={formData} handleChange={handleChange} />
-              <FormField label="Division" name="division" formData={formData} handleChange={handleChange} />
+
               <FormField label="Cost Center" name="costCenter" formData={formData} handleChange={handleChange} />
-              <FormField label="Grade" name="grade" formData={formData} handleChange={handleChange} />
-              <FormField label="Location" name="location" formData={formData} handleChange={handleChange} />
 
-              {/* Assigned Projects Multi-Select */}
-              <div className="col-span-1 md:col-span-2 mt-2">
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Assign Projects
-                </label>
-
-                {/* Search Projects */}
-                <input
-                  type="text"
-                  placeholder="Search projects..."
-                  value={projectSearchQuery}
-                  onChange={(e) => setProjectSearchQuery(e.target.value)}
-                  className="w-full px-2 py-1 mb-2 text-xs border border-gray-300 rounded focus:outline-none focus:border-indigo-500"
-                />
-
-                <div className="border border-gray-300 rounded-md p-2 h-32 overflow-y-auto bg-white">
-                  {availableProjects.length === 0 ? (
-                    <p className="text-xs text-gray-500 italic p-1">No active projects found.</p>
-                  ) : (
-                    availableProjects
-                      .filter(p =>
-                        p.projectName.toLowerCase().includes(projectSearchQuery.toLowerCase()) ||
-                        p.projectId.toLowerCase().includes(projectSearchQuery.toLowerCase())
-                      )
-                      .map(project => (
-                        <label key={project._id} className="flex items-center space-x-2 mb-1 cursor-pointer hover:bg-gray-50 p-1 rounded">
-                          <input
-                            type="checkbox"
-                            checked={formData.assignedProjects?.includes(project._id)}
-                            onChange={(e) => {
-                              const checked = e.target.checked
-                              setFormData(prev => {
-                                const current = prev.assignedProjects || []
-                                return {
-                                  ...prev,
-                                  assignedProjects: checked
-                                    ? [...current, project._id]
-                                    : current.filter(id => id !== project._id)
-                                }
-                              })
-                            }}
-                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4"
-                          />
-                          <span className="text-xs text-gray-700">
-                            {project.projectName} <span className="text-gray-400">({project.projectId})</span>
-                          </span>
-                        </label>
-                      ))
-                  )}
-                </div>
-                <p className="text-[10px] text-gray-500 mt-1">Select projects to assign this employee to.</p>
-              </div>
             </FormSection>
 
 
@@ -1901,66 +2216,206 @@ function UserManagement() {
               isSubmitting={submittingSection === 3}
             >
               <div className="col-span-full">
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">Qualifications</h4>
                 {formData.education && formData.education.map((edu, index) => (
-                  <div key={index} className="flex flex-col md:flex-row gap-4 mb-4 items-end bg-gray-50 p-3 rounded-lg border border-gray-200">
-                    <div className="flex-1 w-full">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Institute Name</label>
-                      <input
-                        type="text"
-                        value={edu.institute || ''}
-                        onChange={(e) => {
-                          const newEducation = [...formData.education]
-                          newEducation[index].institute = e.target.value
-                          setFormData({ ...formData, education: newEducation })
-                        }}
-                        className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-500"
-                        placeholder="Enter Institute Name"
-                      />
-                    </div>
-                    <div className="w-full md:w-32">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">From</label>
-                      <input
-                        type="date"
-                        value={edu.fromDate ? edu.fromDate.split('T')[0] : ''}
-                        onChange={(e) => {
-                          const newEducation = [...formData.education]
-                          newEducation[index].fromDate = e.target.value
-                          setFormData({ ...formData, education: newEducation })
-                        }}
-                        className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md"
-                      />
-                    </div>
-                    <div className="w-full md:w-32">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">To</label>
-                      <input
-                        type="date"
-                        value={edu.toDate ? edu.toDate.split('T')[0] : ''}
-                        onChange={(e) => {
-                          const newEducation = [...formData.education]
-                          newEducation[index].toDate = e.target.value
-                          setFormData({ ...formData, education: newEducation })
-                        }}
-                        className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md"
-                      />
-                    </div>
+                  <div key={index} className="flex flex-col gap-4 mb-4 bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 relative">
                     <button
                       type="button"
                       onClick={() => {
                         const newEducation = formData.education.filter((_, i) => i !== index)
                         setFormData({ ...formData, education: newEducation })
                       }}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-md self-end"
+                      className="absolute top-2 right-2 text-red-600 hover:text-red-800 p-1"
+                      title="Remove"
                     >
-                      <FiX className="w-5 h-5" />
+                      <FiX className="w-4 h-4" />
+                    </button>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Institute Name</label>
+                        <input
+                          type="text"
+                          value={edu.institute || ''}
+                          onChange={(e) => {
+                            const newEducation = [...formData.education]
+                            newEducation[index].institute = e.target.value
+                            setFormData({ ...formData, education: newEducation })
+                          }}
+                          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                          placeholder="Enter Institute Name"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Degree / Qualification</label>
+                        <select
+                          value={edu.degree || ''}
+                          onChange={(e) => {
+                            const newEducation = [...formData.education]
+                            newEducation[index].degree = e.target.value
+                            setFormData({ ...formData, education: newEducation })
+                          }}
+                          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        >
+                          <option value="">Select Degree</option>
+                          <option value="SSC">SSC / 10th</option>
+                          <option value="Intermediate">Intermediate / 12th</option>
+                          <option value="Diploma">Diploma</option>
+                          <option value="UG">UG (Undergraduate)</option>
+                          <option value="PG">PG (Postgraduate)</option>
+                          <option value="PhD">PhD</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Percentage / CGPA</label>
+                        <input
+                          type="text"
+                          value={edu.percentage || ''}
+                          onChange={(e) => {
+                            const newEducation = [...formData.education]
+                            newEducation[index].percentage = e.target.value
+                            setFormData({ ...formData, education: newEducation })
+                          }}
+                          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                          placeholder="e.g. 85% or 8.5"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">From</label>
+                        <input
+                          type="date"
+                          value={edu.fromDate ? edu.fromDate.split('T')[0] : ''}
+                          onChange={(e) => {
+                            const newEducation = [...formData.education]
+                            newEducation[index].fromDate = e.target.value
+                            setFormData({ ...formData, education: newEducation })
+                          }}
+                          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">To</label>
+                        <input
+                          type="date"
+                          value={edu.toDate ? edu.toDate.split('T')[0] : ''}
+                          onChange={(e) => {
+                            const newEducation = [...formData.education]
+                            newEducation[index].toDate = e.target.value
+                            setFormData({ ...formData, education: newEducation })
+                          }}
+                          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-4">
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Attachment</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="file"
+                          onChange={(e) => {
+                            const file = e.target.files[0]
+                            if (file) {
+                              const newEducation = [...formData.education]
+                              newEducation[index].fileName = file.name
+                              // Ideally upload logic here
+                              setFormData({ ...formData, education: newEducation })
+                              toast.success(`Selected: ${file.name}`)
+                            }
+                          }}
+                          className="text-sm text-gray-500 file:mr-4 file:py-1.5 file:px-2.5 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                        />
+                        {edu.fileName && <span className="text-xs text-gray-500 truncate max-w-[100px]">{edu.fileName}</span>}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, education: [...(formData.education || []), { institute: '', degree: '', percentage: '', fromDate: '', toDate: '', fileName: '', fileUrl: '' }] })}
+                  className="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium mb-6"
+                >
+                  <FiPlus className="w-4 h-4" /> Add Qualification
+                </button>
+
+                {/* Languages Section */}
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2 border-t pt-4">Languages Known</h4>
+                {formData.languages && formData.languages.map((lang, index) => (
+                  <div key={index} className="flex flex-col md:flex-row gap-4 mb-2 items-center bg-gray-50 dark:bg-gray-900/50 p-2 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <div className="flex-1">
+                      <input
+                        type="text"
+                        value={lang.name || ''}
+                        onChange={(e) => {
+                          const newLangs = [...formData.languages]
+                          newLangs[index].name = e.target.value
+                          setFormData({ ...formData, languages: newLangs })
+                        }}
+                        className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        placeholder="Language (e.g. English)"
+                      />
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <label className="flex items-center text-xs text-gray-700 dark:text-gray-300">
+                        <input
+                          type="checkbox"
+                          checked={lang.read || false}
+                          onChange={(e) => {
+                            const newLangs = [...formData.languages]
+                            newLangs[index].read = e.target.checked
+                            setFormData({ ...formData, languages: newLangs })
+                          }}
+                          className="mr-1 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        /> Read
+                      </label>
+                      <label className="flex items-center text-xs text-gray-700 dark:text-gray-300">
+                        <input
+                          type="checkbox"
+                          checked={lang.write || false}
+                          onChange={(e) => {
+                            const newLangs = [...formData.languages]
+                            newLangs[index].write = e.target.checked
+                            setFormData({ ...formData, languages: newLangs })
+                          }}
+                          className="mr-1 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        /> Write
+                      </label>
+                      <label className="flex items-center text-xs text-gray-700 dark:text-gray-300">
+                        <input
+                          type="checkbox"
+                          checked={lang.speak || false}
+                          onChange={(e) => {
+                            const newLangs = [...formData.languages]
+                            newLangs[index].speak = e.target.checked
+                            setFormData({ ...formData, languages: newLangs })
+                          }}
+                          className="mr-1 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        /> Speak
+                      </label>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newLangs = formData.languages.filter((_, i) => i !== index)
+                        setFormData({ ...formData, languages: newLangs })
+                      }}
+                      className="text-red-600 hover:text-red-800 p-1"
+                      title="Remove"
+                    >
+                      <FiX className="w-4 h-4" />
                     </button>
                   </div>
                 ))}
                 <button
                   type="button"
-                  onClick={() => setFormData({ ...formData, education: [...(formData.education || []), { institute: '', fromDate: '', toDate: '' }] })}
+                  onClick={() => setFormData({ ...formData, languages: [...(formData.languages || []), { name: '', read: false, write: false, speak: false }] })}
                   className="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium"
                 >
-                  <FiPlus className="w-4 h-4" /> Add Education
+                  <FiPlus className="w-4 h-4" /> Add Language
                 </button>
               </div>
             </FormSection>
@@ -1976,62 +2431,83 @@ function UserManagement() {
             >
               <div className="col-span-full">
                 {formData.experience && formData.experience.map((exp, index) => (
-                  <div key={index} className="flex flex-col md:flex-row gap-4 mb-4 items-end bg-gray-50 p-3 rounded-lg border border-gray-200">
-                    <div className="flex-1 w-full">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Organization</label>
-                      <input
-                        type="text"
-                        value={exp.organization || ''}
-                        onChange={(e) => {
-                          const newExperience = [...formData.experience]
-                          newExperience[index].organization = e.target.value
-                          setFormData({ ...formData, experience: newExperience })
-                        }}
-                        className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-500"
-                        placeholder="Enter Organization Name"
-                      />
-                    </div>
-                    <div className="w-full md:w-32">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">From</label>
-                      <input
-                        type="date"
-                        value={exp.fromDate ? exp.fromDate.split('T')[0] : ''}
-                        onChange={(e) => {
-                          const newExperience = [...formData.experience]
-                          newExperience[index].fromDate = e.target.value
-                          setFormData({ ...formData, experience: newExperience })
-                        }}
-                        className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md"
-                      />
-                    </div>
-                    <div className="w-full md:w-32">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">To</label>
-                      <input
-                        type="date"
-                        value={exp.toDate ? exp.toDate.split('T')[0] : ''}
-                        onChange={(e) => {
-                          const newExperience = [...formData.experience]
-                          newExperience[index].toDate = e.target.value
-                          setFormData({ ...formData, experience: newExperience })
-                        }}
-                        className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md"
-                      />
-                    </div>
+                  <div key={index} className="flex flex-col gap-4 mb-4 bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 relative">
                     <button
                       type="button"
                       onClick={() => {
                         const newExperience = formData.experience.filter((_, i) => i !== index)
                         setFormData({ ...formData, experience: newExperience })
                       }}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-md self-end"
+                      className="absolute top-2 right-2 text-red-600 hover:text-red-800 p-1"
+                      title="Remove"
                     >
-                      <FiX className="w-5 h-5" />
+                      <FiX className="w-4 h-4" />
                     </button>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Organization</label>
+                        <input
+                          type="text"
+                          value={exp.organization || ''}
+                          onChange={(e) => {
+                            const newExperience = [...formData.experience]
+                            newExperience[index].organization = e.target.value
+                            setFormData({ ...formData, experience: newExperience })
+                          }}
+                          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                          placeholder="Enter Organization Name"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Position / Designation</label>
+                        <input
+                          type="text"
+                          value={exp.designation || ''}
+                          onChange={(e) => {
+                            const newExperience = [...formData.experience]
+                            newExperience[index].designation = e.target.value
+                            setFormData({ ...formData, experience: newExperience })
+                          }}
+                          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                          placeholder="Enter Designation"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">From</label>
+                        <input
+                          type="date"
+                          value={exp.fromDate ? exp.fromDate.split('T')[0] : ''}
+                          onChange={(e) => {
+                            const newExperience = [...formData.experience]
+                            newExperience[index].fromDate = e.target.value
+                            setFormData({ ...formData, experience: newExperience })
+                          }}
+                          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">To</label>
+                        <input
+                          type="date"
+                          value={exp.toDate ? exp.toDate.split('T')[0] : ''}
+                          onChange={(e) => {
+                            const newExperience = [...formData.experience]
+                            newExperience[index].toDate = e.target.value
+                            setFormData({ ...formData, experience: newExperience })
+                          }}
+                          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        />
+                      </div>
+                    </div>
                   </div>
                 ))}
                 <button
                   type="button"
-                  onClick={() => setFormData({ ...formData, experience: [...(formData.experience || []), { organization: '', fromDate: '', toDate: '' }] })}
+                  onClick={() => setFormData({ ...formData, experience: [...(formData.experience || []), { organization: '', designation: '', fromDate: '', toDate: '' }] })}
                   className="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium"
                 >
                   <FiPlus className="w-4 h-4" /> Add Experience
@@ -2039,52 +2515,7 @@ function UserManagement() {
               </div>
             </FormSection>
 
-            {/* Skills */}
-            <FormSection
-              title="Skills"
-              sectionId={11}
-              isOpen={expandedSections.includes(11)}
-              onToggle={() => toggleSection(11)}
-              onSave={handleSubmit}
-              isSubmitting={submittingSection === 11}
-            >
-              <div className="col-span-full">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {formData.skills && formData.skills.map((skill, index) => (
-                    <div key={index} className="flex gap-2 items-center">
-                      <input
-                        type="text"
-                        value={skill || ''}
-                        onChange={(e) => {
-                          const newSkills = [...formData.skills]
-                          newSkills[index] = e.target.value
-                          setFormData({ ...formData, skills: newSkills })
-                        }}
-                        className="flex-1 px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-500"
-                        placeholder="Type here"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const newSkills = formData.skills.filter((_, i) => i !== index)
-                          setFormData({ ...formData, skills: newSkills })
-                        }}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-md"
-                      >
-                        <FiX className="w-5 h-5" />
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => setFormData({ ...formData, skills: [...(formData.skills || []), ''] })}
-                    className="flex justify-center items-center gap-2 h-9 border border-dashed border-gray-300 rounded-md text-sm text-gray-500 hover:border-indigo-500 hover:text-indigo-600 transition-colors"
-                  >
-                    <FiPlus className="w-4 h-4" /> Add Skill
-                  </button>
-                </div>
-              </div>
-            </FormSection>
+
 
             {/* Bank Details */}
             <FormSection
@@ -2095,16 +2526,62 @@ function UserManagement() {
               onSave={handleSubmit}
               isSubmitting={submittingSection === 4}
             >
-              <FormField label="Account Number" name="accountNumber" formData={formData} handleChange={handleChange} />
+              {/* Custom Account Number Field with Masking */}
+              <div className="flex flex-col">
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Account Number
+                </label>
+                <input
+                  type="text"
+                  name="accountNumber"
+                  value={isAccountNumberFocused ? formData.accountNumber : getMaskedAccountNumber(formData.accountNumber)}
+                  onChange={handleChange}
+                  onFocus={() => setIsAccountNumberFocused(true)}
+                  onBlur={() => setIsAccountNumberFocused(false)}
+                  className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                  placeholder="Enter Account Number"
+                />
+              </div>
+
+              {/* Custom Confirm Account Number Field with Validation */}
+              <div className="flex flex-col">
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Confirm Account Number
+                </label>
+                <div className="relative">
+                  <input
+                    type="password"
+                    name="confirmAccountNumber"
+                    value={formData.confirmAccountNumber || ''}
+                    onChange={handleChange}
+                    className={`w-full px-2.5 py-1.5 text-sm border rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 transition-colors ${formData.confirmAccountNumber && formData.accountNumber
+                      ? formData.accountNumber === formData.confirmAccountNumber
+                        ? 'border-green-500 focus:ring-green-500 focus:border-green-500'
+                        : 'border-red-500 focus:ring-red-500 focus:border-red-500'
+                      : 'border-gray-300 dark:border-gray-600 focus:ring-indigo-500 focus:border-indigo-500'
+                      }`}
+                    placeholder="Re-enter Account Number"
+                  />
+                  {formData.confirmAccountNumber && formData.accountNumber && (
+                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                      {formData.accountNumber === formData.confirmAccountNumber ? (
+                        <span className="text-green-500 text-xs font-semibold">Confirmed</span>
+                      ) : (
+                        <span className="text-red-500 text-xs font-semibold">Mismatch</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
               <FormField label="Bank Name" name="bankName" formData={formData} handleChange={handleChange} />
               <FormField label="IFSC Code" name="ifscCode" formData={formData} handleChange={handleChange} />
               <FormField label="Account Type" name="accountType" type="select" options={accountTypes} formData={formData} handleChange={handleChange} />
               <FormField label="Branch Name" name="branchName" formData={formData} handleChange={handleChange} />
 
               <FormField label="Salary Payment Mode" name="salaryPaymentMode" type="select" options={paymentModes} formData={formData} handleChange={handleChange} />
-              <FormField label="DD Payable At" name="ddPayableAt" formData={formData} handleChange={handleChange} />
               <FormField label="Name as per Bank Records" name="nameAsPerBankRecords" formData={formData} handleChange={handleChange} />
               <FormField label="IBAN" name="iban" formData={formData} handleChange={handleChange} />
+              <FormField label="Swift Code" name="swiftCode" formData={formData} handleChange={handleChange} />
             </FormSection>
 
             {/* Documents */}
@@ -2116,36 +2593,97 @@ function UserManagement() {
               onSave={handleSubmit}
               isSubmitting={submittingSection === 5}
             >
-              <FormField label="Aadhar Number" name="aadharNumber" formData={formData} handleChange={handleChange} />
-              <FormField label="PAN Number" name="panNumber" formData={formData} handleChange={handleChange} />
-              <FormField label="Passport Number" name="passportNumber" formData={formData} handleChange={handleChange} />
-              <FormField label="Name (As on Aadhaar Card)" name="nameAsOnAadhaarCard" formData={formData} handleChange={handleChange} />
-            </FormSection>
+              <div className="col-span-full">
+                {formData.documents && formData.documents.map((doc, index) => (
+                  <div key={index} className="flex flex-col gap-4 mb-4 bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 relative">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newDocs = formData.documents.filter((_, i) => i !== index)
+                        setFormData({ ...formData, documents: newDocs })
+                      }}
+                      className="absolute top-2 right-2 text-red-600 hover:text-red-800 p-1"
+                      title="Remove"
+                    >
+                      <FiX className="w-4 h-4" />
+                    </button>
 
-            {/* Background Verification */}
-            <FormSection
-              title="Background Verification"
-              sectionId={6}
-              isOpen={expandedSections.includes(6)}
-              onToggle={() => toggleSection(6)}
-              onSave={handleSubmit}
-              isSubmitting={submittingSection === 6}
-            >
-              <FormField label="Status" name="verificationStatus" type="select" options={verificationStatuses} formData={formData} handleChange={handleChange} />
-              <FormField label="Verification Indication" name="verificationIndication" formData={formData} handleChange={handleChange} />
-              <FormField label="Completed On" name="completedOn" type="date" formData={formData} handleChange={handleChange} />
-              <FormField label="Agency Name" name="agencyName" formData={formData} handleChange={handleChange} />
-              <FormField label="Remarks" name="remarks" type="textarea" formData={formData} handleChange={handleChange} />
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Document Type <span className="text-red-500">*</span></label>
+                        <select
+                          value={doc.documentType || ''}
+                          onChange={(e) => {
+                            const newDocs = [...formData.documents]
+                            newDocs[index].documentType = e.target.value
+                            setFormData({ ...formData, documents: newDocs })
+                          }}
+                          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        >
+                          <option value="">Select Type</option>
+                          <option value="Aadhar Card">Aadhar Card</option>
+                          <option value="PAN Card">PAN Card</option>
+                          <option value="Passport">Passport</option>
+                          <option value="Driving License">Driving License</option>
+                          <option value="Voter ID">Voter ID</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Document Number <span className="text-red-500">*</span></label>
+                        <input
+                          type="text"
+                          value={doc.documentNumber || ''}
+                          onChange={(e) => {
+                            const newDocs = [...formData.documents]
+                            newDocs[index].documentNumber = e.target.value
+                            setFormData({ ...formData, documents: newDocs })
+                          }}
+                          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          placeholder="Enter Number"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Attachment</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="file"
+                            onChange={(e) => {
+                              const file = e.target.files[0]
+                              if (file) {
+                                const newDocs = [...formData.documents]
+                                newDocs[index].fileName = file.name
+                                // Ideally upload logic here, currently storing just name for display
+                                setFormData({ ...formData, documents: newDocs })
+                                toast.success(`Selected: ${file.name}`)
+                              }
+                            }}
+                            className="text-sm text-gray-500 file:mr-4 file:py-1.5 file:px-2.5 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                          />
+                          {doc.fileName && <span className="text-xs text-gray-500 truncate max-w-[100px]">{doc.fileName}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, documents: [...(formData.documents || []), { documentType: '', documentNumber: '', fileName: '' }] })}
+                  className="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+                >
+                  <FiPlus className="w-4 h-4" /> Add Document
+                </button>
+              </div>
             </FormSection>
 
             {/* PF Details */}
             <FormSection
               title="PF Details"
-              sectionId={7}
-              isOpen={expandedSections.includes(7)}
-              onToggle={() => toggleSection(7)}
+              sectionId={6}
+              isOpen={expandedSections.includes(6)}
+              onToggle={() => toggleSection(6)}
               onSave={handleSubmit}
-              isSubmitting={submittingSection === 7}
+              isSubmitting={submittingSection === 6}
             >
               <FormField label="Is Employee Eligible for PF" name="isEligibleForPF" type="checkbox" formData={formData} handleChange={handleChange} />
               <FormField label="PF Number" name="pfNumber" formData={formData} handleChange={handleChange} />
@@ -2161,11 +2699,11 @@ function UserManagement() {
             {/* ESI Details */}
             <FormSection
               title="ESI Details"
-              sectionId={8}
-              isOpen={expandedSections.includes(8)}
-              onToggle={() => toggleSection(8)}
+              sectionId={7}
+              isOpen={expandedSections.includes(7)}
+              onToggle={() => toggleSection(7)}
               onSave={handleSubmit}
-              isSubmitting={submittingSection === 8}
+              isSubmitting={submittingSection === 7}
             >
               <FormField label="Is Employee Eligible for ESI" name="isEligibleForESI" type="checkbox" formData={formData} handleChange={handleChange} />
               <FormField label="ESI Number" name="esiNumber" formData={formData} handleChange={handleChange} />
@@ -2175,11 +2713,11 @@ function UserManagement() {
             {/* Account Setup */}
             <FormSection
               title="Account Setup"
-              sectionId={9}
-              isOpen={expandedSections.includes(9)}
-              onToggle={() => toggleSection(9)}
+              sectionId={8}
+              isOpen={expandedSections.includes(8)}
+              onToggle={() => toggleSection(8)}
               onSave={handleSubmit}
-              isSubmitting={submittingSection === 9}
+              isSubmitting={submittingSection === 8}
             >
               <FormField
                 label="Password"
@@ -2257,42 +2795,44 @@ function UserManagement() {
           </div>
 
         </form>
-      </div>
+      </div >
 
       {/* Delete Confirmation Modal */}
-      {deleteConfirmation && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-            <div className="p-6">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">Confirm Delete</h3>
-              <p className="text-gray-600 mb-6">
-                Are you sure you want to delete{' '}
-                <span className="font-semibold">
-                  {deleteConfirmation.fullName || `${deleteConfirmation.firstName || ''} ${deleteConfirmation.lastName || ''}`.trim() || deleteConfirmation.email}
-                </span>
-                ? This action cannot be undone.
-              </p>
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={handleDeleteCancel}
-                  disabled={deleting}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleDeleteConfirm}
-                  disabled={deleting}
-                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
-                >
-                  {deleting ? 'Deleting...' : 'Delete'}
-                </button>
+      {
+        deleteConfirmation && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+              <div className="p-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-4">Confirm Delete</h3>
+                <p className="text-gray-600 mb-6">
+                  Are you sure you want to delete{' '}
+                  <span className="font-semibold">
+                    {deleteConfirmation.fullName || `${deleteConfirmation.firstName || ''} ${deleteConfirmation.lastName || ''}`.trim() || deleteConfirmation.email}
+                  </span>
+                  ? This action cannot be undone.
+                </p>
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={handleDeleteCancel}
+                    disabled={deleting}
+                    className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDeleteConfirm}
+                    disabled={deleting}
+                    className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {deleting ? 'Deleting...' : 'Delete'}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   )
 }
 

@@ -95,7 +95,7 @@ export const menuItems = [
     label: 'Employee Directory',
     icon: FiUsers,
     path: '/admin/users',
-    roles: ['super_admin']
+    roles: ['super_admin', 'hr_admin']
   },
   {
     id: 'project-management',
@@ -118,7 +118,13 @@ export const menuItems = [
     path: '/admin/grievance-config',
     roles: ['super_admin']
   },
-
+  {
+    id: 'form-builder',
+    label: 'Schema Configuration',
+    icon: FiSettings,
+    path: '/admin/form-builder',
+    roles: ['super_admin', 'hr_admin']
+  }
 
 
 ]

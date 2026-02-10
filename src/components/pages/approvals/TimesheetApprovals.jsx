@@ -239,8 +239,8 @@ const TimesheetApprovals = () => {
                                             </td>
                                             <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
                                                 <div className="flex justify-end space-x-2">
-                                                    {/* Approve Button */}
-                                                    {timesheet.status !== 'Approved' && (
+                                                    {/* Approve Button - Hide if already approved */}
+                                                    {!['Approved', 'approved'].includes(timesheet.status) && (
                                                         <>
                                                             <button
                                                                 onClick={() => initiateAction(timesheet._id, 'approved')}
