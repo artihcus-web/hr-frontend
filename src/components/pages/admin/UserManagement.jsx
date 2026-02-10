@@ -188,6 +188,7 @@ function UserManagement() {
     maritalStatus: '',
     bloodGroup: '',
     emergencyContact: '',
+    emergencyCountryCode: '+91',
     presentAddress: { line1: '', line2: '', pincode: '', district: '', state: '', country: '' },
     permanentAddress: { line1: '', line2: '', pincode: '', district: '', state: '', country: '' },
     aadhaarAddress: { line1: '', line2: '', pincode: '', district: '', state: '', country: '' },
@@ -467,7 +468,9 @@ function UserManagement() {
         gender: emp.gender || '',
         maritalStatus: emp.maritalStatus || '',
         bloodGroup: emp.bloodGroup || '',
+        bloodGroup: emp.bloodGroup || '',
         emergencyContact: emp.emergencyContact || '',
+        emergencyCountryCode: emp.emergencyCountryCode || '+91',
         presentAddress: emp.presentAddress || { line1: '', line2: '', pincode: '', district: '', state: '', country: '' },
         permanentAddress: emp.permanentAddress || { line1: '', line2: '', pincode: '', district: '', state: '', country: '' },
         aadhaarAddress: emp.aadhaarAddress || { line1: '', line2: '', pincode: '', district: '', state: '', country: '' },
@@ -1911,7 +1914,27 @@ function UserManagement() {
               </div>
 
               {/* Emergency Contact */}
-              <FormField label="Emergency Contact Number" name="emergencyContact" required formData={formData} handleChange={handleChange} />
+              <div className="col-span-full md:col-span-1 flex gap-2 w-full">
+                <div className="w-1/2">
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Code</label>
+                  <select
+                    name="emergencyCountryCode"
+                    value={formData.emergencyCountryCode || '+91'}
+                    onChange={handleChange}
+                    className="w-full px-2 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  >
+                    {countryCodes.map((country, index) => (
+                      <option key={`${country.code}-${index}`} value={country.code}>
+                        {country.name} ({country.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex-1">
+                  <FormField label="Emergency Contact Number" name="emergencyContact" required formData={formData} handleChange={handleChange} />
+                </div>
+              </div>
+
               <FormField label="Emergency Contact Name" name="emergencyContactName" required formData={formData} handleChange={handleChange} />
 
               {/* Emails */}
@@ -2152,9 +2175,9 @@ function UserManagement() {
                 </p>
               </div>
 
+              <FormField label="Department/Business Unit" name="businessUnitHR" type="select" options={['BU1', 'BU2', 'BU3']} formData={formData} handleChange={handleChange} />
               <FormField label="Designation" name="designation" formData={formData} handleChange={handleChange} />
               <FormField label="Role" name="role" type="select" required options={roles} formData={formData} handleChange={handleChange} />
-              <FormField label="Department/Business Unit" name="businessUnitHR" type="select" options={['BU1', 'BU2', 'BU3']} formData={formData} handleChange={handleChange} />
               <FormField label="Employee Status" name="employeeStatus" type="select" required options={['Active', 'Inactive']} formData={formData} handleChange={handleChange} />
               <FormField label="Joining Date" name="joiningDate" type="date" formData={formData} handleChange={handleChange} />
               <div className="col-span-1">
@@ -2248,24 +2271,39 @@ function UserManagement() {
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Degree / Qualification</label>
-                        <select
-                          value={edu.degree || ''}
-                          onChange={(e) => {
-                            const newEducation = [...formData.education]
-                            newEducation[index].degree = e.target.value
-                            setFormData({ ...formData, education: newEducation })
-                          }}
-                          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                        >
-                          <option value="">Select Degree</option>
-                          <option value="SSC">SSC / 10th</option>
-                          <option value="Intermediate">Intermediate / 12th</option>
-                          <option value="Diploma">Diploma</option>
-                          <option value="UG">UG (Undergraduate)</option>
-                          <option value="PG">PG (Postgraduate)</option>
-                          <option value="PhD">PhD</option>
-                          <option value="Other">Other</option>
-                        </select>
+                        <div className="space-y-2">
+                          <select
+                            value={['SSC', 'Intermediate', 'Diploma', 'UG', 'PG', 'PhD'].includes(edu.degree) ? edu.degree : 'Other'}
+                            onChange={(e) => {
+                              const newEducation = [...formData.education]
+                              newEducation[index].degree = e.target.value === 'Other' ? '' : e.target.value
+                              setFormData({ ...formData, education: newEducation })
+                            }}
+                            className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                          >
+                            <option value="">Select Degree</option>
+                            <option value="SSC">SSC / 10th</option>
+                            <option value="Intermediate">Intermediate / 12th</option>
+                            <option value="Diploma">Diploma</option>
+                            <option value="UG">UG (Undergraduate)</option>
+                            <option value="PG">PG (Postgraduate)</option>
+                            <option value="PhD">PhD</option>
+                            <option value="Other">Other (Specify)</option>
+                          </select>
+                          {(!['SSC', 'Intermediate', 'Diploma', 'UG', 'PG', 'PhD', ''].includes(edu.degree) || edu.degree === '') && (
+                            <input
+                              type="text"
+                              value={edu.degree || ''}
+                              onChange={(e) => {
+                                const newEducation = [...formData.education]
+                                newEducation[index].degree = e.target.value
+                                setFormData({ ...formData, education: newEducation })
+                              }}
+                              className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                              placeholder="Specify Degree/Qualification"
+                            />
+                          )}
+                        </div>
                       </div>
                     </div>
 
