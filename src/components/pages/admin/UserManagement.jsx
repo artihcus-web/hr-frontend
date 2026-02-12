@@ -89,6 +89,8 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
   const isCountryField = name.includes('country') || (label && label.toLowerCase().includes('country'))
   const isAccountNumberField = name.includes('accountNumber') && !name.includes('confirm')
   const isPercentageField = name.includes('percentage') || (label && (label.toLowerCase().includes('percentage') || label.toLowerCase().includes('cgpa')))
+  const isPhoneType = normalizedType === 'phone'
+  const isEmailType = normalizedType === 'email'
   
   // Schema-driven type validation
   // Text type: only alphabets, spaces, and valid special characters (no numbers)
@@ -374,6 +376,77 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           }}
           required={required}
           placeholder={placeholder}
+          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+          {...props}
+        />
+      ) : isPhoneType ? (
+        <input
+          type="text"
+          inputMode="numeric"
+          name={name}
+          value={value}
+          onChange={(e) => {
+            // Phone type: only digits, max 10 characters
+            const filteredValue = e.target.value.replace(/[^0-9]/g, '').slice(0, 10)
+            handleChange({ ...e, target: { ...e.target, value: filteredValue } })
+          }}
+          onKeyPress={(e) => {
+            const char = String.fromCharCode(e.which)
+            // Block non-digits
+            if (!/[0-9]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
+              e.preventDefault()
+              return
+            }
+            // Enforce max length 10 while typing
+            if (e.target.value && e.target.value.length >= 10 && e.key !== 'Backspace' && e.key !== 'Delete') {
+              e.preventDefault()
+            }
+          }}
+          onPaste={(e) => {
+            e.preventDefault()
+            const pastedText = e.clipboardData.getData('text')
+            const filteredValue = pastedText.replace(/[^0-9]/g, '').slice(0, 10)
+            handleChange({ target: { name, value: filteredValue, type: 'text' } })
+          }}
+          onBlur={(e) => {
+            const current = (e.target.value || '').trim()
+            if (current && current.length !== 10) {
+              toast.error('Phone number must be exactly 10 digits')
+            }
+          }}
+          maxLength={10}
+          required={required}
+          placeholder={placeholder || '10-digit phone number'}
+          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+          {...props}
+        />
+      ) : isEmailType ? (
+        <input
+          type="email"
+          name={name}
+          value={value}
+          onChange={(e) => {
+            // Trim spaces while typing
+            const next = e.target.value.replace(/\s+/g, '')
+            handleChange({ ...e, target: { ...e.target, value: next } })
+          }}
+          onBlur={(e) => {
+            const current = (e.target.value || '').trim()
+            if (!current) return
+            const lower = current.toLowerCase()
+            // Basic email shape check
+            const basicEmailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+            if (!basicEmailRegex.test(current)) {
+              toast.error('Please enter a valid email address')
+              return
+            }
+            // Enforce .com domain
+            if (!lower.endsWith('.com')) {
+              toast.error('Email must end with .com')
+            }
+          }}
+          required={required}
+          placeholder={placeholder || 'example@domain.com'}
           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
           {...props}
         />
@@ -794,7 +867,9 @@ function UserManagement() {
       const sectionKey = getSectionKey(sectionId)
       if (!sectionKey) return defaultValue
       const field = getFieldConfig(sectionKey, fieldName)
-      return field?.required === true
+      if (!field) return defaultValue
+      if (typeof field.required === 'boolean') return field.required
+      return defaultValue
     },
     [getSectionKey, getFieldConfig]
   )
@@ -1449,6 +1524,14 @@ function UserManagement() {
               'Email': 'email',
               'Email *': 'email', // Handle asterisk
               'email': 'email',
+              'Official Email ID': 'officialEmail',
+              'Official Email ID *': 'officialEmail',
+              'Official Email': 'officialEmail',
+              'OfficialEmail': 'officialEmail',
+              'officialEmail': 'officialEmail',
+              'officeEmail': 'officialEmail',
+              'Office Mail ID': 'officialEmail',
+              'Office Mail ID *': 'officialEmail',
               'Phone': 'phone',
               'Phone *': 'phone',
               'phone': 'phone',
@@ -1482,8 +1565,6 @@ function UserManagement() {
               'DOB as per Aadhaar': 'birthdayDate',
               'Employee Status': 'employeeStatus',
               'Nick Name': 'nickName',
-              'Office Mail ID': 'officeEmail',
-              'Office Mail ID *': 'officeEmail',
               'Secondary Contact': 'secondaryContact',
               'Secondary Contact *': 'secondaryContact',
               'Employee Ref Number': 'employeeRefNumber',
@@ -1633,11 +1714,17 @@ function UserManagement() {
               }
             })
 
+            // Map email to officialEmail if officialEmail is not provided
+            // This allows using "Email" column for officialEmail
+            if (!employee.officialEmail && employee.email) {
+              employee.officialEmail = employee.email
+            }
+            
             // Ensure required fields
             if (!employee.firstName) employee.firstName = ''
-            if (!employee.email) employee.email = ''
             if (!employee.phone) employee.phone = ''
             if (!employee.employeeId) employee.employeeId = ''
+            if (!employee.officialEmail) employee.officialEmail = ''
             if (!employee.role) employee.role = 'employee'
             if (!employee.password) {
               // Generate default password if not provided
@@ -1660,17 +1747,24 @@ function UserManagement() {
           for (let i = 0; i < employees.length; i++) {
             const emp = employees[i]
 
-            // Validate required fields
-            if (!emp.firstName || !emp.email || !emp.phone || !emp.employeeId) {
+            // Validate required fields (backend requires: firstName, phone, employeeId, officialEmail, role)
+            if (!emp.firstName || !emp.phone || !emp.employeeId || !emp.officialEmail || !emp.role) {
+              const missingFields = []
+              if (!emp.firstName) missingFields.push('FirstName')
+              if (!emp.phone) missingFields.push('Phone')
+              if (!emp.employeeId) missingFields.push('EmployeeID')
+              if (!emp.officialEmail) missingFields.push('Official Email ID')
+              if (!emp.role) missingFields.push('Role')
               failedCount++
-              errors.push(`Row ${i + 2}: Missing required fields (FirstName, Email, Phone, EmployeeID)`)
+              errors.push(`Row ${i + 2}: Missing required fields (${missingFields.join(', ')})`)
               continue
             }
 
             try {
               const apiData = {
                 username: emp.loginUsername || emp.employeeId,
-                email: emp.email,
+                email: emp.email || emp.officialEmail, // Use email if provided, otherwise use officialEmail
+                officialEmail: emp.officialEmail,
                 password: emp.password,
                 fullName: `${emp.firstName} ${emp.lastName || ''}`.trim(),
                 role: emp.role || 'employee',
@@ -2505,7 +2599,9 @@ function UserManagement() {
                 <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
                   <thead className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/50 dark:to-purple-950/50">
                     <tr>
-
+                      <th className="px-2 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                        S. No
+                      </th>
                       <th className="px-2 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
                         Employee ID
                       </th>
@@ -2551,7 +2647,7 @@ function UserManagement() {
                           </div>
                         </td>
                       </tr>
-                    ) : filteredEmployees.map((emp) => {
+                    ) : filteredEmployees.map((emp, index) => {
                       const fullName = emp.fullName || `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || 'Unknown'
                       const initials = getInitials(emp)
                       const avatarColor = getAvatarColor(fullName)
@@ -2561,6 +2657,9 @@ function UserManagement() {
                           key={emp._id || emp.id}
                           className="hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 transition-colors duration-150"
                         >
+                          <td className="px-2 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
+                            {index + 1}
+                          </td>
                           <td
                             className="px-2 py-3 whitespace-nowrap cursor-pointer"
                             onClick={() => { handleEdit(emp._id || emp.id); setIsNewEntry(false) }}
@@ -2904,8 +3003,9 @@ function UserManagement() {
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
                     <p className="text-sm font-semibold text-blue-900 mb-2">Expected Excel Format:</p>
                     <div className="text-xs text-blue-800 space-y-1">
-                      <p><strong>Required columns:</strong> First Name, Email, Phone, Employee ID</p>
-                      <p><strong>Optional columns:</strong> Last Name, Middle Name, Role, Department, Designation, Location, Password (defaults to Temp[EmployeeID]123! if not provided)</p>
+                      <p><strong>Required columns:</strong> First Name, Official Email ID (or Email), Phone, Employee ID, Role</p>
+                      <p><strong>Optional columns:</strong> Last Name, Middle Name, Department, Designation, Location, Password (defaults to Temp[EmployeeID]123! if not provided)</p>
+                      <p className="mt-2 text-blue-700"><strong>Note:</strong> If "Official Email ID" column is not present, "Email" column will be used as Official Email ID.</p>
                     </div>
                   </div>
 

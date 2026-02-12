@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../../../context/AuthContext'
 import axiosInstance from '../../../utils/axiosInstance'
 import toast from 'react-hot-toast'
-import { FiUsers, FiMonitor, FiSettings, FiAlertCircle, FiSave, FiCheck, FiX } from 'react-icons/fi'
+import { FiUsers, FiMonitor, FiSettings, FiAlertCircle, FiFileText, FiSave, FiCheck, FiX } from 'react-icons/fi'
 import LoadingSpinner from '../../common/LoadingSpinner'
 
 const AdminControllers = () => {
@@ -13,7 +13,8 @@ const AdminControllers = () => {
     employeeDirectory: { roles: ['hr'], users: [] },
     ticketConfiguration: { roles: ['hr'], users: [] },
     schemaConfiguration: { roles: ['hr'], users: [] },
-    grievancePortal: { roles: ['hr'], users: [] }
+    grievancePortal: { roles: ['hr'], users: [] },
+    policies: { roles: ['hr'], users: [] }
   })
 
   const features = [
@@ -40,6 +41,12 @@ const AdminControllers = () => {
       label: 'Grievance Portal',
       icon: FiAlertCircle,
       description: 'Access to grievance portal administration'
+    },
+    {
+      id: 'policies',
+      label: 'Policies',
+      icon: FiFileText,
+      description: 'Access to view and manage company policies'
     }
   ]
 
