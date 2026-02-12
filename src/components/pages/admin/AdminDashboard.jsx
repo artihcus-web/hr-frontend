@@ -203,10 +203,10 @@ function AdminDashboard() {
           {/* LEFT MAIN AREA (Span 9) */}
           <div className="lg:col-span-9 grid grid-cols-1 md:grid-cols-12 gap-6 h-full">
 
-            {/* LEFT COLUMN (Span 6 of 12) - Metrics */}
-            <div className="md:col-span-6 flex flex-col gap-6">
+            {/* LEFT COLUMN (Span 4 of 12) - Metrics - reduced to give more space to action cards */}
+            <div className="md:col-span-4 flex flex-col gap-6">
               {/* Total Employees Widget */}
-              <div className="bg-white dark:bg-slate-900/50 backdrop-blur-sm rounded-2xl shadow-sm p-6 border border-slate-200 dark:border-slate-800 transition-colors">
+              <div className="bg-white dark:bg-slate-900/50 backdrop-blur-sm rounded-2xl shadow-sm p-4 w-full border border-slate-200 dark:border-slate-800 transition-colors">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-slate-500 dark:text-slate-400 font-medium">Total Employees</span>
                   <FiUsers className="h-5 w-5 text-orange-500" />
@@ -226,8 +226,8 @@ function AdminDashboard() {
               </div>
             </div>
 
-            {/* RIGHT COLUMN (Span 6 of 12) - Actions & Activity */}
-            <div className="md:col-span-6 flex flex-col gap-6">
+            {/* RIGHT COLUMN (Span 8 of 12) - Actions & Activity - larger for User Management & Project Resources */}
+            <div className="md:col-span-8 flex flex-col gap-6">
               {/* Feature Cards Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 {/* User Management */}

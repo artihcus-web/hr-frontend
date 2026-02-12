@@ -124,6 +124,13 @@ export const menuItems = [
     icon: FiSettings,
     path: '/admin/form-builder',
     roles: ['super_admin', 'hr_admin']
+  },
+  {
+    id: 'admin-controllers',
+    label: 'Admin Controllers',
+    icon: FiSettings,
+    path: '/admin/controllers',
+    roles: ['super_admin']
   }
 
 

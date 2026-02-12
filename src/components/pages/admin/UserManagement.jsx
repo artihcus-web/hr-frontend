@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../context/AuthContext'
-import { FiEdit2, FiTrash2, FiUpload, FiX, FiSearch, FiFilter, FiDownload, FiChevronDown, FiChevronUp, FiSave, FiPlus, FiMoreVertical } from 'react-icons/fi'
+import { FiEdit2, FiTrash2, FiUpload, FiX, FiSearch, FiFilter, FiDownload, FiChevronDown, FiChevronUp, FiSave, FiPlus, FiMoreVertical, FiEye } from 'react-icons/fi'
 import * as XLSX from 'xlsx'
 import toast from 'react-hot-toast'
 import { countryCodes } from '../../../utils/countryCodes'
@@ -9,6 +9,13 @@ import axiosInstance from '../../../utils/axiosInstance'
 import LoadingSpinner from '../../common/LoadingSpinner'
 
 const roles = ['admin', 'c-suite', 'hr', 'manager', 'supermanager', 'tl', 'employee', 'client']
+
+const getProfileImageUrl = (url) => {
+  if (!url) return ''
+  if (url.startsWith('http') || url.startsWith('data:') || url.startsWith('blob:')) return url
+  const base = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+  return `${base.replace(/\/$/, '')}${url.startsWith('/') ? url : `/${url}`}`
+}
 const genders = ['Male', 'Female', 'Other']
 const maritalStatuses = ['Single', 'Married', 'Divorced', 'Widowed']
 const accountTypes = ['Savings', 'Current']
@@ -98,35 +105,50 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
   )
 }
 
-// FormSection component - refactored for Accordion mode
-const FormSection = ({ title, children, isOpen, onToggle, onSave, isSubmitting, sectionId }) => {
+// FormSection component - read-only until Edit is clicked; then fields and SAVE are enabled
+const FormSection = ({ title, children, isOpen, onToggle, onSave, isSubmitting, sectionId, isEditMode, onEditClick, showEditButton = true }) => {
+  const handleEditClick = (e) => {
+    e.stopPropagation()
+    if (!isOpen) onToggle()
+    onEditClick?.(sectionId)
+  }
   return (
     <div className="bg-white dark:bg-gray-800 rounded-md border border-gray-200 dark:border-gray-700 mb-2 overflow-hidden shadow-sm transition-colors">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="w-full flex items-center justify-between px-4 py-2 bg-gray-50 dark:bg-gray-900/50 hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors focus:outline-none"
-      >
-        <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
-        {isOpen ? <FiChevronUp className="w-5 h-5 text-gray-500 dark:text-gray-400" /> : <FiChevronDown className="w-5 h-5 text-gray-500 dark:text-gray-400" />}
-      </button>
+      <div className="flex items-center justify-between px-4 py-2 bg-gray-50 dark:bg-gray-900/50 hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors">
+        <button type="button" onClick={onToggle} className="flex-1 flex items-center justify-between text-left focus:outline-none">
+          <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
+          {isOpen ? <FiChevronUp className="w-5 h-5 text-gray-500 dark:text-gray-400 flex-shrink-0" /> : <FiChevronDown className="w-5 h-5 text-gray-500 dark:text-gray-400 flex-shrink-0" />}
+        </button>
+        {showEditButton && (
+          <button
+            type="button"
+            onClick={handleEditClick}
+            className="ml-2 flex items-center gap-1 px-2 py-1 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded transition-colors flex-shrink-0"
+          >
+            <FiEdit2 className="w-3.5 h-3.5" /> {isEditMode ? 'Editing' : 'Edit'}
+          </button>
+        )}
+      </div>
 
       {isOpen && (
         <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
-            {children}
-          </div>
-          <div className="flex justify-end pt-4 border-t border-gray-100 dark:border-gray-700">
-            <button
-              type="button"
-              onClick={(e) => onSave(e, sectionId)}
-              disabled={isSubmitting}
-              className="px-4 py-1.5 bg-indigo-600 dark:bg-indigo-500 text-white text-sm rounded-md hover:bg-indigo-700 dark:hover:bg-indigo-600 disabled:opacity-50 flex items-center gap-2 transition-colors shadow-sm"
-            >
-
-              {isSubmitting ? 'Saving...' : 'SAVE'}
-            </button>
-          </div>
+          <fieldset disabled={!isEditMode} className={!isEditMode ? 'opacity-90' : ''}>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
+              {children}
+            </div>
+          </fieldset>
+          {isEditMode && (
+            <div className="flex justify-end pt-4 border-t border-gray-100 dark:border-gray-700">
+              <button
+                type="button"
+                onClick={(e) => onSave(e, sectionId)}
+                disabled={isSubmitting}
+                className="px-4 py-1.5 bg-indigo-600 dark:bg-indigo-500 text-white text-sm rounded-md hover:bg-indigo-700 dark:hover:bg-indigo-600 disabled:opacity-50 flex items-center gap-2 transition-colors shadow-sm"
+              >
+                {isSubmitting ? 'Saving...' : 'SAVE'}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -144,6 +166,7 @@ function UserManagement() {
   const [deleteConfirmation, setDeleteConfirmation] = useState(null)
   const [deleting, setDeleting] = useState(false)
   const [isNewEntry, setIsNewEntry] = useState(false) // Track if this is a fresh entry creation flow
+  const [addFlowJustSaved, setAddFlowJustSaved] = useState(false) // After first section save we keep "add" UX (title + editable sections) until user leaves
   const [showImportModal, setShowImportModal] = useState(false)
   const [importing, setImporting] = useState(false)
   const [importProgress, setImportProgress] = useState({ total: 0, success: 0, failed: 0, errors: [] })
@@ -154,24 +177,170 @@ function UserManagement() {
   const [filterStatus, setFilterStatus] = useState('all')
   // const [showFilters, setShowFilters] = useState(false) // Removed unused
 
-  // Action Menu State
+  // Dynamic employee form schema (from CMS / Form Builder)
+  const [employeeFormConfig, setEmployeeFormConfig] = useState(null)
+
+  // Load employee form configuration from backend (CMS)
+  useEffect(() => {
+    if (!token) return
+
+    const fetchEmployeeFormConfig = async () => {
+      try {
+        const res = await axiosInstance.get('/api/form-config/employee')
+        setEmployeeFormConfig(res.data?.config || null)
+      } catch (error) {
+        // 404 means no config yet – fall back to hard-coded labels
+        if (error.response?.status !== 404) {
+          console.error('Error loading employee form configuration:', error)
+        }
+      }
+    }
+
+    fetchEmployeeFormConfig()
+  }, [token])
+
+  // Helpers to resolve section/field metadata from schema
+  const getSectionConfig = useCallback(
+    (sectionKey) => {
+      if (!employeeFormConfig?.sections) return null
+      return employeeFormConfig.sections.find((s) => s.id === sectionKey)
+    },
+    [employeeFormConfig]
+  )
+
+  const getSectionTitle = useCallback(
+    (sectionKey, defaultTitle) => {
+      const section = getSectionConfig(sectionKey)
+      return section?.title || defaultTitle
+    },
+    [getSectionConfig]
+  )
+
+  const getFieldConfig = useCallback(
+    (sectionKey, fieldName) => {
+      const section = getSectionConfig(sectionKey)
+      if (!section?.fields) return null
+      return section.fields.find((f) => f.name === fieldName)
+    },
+    [getSectionConfig]
+  )
+
+  const isFieldVisible = useCallback(
+    (sectionKey, fieldName) => {
+      const field = getFieldConfig(sectionKey, fieldName)
+      // If field not defined in schema, keep it visible by default
+      if (!field) return true
+      return field.isActive !== false
+    },
+    [getFieldConfig]
+  )
+
+  const getFieldLabel = useCallback(
+    (sectionKey, fieldName, defaultLabel) => {
+      const field = getFieldConfig(sectionKey, fieldName)
+      return field?.label || defaultLabel
+    },
+    [getFieldConfig]
+  )
+
+  // Map numeric sectionId to schema section key
+  const getSectionKey = useCallback((sectionId) => {
+    const mapping = {
+      1: 'basic-info',
+      12: 'contact-info',
+      16: 'address-info',
+      13: 'family-details',
+      2: 'employment-info',
+      3: 'education-details',
+      14: 'languages',
+      10: 'experience-details',
+      4: 'bank-details',
+      5: 'documents',
+      6: 'pf-details',
+      7: 'esi-details',
+      8: 'other-info'
+    }
+    return mapping[sectionId] || null
+  }, [])
+
+  // Helper to get section title by sectionId
+  const getSectionTitleById = useCallback(
+    (sectionId, defaultTitle) => {
+      const sectionKey = getSectionKey(sectionId)
+      if (!sectionKey) return defaultTitle
+      return getSectionTitle(sectionKey, defaultTitle)
+    },
+    [getSectionKey, getSectionTitle]
+  )
+
+  // Helper to get field label by sectionId and fieldName
+  const getFieldLabelById = useCallback(
+    (sectionId, fieldName, defaultLabel) => {
+      const sectionKey = getSectionKey(sectionId)
+      if (!sectionKey) return defaultLabel
+      return getFieldLabel(sectionKey, fieldName, defaultLabel)
+    },
+    [getSectionKey, getFieldLabel]
+  )
+
+  // Helper to check field visibility by sectionId and fieldName
+  const isFieldVisibleById = useCallback(
+    (sectionId, fieldName) => {
+      const sectionKey = getSectionKey(sectionId)
+      if (!sectionKey) return true // Default visible if no mapping
+      return isFieldVisible(sectionKey, fieldName)
+    },
+    [getSectionKey, isFieldVisible]
+  )
+
+  // Action menu (three dots) state; position for portal so dropdown isn't clipped by table overflow
   const [openActionMenuId, setOpenActionMenuId] = useState(null)
+  const [actionMenuPosition, setActionMenuPosition] = useState(null)
+
+  // Detail view: employee shown in read-only detail modal; edit opens form with this section expanded
+  const [detailEmployee, setDetailEmployee] = useState(null)
+  const [openEditWithSection, setOpenEditWithSection] = useState(null)
 
   useEffect(() => {
-    const handleClickOutside = () => setOpenActionMenuId(null)
-    if (openActionMenuId) {
-      document.addEventListener('click', handleClickOutside)
+    if (!openActionMenuId) return
+    const handleClickOutside = () => {
+      setOpenActionMenuId(null)
+      setActionMenuPosition(null)
     }
-    return () => document.removeEventListener('click', handleClickOutside)
+    // Defer so the same click that opened the menu doesn't close it
+    const t = setTimeout(() => {
+      document.addEventListener('click', handleClickOutside)
+    }, 0)
+    return () => {
+      clearTimeout(t)
+      document.removeEventListener('click', handleClickOutside)
+    }
   }, [openActionMenuId])
 
   const toggleActionMenu = (id, e) => {
+    e.preventDefault()
     e.stopPropagation()
+    const target = e.currentTarget
+    const rect = target?.getBoundingClientRect?.()
+    const dropdownWidth = 192
+    const dropdownHeight = 200 // ~4 items so menu stays in viewport when row is at bottom
+    const left = rect ? Math.min(rect.right - dropdownWidth, window.innerWidth - dropdownWidth - 8) : 0
+    const spaceBelow = rect ? window.innerHeight - rect.bottom - 8 : 0
+    const openUpward = spaceBelow < dropdownHeight && rect
+    const top = rect
+      ? (openUpward
+          ? Math.max(8, rect.top - dropdownHeight - 4)
+          : rect.bottom + 4)
+      : 0
+    setActionMenuPosition(rect ? { top, left, openUpward } : null)
     setOpenActionMenuId(prev => (prev === id ? null : id))
   }
 
+  const [profileImageFile, setProfileImageFile] = useState(null) // File to upload (not base64)
   const [formData, setFormData] = useState({
     // Basic Information
+    profileImage: '', // URL path from server or blob URL for preview
+    profileImageOriginalName: '', // Original filename (display only)
     firstName: '',
     middleName: '',
     lastName: '',
@@ -193,7 +362,7 @@ function UserManagement() {
     permanentAddress: { line1: '', line2: '', pincode: '', district: '', state: '', country: '' },
     aadhaarAddress: { line1: '', line2: '', pincode: '', district: '', state: '', country: '' },
     sameAsPresent: false, // UI state for checkbox
-    aadhaarAddressOption: 'none', // 'present', 'permanent', 'none'
+    aadhaarAddressOption: '', // 'present', 'permanent' or empty for manual
     emergencyContactName: '',
     emergencyContactNumber: '',
     isPhysicallyChallenged: false,
@@ -210,11 +379,9 @@ function UserManagement() {
     role: 'employee',
     employeeStatus: 'Active',
     joiningDate: '',
-    exitDate: '',
     cid: '',
     managerId: '',
     superManagerId: '',
-    confirmDate: '',
     probationPeriod: '',
     noticePeriod: '',
     division: '',
@@ -269,11 +436,18 @@ function UserManagement() {
 
   // Accordion State
   const [expandedSections, setExpandedSections] = useState([1]) // First section open by default
+  // Which section is in edit mode; others show read-only until Edit is clicked
+  const [editingSectionId, setEditingSectionId] = useState(null)
 
   const toggleSection = (id) => {
     setExpandedSections(prev =>
       prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
     )
+  }
+
+  const handleSectionEditClick = (sectionId) => {
+    setEditingSectionId(sectionId)
+    setExpandedSections(prev => [...new Set([...prev, sectionId])])
   }
 
   useEffect(() => {
@@ -322,6 +496,14 @@ function UserManagement() {
     setExpandedSections([1])
     window.scrollTo({ top: 0, behavior: 'auto' })
   }, [showForm])
+
+  // When opening edit from detail view with a specific section, expand that section
+  useEffect(() => {
+    if (showForm && openEditWithSection) {
+      setExpandedSections(prev => [...new Set([openEditWithSection, ...prev])])
+      setOpenEditWithSection(null)
+    }
+  }, [showForm, openEditWithSection])
 
 
 
@@ -412,6 +594,32 @@ function UserManagement() {
     }
   }
 
+  // Render any extra fields from schema that are not in the known (hard-coded) list – makes every section fully dynamic
+  const renderSchemaExtraFields = (sectionId, knownFields) => {
+    const sectionKey = getSectionKey(sectionId)
+    if (!sectionKey) return null
+    const section = getSectionConfig(sectionKey)
+    const extra = section?.fields?.filter(
+      (f) => !knownFields.includes(f.name) && f.isActive !== false
+    ) || []
+
+    return extra.map((field) =>
+      isFieldVisibleById(sectionId, field.name) ? (
+        <FormField
+          key={field.name}
+          label={getFieldLabelById(sectionId, field.name, field.label || field.name)}
+          name={field.name}
+          type={field.type || 'text'}
+          required={field.required || false}
+          formData={formData}
+          handleChange={handleChange}
+          placeholder={field.placeholder}
+          options={field.options || []}
+        />
+      ) : null
+    )
+  }
+
   // Address Copy Helpers
   const handleSameAsPresentChange = (e) => {
     const checked = e.target.checked
@@ -423,11 +631,15 @@ function UserManagement() {
   }
 
   const handleAadhaarAddressOptionChange = (e) => {
-    const option = e.target.value
+    const clicked = e.target.value
     setFormData(prev => {
+      // Allow toggling off: clicking the same option again clears the selection
+      const option = prev.aadhaarAddressOption === clicked ? '' : clicked
+
       let newAddr = prev.aadhaarAddress
       if (option === 'present') newAddr = { ...prev.presentAddress }
       if (option === 'permanent') newAddr = { ...prev.permanentAddress }
+      // When option is '', keep whatever is currently in aadhaarAddress so user can edit manually
       return {
         ...prev,
         aadhaarAddressOption: option,
@@ -454,6 +666,8 @@ function UserManagement() {
       // Populate form with employee data
       setFormData({
         employeeName: `${emp.firstName || ''} ${emp.lastName || ''}`.trim(),
+        profileImage: emp.profileImage || '',
+        profileImageOriginalName: emp.profileImageOriginalName || '',
         firstName: emp.firstName || '',
         middleName: emp.middleName || '',
         lastName: emp.lastName || '',
@@ -467,7 +681,6 @@ function UserManagement() {
         dateOfBirth: formatDate(emp.dateOfBirth),
         gender: emp.gender || '',
         maritalStatus: emp.maritalStatus || '',
-        bloodGroup: emp.bloodGroup || '',
         bloodGroup: emp.bloodGroup || '',
         emergencyContact: emp.emergencyContact || '',
         emergencyCountryCode: emp.emergencyCountryCode || '+91',
@@ -501,12 +714,10 @@ function UserManagement() {
         role: emp.role || 'employee',
         employeeStatus: emp.isActive === false ? 'Inactive' : 'Active', // Map isActive to employeeStatus
         joiningDate: formatDate(emp.joiningDate),
-        exitDate: formatDate(emp.exitDate),
         cid: emp.cid || '',
         managerId: emp.managerId || '',
         businessUnitHR: emp.businessUnitHR || '',
         superManagerId: emp.superManagerId || '',
-        confirmDate: formatDate(emp.confirmDate),
         probationPeriod: emp.probationPeriod || '',
         noticePeriod: emp.noticePeriod || '',
         division: emp.division || '',
@@ -550,7 +761,9 @@ function UserManagement() {
         isCoveredUnderLWF: emp.isCoveredUnderLWF || false,
         password: '' // Don't pre-fill password
       })
+      setProfileImageFile(null)
       setEditingEmployee(employeeId)
+      setAddFlowJustSaved(false) // Opening existing employee = edit mode
       setShowForm(true)
     } catch (error) {
       console.error('Error loading employee:', error)
@@ -685,7 +898,6 @@ function UserManagement() {
               'Number of Children *': 'numberOfChildren',
               'Children DOBs': 'childrenDobs',
               'DOB as per Aadhaar': 'birthdayDate',
-              'Exit Date': 'exitDate',
               'Employee Status': 'employeeStatus',
               'Nick Name': 'nickName',
               'Office Mail ID': 'officeEmail',
@@ -716,7 +928,6 @@ function UserManagement() {
               'Manager ID': 'managerId',
               'Super Manager ID': 'superManagerId',
               'Super Manager ID *': 'superManagerId', // Handle asterisk
-              'Confirm Date': 'confirmDate',
               'Probation Period': 'probationPeriod',
               'Notice Period': 'noticePeriod',
               'Division': 'division',
@@ -1015,7 +1226,10 @@ function UserManagement() {
   }
 
   const resetForm = () => {
+    setProfileImageFile(null)
     setFormData({
+      profileImage: '',
+      profileImageOriginalName: '',
       employeeName: '',
       firstName: '',
       middleName: '',
@@ -1034,7 +1248,7 @@ function UserManagement() {
       permanentAddress: { line1: '', line2: '', pincode: '', district: '', state: '', country: '' },
       aadhaarAddress: { line1: '', line2: '', pincode: '', district: '', state: '', country: '' },
       sameAsPresent: false,
-      aadhaarAddressOption: 'none',
+      aadhaarAddressOption: '',
       nickName: '',
       employeeRefNumber: '',
       birthdayDate: '',
@@ -1061,11 +1275,9 @@ function UserManagement() {
       role: 'employee',
       employeeStatus: 'Active',
       joiningDate: '',
-      exitDate: '',
       cid: '',
       managerId: '',
       superManagerId: '',
-      confirmDate: '',
       probationPeriod: '',
       noticePeriod: '',
       division: '',
@@ -1112,6 +1324,7 @@ function UserManagement() {
       password: ''
     })
     setEditingEmployee(null)
+    setAddFlowJustSaved(false)
   }
 
   const handleSubmit = async (e, sectionId = null) => {
@@ -1121,25 +1334,26 @@ function UserManagement() {
       return
     }
 
-    // Validate required fields for initial creation
-    if (!editingEmployee) {
-      const missingFields = []
-      if (!formData.firstName) missingFields.push('First Name')
-      if (!formData.lastName) missingFields.push('Last Name')
-      if (!formData.email) missingFields.push('Email')
-      if (!formData.phone) missingFields.push('Phone')
-      if (!formData.employeeId) missingFields.push('Employee ID')
-      // Note: Password validation removed here to allow 'Draft' creation with temp password
-
-      if (missingFields.length > 0) {
-        toast.error(`Initial creation requires: ${missingFields.join(', ')}`)
-        return
-      }
-    } else {
-      // For updates, at least ensure ID and Official Email aren't wiped accidentally
-      if (!formData.employeeId) {
-        toast.error('Employee ID is required')
-        return
+    // When saving a specific section, allow partial save (no global required-field check)
+    const isSectionSave = sectionId != null
+    if (!isSectionSave) {
+      // Full form submit: validate required fields for initial creation
+      if (!editingEmployee) {
+        const missingFields = []
+        if (!formData.firstName) missingFields.push('First Name')
+        if (!formData.lastName) missingFields.push('Last Name')
+        if (!formData.email) missingFields.push('Email')
+        if (!formData.phone) missingFields.push('Phone')
+        if (!formData.employeeId) missingFields.push('Employee ID')
+        if (missingFields.length > 0) {
+          toast.error(`Initial creation requires: ${missingFields.join(', ')}`)
+          return
+        }
+      } else {
+        if (!formData.employeeId) {
+          toast.error('Employee ID is required')
+          return
+        }
       }
     }
 
@@ -1157,10 +1371,53 @@ function UserManagement() {
       return
     }
 
+    // Education Details validation (Section 3): require at least one complete qualification
+    if (sectionId === 3) {
+      const education = formData.education || []
+      const nonEmptyRows = education.filter(e =>
+        e &&
+        (e.institute || e.degree || e.percentage || e.fromDate || e.toDate || e.fileName)
+      )
+
+      if (nonEmptyRows.length === 0) {
+        toast.error('Please add at least one qualification before saving Education Details.')
+        return
+      }
+
+      const hasIncomplete = nonEmptyRows.some(e =>
+        !String(e.institute || '').trim() ||
+        !String(e.degree || '').trim() ||
+        !String(e.percentage || '').trim() ||
+        !e.fromDate ||
+        !e.toDate
+      )
+
+      if (hasIncomplete) {
+        toast.error('Please fill Institute, Degree, Percentage, From and To dates for each qualification.')
+        return
+      }
+    }
+
+    // Family Details validation (Section 13): require all fields before saving
+    if (sectionId === 13) {
+      const family = formData.familyDetails || []
+      const hasIncomplete = family.some(m =>
+        !m ||
+        !String(m.name || '').trim() ||
+        !String(m.relation || '').trim() ||
+        !m.dob
+      )
+      if (hasIncomplete) {
+        toast.error('Please fill Name, Relationship, and DOB for all family members before saving.')
+        return
+      }
+    }
+
     setSubmittingSection(sectionId)
 
     try {
-      // Prepare data for API (map to backend expected format)
+      const isSectionSave = sectionId != null
+      // Prepare data for API (map to backend expected format). Never send profile image as base64/blob.
       const apiData = {
         username: formData.loginUsername || formData.employeeId,
         email: formData.email,
@@ -1168,30 +1425,80 @@ function UserManagement() {
         alternativeEmail: formData.alternativeEmail,
         fullName: `${formData.firstName} ${formData.lastName}`.trim(),
         role: formData.role,
-        // Map employeeStatus (Active/Inactive) to isActive (boolean)
         isActive: formData.employeeStatus === 'Active',
-        // Include all other fields
         ...formData
+      }
+      if (apiData.profileImage && (String(apiData.profileImage).startsWith('data:') || String(apiData.profileImage).startsWith('blob:'))) {
+        delete apiData.profileImage
+      }
+      // Section save for new employee: send draft so backend allows saving with just this section's data
+      if (!editingEmployee && isSectionSave) {
+        apiData.draft = true
       }
 
       // Only include password if provided (for new employees or password change)
       if (formData.password) {
         apiData.password = formData.password
       } else if (!editingEmployee) {
-        // Generate temp password for 'Draft' creation so other info can be saved first
-        const tempPass = `Temp@${formData.phone ? formData.phone.slice(-4) : '1234'}`
-        apiData.password = tempPass
-        toast('Draft created. Temporary password set.', { icon: 'ℹ️' })
+        apiData.password = `Temp@${formData.phone ? formData.phone.slice(-4) : Date.now().toString().slice(-4)}`
+      }
+
+      // Upload profile image as file first when we have a selected file
+      if (profileImageFile) {
+        const form = new FormData()
+        form.append('avatar', profileImageFile)
+        if (editingEmployee) {
+          const avatarRes = await axiosInstance.put(`/api/auth/users/${editingEmployee}/avatar`, form, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          })
+          const profileImageUrl = avatarRes.data?.profileImage
+          const profileImageOriginalName = avatarRes.data?.profileImageOriginalName
+          if (profileImageUrl) {
+            apiData.profileImage = profileImageUrl
+            setFormData(prev => ({
+              ...prev,
+              profileImage: profileImageUrl,
+              ...(profileImageOriginalName ? { profileImageOriginalName } : {})
+            }))
+          }
+          setProfileImageFile(null)
+        } else {
+          // New user: create first, then upload avatar
+          const res = await axiosInstance.post('/api/auth/users', apiData)
+          const newEmployee = res.data.user
+          const newId = newEmployee._id || newEmployee.id
+          setEditingEmployee(newId)
+          setAddFlowJustSaved(true)
+          const avatarRes = await axiosInstance.put(`/api/auth/users/${newId}/avatar`, form, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          })
+          const profileImageUrl = avatarRes.data?.profileImage
+          const profileImageOriginalName = avatarRes.data?.profileImageOriginalName
+          if (profileImageUrl) {
+            setFormData(prev => ({
+              ...prev,
+              profileImage: profileImageUrl,
+              ...(profileImageOriginalName ? { profileImageOriginalName } : {})
+            }))
+          }
+          setProfileImageFile(null)
+          toast.success(isSectionSave ? 'Section saved. Continue with other sections.' : 'Employee created successfully.')
+          await fetchEmployees()
+          setSubmittingSection(null)
+          return
+        }
       }
 
       if (editingEmployee) {
         await axiosInstance.put(`/api/auth/users/${editingEmployee}`, apiData)
-        toast.success('Employee updated successfully')
+        toast.success(isSectionSave ? 'Section saved successfully' : 'Employee updated successfully')
+        setEditingSectionId(null)
       } else {
         const res = await axiosInstance.post('/api/auth/users', apiData)
         const newEmployee = res.data.user
         setEditingEmployee(newEmployee._id || newEmployee.id)
-        toast.success('Employee created successfully. You can now continue with other sections.')
+        setAddFlowJustSaved(true) // Keep "Add New Employee" title and editable sections until user leaves
+        toast.success(isSectionSave ? 'Section saved. Continue with other sections.' : 'Employee created successfully.')
       }
 
       // Refresh employees list but KEEP form open for incremental saving
@@ -1470,7 +1777,10 @@ function UserManagement() {
                           key={emp._id || emp.id}
                           className="hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 transition-colors duration-150"
                         >
-                          <td className="px-2 py-3 whitespace-nowrap">
+                          <td
+                            className="px-2 py-3 whitespace-nowrap cursor-pointer"
+                            onClick={() => { handleEdit(emp._id || emp.id); setIsNewEntry(false) }}
+                          >
                             <div className="text-sm font-medium text-gray-900 dark:text-gray-200">
                               {emp.employeeId || 'N/A'}
                             </div>
@@ -1478,9 +1788,9 @@ function UserManagement() {
                           <td className="px-2 py-3 whitespace-nowrap">
                             <div className="flex items-center space-x-3">
                               {/* Profile Avatar */}
-                              {emp.profileImage ? (
-                                <img
-                                  src={emp.profileImage}
+{emp.profileImage ? (
+                                  <img
+                                  src={getProfileImageUrl(emp.profileImage)}
                                   alt={fullName}
                                   className="w-10 h-10 rounded-full object-cover shadow-md border border-gray-200"
                                 />
@@ -1523,61 +1833,16 @@ function UserManagement() {
                               {emp.isActive !== false ? 'Active' : 'Inactive'}
                             </span>
                           </td>
-                          <td className="px-2 py-3 whitespace-nowrap">
-                            <div className="flex items-center justify-center relative">
+                          <td className="px-2 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-center">
                               <button
+                                type="button"
                                 onClick={(e) => toggleActionMenu(emp._id || emp.id, e)}
                                 className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg transition-colors focus:outline-none"
+                                title="Actions"
                               >
                                 <FiMoreVertical className="w-5 h-5" />
                               </button>
-
-                              {openActionMenuId === (emp._id || emp.id) && (
-                                <div className="absolute right-8 top-0 mt-0 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg py-1 z-50 border border-gray-200 dark:border-gray-700 ring-1 ring-black ring-opacity-5 focus:outline-none origin-top-right">
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      handleEdit(emp._id || emp.id)
-                                      setIsNewEntry(false) // Not a new entry
-                                      setOpenActionMenuId(null)
-                                    }}
-                                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
-                                  >
-                                    <div className="flex items-center gap-2">
-                                      <FiEdit2 className="w-4 h-4" />
-                                      <span>Edit</span>
-                                    </div>
-                                  </button>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      handleExportSingle(emp)
-                                      setOpenActionMenuId(null)
-                                    }}
-                                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-green-600 dark:hover:text-green-400 transition-colors"
-                                  >
-                                    <div className="flex items-center gap-2">
-                                      <FiDownload className="w-4 h-4" />
-                                      <span>Download</span>
-                                    </div>
-                                  </button>
-                                  {emp.isActive !== false && (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        handleDeleteClick(emp)
-                                        setOpenActionMenuId(null)
-                                      }}
-                                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-red-600 dark:hover:text-red-400 transition-colors"
-                                    >
-                                      <div className="flex items-center gap-2">
-                                        <FiTrash2 className="w-4 h-4" />
-                                        <span>Delete</span>
-                                      </div>
-                                    </button>
-                                  )}
-                                </div>
-                              )}
                             </div>
                           </td>
                         </tr>
@@ -1588,6 +1853,152 @@ function UserManagement() {
               </div>
             )}
           </div>
+
+          {/* Actions dropdown: fixed position sibling of table so it is not clipped */}
+          {openActionMenuId != null && actionMenuPosition && (() => {
+            const idStr = String(openActionMenuId)
+            const emp = filteredEmployees.find(e => String(e._id || e.id) === idStr)
+            if (!emp) return null
+            const closeMenu = () => { setOpenActionMenuId(null); setActionMenuPosition(null) }
+            return (
+              <div
+                className="fixed w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg py-1 z-[100] border border-gray-200 dark:border-gray-700 ring-1 ring-black ring-opacity-5"
+                style={{ top: actionMenuPosition.top, left: actionMenuPosition.left }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {emp.isActive !== false && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); handleEdit(emp._id || emp.id); setIsNewEntry(false); closeMenu() }}
+                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <FiEye className="w-4 h-4" />
+                      <span>View</span>
+                    </div>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); handleEdit(emp._id || emp.id); setIsNewEntry(false); closeMenu() }}
+                  className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <FiEdit2 className="w-4 h-4" />
+                    <span>Edit</span>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); handleExportSingle(emp); closeMenu() }}
+                  className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-green-600 dark:hover:text-green-400 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <FiDownload className="w-4 h-4" />
+                    <span>Download</span>
+                  </div>
+                </button>
+                {emp.isActive !== false && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); handleDeleteClick(emp); closeMenu() }}
+                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <FiTrash2 className="w-4 h-4" />
+                      <span>Delete</span>
+                    </div>
+                  </button>
+                )}
+              </div>
+            )
+          })()}
+
+          {/* Employee Detail Modal - click row or View icon to open */}
+          {detailEmployee && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setDetailEmployee(null)}>
+              <div
+                className="bg-white dark:bg-gray-900 rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-gray-200 dark:border-gray-800"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-800">
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                    {detailEmployee.fullName || `${detailEmployee.firstName || ''} ${detailEmployee.lastName || ''}`.trim() || 'Employee Details'}
+                  </h2>
+                  <button onClick={() => setDetailEmployee(null)} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg">
+                    <FiX className="w-5 h-5" />
+                  </button>
+                </div>
+                <div className="overflow-y-auto flex-1 p-6 space-y-4">
+                  {(() => {
+                    const e = detailEmployee
+                    const editSection = (sectionId) => {
+                      setOpenEditWithSection(sectionId)
+                      setDetailEmployee(null)
+                      handleEdit(e._id || e.id)
+                    }
+                    const DetailBlock = ({ title, sectionId, children }) => (
+                      <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                        <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+                          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
+                          <button
+                            type="button"
+                            onClick={() => editSection(sectionId)}
+                            className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded transition-colors"
+                          >
+                            <FiEdit2 className="w-3.5 h-3.5" /> Edit
+                          </button>
+                        </div>
+                        <div className="p-4 text-sm text-gray-700 dark:text-gray-300 space-y-1">
+                          {children}
+                        </div>
+                      </div>
+                    )
+                    return (
+                      <>
+                        <DetailBlock title={getSectionTitleById(1, 'Basic Information')} sectionId={1}>
+                          <p><span className="text-gray-500 dark:text-gray-400">Name:</span> {e.fullName || `${e.firstName || ''} ${e.lastName || ''}`.trim() || '—'}</p>
+                          <p><span className="text-gray-500 dark:text-gray-400">Gender:</span> {e.gender || '—'}</p>
+                          <p><span className="text-gray-500 dark:text-gray-400">DOB:</span> {e.dateOfBirth || e.birthdayDate || '—'}</p>
+                          <p><span className="text-gray-500 dark:text-gray-400">Marital status:</span> {e.maritalStatus || '—'}</p>
+                          <p><span className="text-gray-500 dark:text-gray-400">Blood group:</span> {e.bloodGroup || '—'}</p>
+                        </DetailBlock>
+                        <DetailBlock title={getSectionTitleById(12, 'Contact Information')} sectionId={12}>
+                          <p><span className="text-gray-500 dark:text-gray-400">Phone:</span> {e.phone || e.mobileNumber || '—'}</p>
+                          <p><span className="text-gray-500 dark:text-gray-400">Personal email:</span> {e.email || '—'}</p>
+                          <p><span className="text-gray-500 dark:text-gray-400">Official email:</span> {e.officialEmail || '—'}</p>
+                          <p><span className="text-gray-500 dark:text-gray-400">Emergency contact:</span> {e.emergencyContactName || '—'} {e.emergencyContactNumber ? `(${e.emergencyContactNumber})` : ''}</p>
+                        </DetailBlock>
+                        <DetailBlock title={getSectionTitleById(16, 'Communication / Address')} sectionId={16}>
+                          <p><span className="text-gray-500 dark:text-gray-400">Present:</span> {[e.presentAddress?.line1, e.presentAddress?.line2, e.presentAddress?.district, e.presentAddress?.state, e.presentAddress?.pincode, e.presentAddress?.country].filter(Boolean).join(', ') || '—'}</p>
+                          <p><span className="text-gray-500 dark:text-gray-400">Permanent:</span> {[e.permanentAddress?.line1, e.permanentAddress?.line2, e.permanentAddress?.district, e.permanentAddress?.state, e.permanentAddress?.pincode, e.permanentAddress?.country].filter(Boolean).join(', ') || '—'}</p>
+                        </DetailBlock>
+                        <DetailBlock title={getSectionTitleById(2, 'Employment Information')} sectionId={2}>
+                          <p><span className="text-gray-500 dark:text-gray-400">Employee ID:</span> {e.employeeId || '—'}</p>
+                          <p><span className="text-gray-500 dark:text-gray-400">Department:</span> {e.department || e.businessUnitHR || '—'}</p>
+                          <p><span className="text-gray-500 dark:text-gray-400">Designation:</span> {e.designation || '—'}</p>
+                          <p><span className="text-gray-500 dark:text-gray-400">Role:</span> {e.role || '—'}</p>
+                          <p><span className="text-gray-500 dark:text-gray-400">Status:</span> {e.isActive !== false ? 'Active' : 'Inactive'}</p>
+                          <p><span className="text-gray-500 dark:text-gray-400">Joining date:</span> {e.joiningDate || '—'}</p>
+                          <p><span className="text-gray-500 dark:text-gray-400">Confirm date:</span> {e.confirmDate || '—'}</p>
+                        </DetailBlock>
+                        <DetailBlock title={getSectionTitleById(13, 'Family Details')} sectionId={13}>
+                          {(Array.isArray(e.familyDetails) && e.familyDetails.length > 0) ? e.familyDetails.map((f, i) => (
+                            <p key={i}>{f.name || '—'} ({f.relation || '—'}) {f.dob ? ` · ${f.dob}` : ''}</p>
+                          )) : <p>—</p>}
+                        </DetailBlock>
+                        <DetailBlock title={getSectionTitleById(4, 'Bank Details')} sectionId={4}>
+                          <p><span className="text-gray-500 dark:text-gray-400">Bank:</span> {e.bankName || '—'}</p>
+                          <p><span className="text-gray-500 dark:text-gray-400">Account:</span> {e.accountNumber ? '••••' + (e.accountNumber.slice(-4)) : '—'}</p>
+                          <p><span className="text-gray-500 dark:text-gray-400">IFSC:</span> {e.ifscCode || '—'}</p>
+                        </DetailBlock>
+                      </>
+                    )
+                  })()}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Delete Confirmation Modal */}
           {deleteConfirmation && (
@@ -1735,16 +2146,39 @@ function UserManagement() {
     )
   }
 
-  // Add Employee Form View
+  // Add Employee Form View — keep "add" UX (title + editable sections) until user leaves, even after first section save
+  const isAddFlow = !editingEmployee || addFlowJustSaved
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
         {/* Compact Header */}
         <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-              {editingEmployee ? 'Edit Employee' : 'Add New Employee'}
-            </h1>
+          <div className="flex items-center gap-4">
+            {!isAddFlow && (
+              <div className="flex-shrink-0 w-12 h-12 rounded-full overflow-hidden border-2 border-gray-200 dark:border-gray-600 bg-gray-100 dark:bg-gray-800">
+                {formData.profileImage ? (
+                  <img
+                    src={getProfileImageUrl(formData.profileImage)}
+                    alt="Profile"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className={`w-full h-full flex items-center justify-center text-sm font-semibold text-white ${getAvatarColor(`${formData.firstName || ''} ${formData.lastName || ''}`.trim() || formData.employeeId || 'U')}`}>
+                    {getInitials({ fullName: `${formData.firstName || ''} ${formData.lastName || ''}`.trim() || formData.employeeId || 'U' })}
+                  </div>
+                )}
+              </div>
+            )}
+            <div>
+              <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                {isAddFlow ? 'Add New Employee' : 'Edit Employee'}
+              </h1>
+              {!isAddFlow && (
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  Employee ID: <span className="font-medium text-gray-700 dark:text-gray-300">{formData.employeeId || '—'}</span>
+                </p>
+              )}
+            </div>
           </div>
           <div className="flex gap-2">
             <button
@@ -1763,20 +2197,23 @@ function UserManagement() {
 
         <form onSubmit={handleSubmit}>
           <div className="space-y-4">
-            {/* Basic Information */}
-            {/* Basic Information (Refined) */}
+            {/* Basic Information (wired to CMS schema for title + key field labels) */}
             <FormSection
-              title="Basic Information"
+              title={getSectionTitle('basic-info', 'Basic Information')}
               sectionId={1}
               isOpen={expandedSections.includes(1)}
               onToggle={() => toggleSection(1)}
               onSave={handleSubmit}
               isSubmitting={submittingSection === 1}
+              isEditMode={isAddFlow || editingSectionId === 1}
+              onEditClick={handleSectionEditClick}
+              showEditButton={!isAddFlow}
             >
               {/* Employee Name - Read Only Display */}
+              {isFieldVisibleById(1, 'employeeName') && (
               <div className="col-span-full">
                 <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
-                  Employee Name <span className="text-red-500">*</span>
+                  {getFieldLabelById(1, 'employeeName', 'Employee Name')} <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -1786,47 +2223,67 @@ function UserManagement() {
                   className="w-full px-3 py-2 text-base font-bold border border-gray-200 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 cursor-default focus:outline-none"
                 />
               </div>
+              )}
 
               {/* Name Parts Inputs */}
               <div className="col-span-full grid grid-cols-1 md:grid-cols-3 gap-4">
-                <FormField
-                  label="First Name"
-                  name="firstName"
-                  required
-                  formData={formData}
-                  handleChange={handleChange}
-                  placeholder="First Name"
-                />
-                <FormField
-                  label="Middle Name"
-                  name="middleName"
-                  formData={formData}
-                  handleChange={handleChange}
-                  placeholder="Middle Name"
-                />
-                <FormField
-                  label="Last Name"
-                  name="lastName"
-                  required
-                  formData={formData}
-                  handleChange={handleChange}
-                  placeholder="Last Name"
-                />
+                {isFieldVisible('basic-info', 'firstName') && (
+                  <FormField
+                    label={getFieldLabel('basic-info', 'firstName', 'First Name')}
+                    name="firstName"
+                    required
+                    formData={formData}
+                    handleChange={handleChange}
+                    placeholder={getFieldLabel('basic-info', 'firstName', 'First Name')}
+                  />
+                )}
+                {isFieldVisible('basic-info', 'middleName') && (
+                  <FormField
+                    label={getFieldLabel('basic-info', 'middleName', 'Middle Name')}
+                    name="middleName"
+                    formData={formData}
+                    handleChange={handleChange}
+                    placeholder={getFieldLabel('basic-info', 'middleName', 'Middle Name')}
+                  />
+                )}
+                {isFieldVisible('basic-info', 'lastName') && (
+                  <FormField
+                    label={getFieldLabel('basic-info', 'lastName', 'Last Name')}
+                    name="lastName"
+                    required
+                    formData={formData}
+                    handleChange={handleChange}
+                    placeholder={getFieldLabel('basic-info', 'lastName', 'Last Name')}
+                  />
+                )}
               </div>
 
               {/* Row 2: Gender & Blood Group */}
-              <FormField label="Gender" name="gender" type="select" required options={genders} formData={formData} handleChange={handleChange} />
-              <FormField label="Blood Group" name="bloodGroup" type="select" options={['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']} formData={formData} handleChange={handleChange} />
+              {isFieldVisibleById(1, 'gender') && (
+                <FormField label={getFieldLabelById(1, 'gender', 'Gender')} name="gender" type="select" required options={genders} formData={formData} handleChange={handleChange} />
+              )}
+              {isFieldVisibleById(1, 'bloodGroup') && (
+                <FormField label={getFieldLabelById(1, 'bloodGroup', 'Blood Group')} name="bloodGroup" type="select" options={['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']} formData={formData} handleChange={handleChange} />
+              )}
 
               {/* Row 3: DOBs */}
-              <FormField label="DOB as per Aadhaar" name="birthdayDate" type="date" formData={formData} handleChange={handleChange} />
-              <FormField label="Date of Birth (Actual)" name="dateOfBirth" type="date" formData={formData} handleChange={handleChange} />
+              {isFieldVisibleById(1, 'birthdayDate') && (
+                <FormField label={getFieldLabelById(1, 'birthdayDate', 'DOB as per Aadhaar')} name="birthdayDate" type="date" formData={formData} handleChange={handleChange} />
+              )}
+              {isFieldVisibleById(1, 'dateOfBirth') && (
+                <FormField label={getFieldLabelById(1, 'dateOfBirth', 'Date of Birth (Actual)')} name="dateOfBirth" type="date" formData={formData} handleChange={handleChange} />
+              )}
 
               {/* Row 4: Marital Status */}
-              <FormField label="Marital Status" name="maritalStatus" type="select" options={maritalStatuses} formData={formData} handleChange={handleChange} />
-              <FormField label="Marriage Date" name="marriageDate" type="date" formData={formData} handleChange={handleChange} />
+              {isFieldVisibleById(1, 'maritalStatus') && (
+                <FormField label={getFieldLabelById(1, 'maritalStatus', 'Marital Status')} name="maritalStatus" type="select" options={maritalStatuses} formData={formData} handleChange={handleChange} />
+              )}
+              {isFieldVisibleById(1, 'marriageDate') && (
+                <FormField label={getFieldLabelById(1, 'marriageDate', 'Marriage Date')} name="marriageDate" type="date" formData={formData} handleChange={handleChange} />
+              )}
 
               {/* Physically Challenged - Conditional */}
+              {isFieldVisibleById(1, 'isPhysicallyChallenged') && (
               <div className="col-span-full">
                 <div className="flex items-center mb-2">
                   <input
@@ -1838,7 +2295,7 @@ function UserManagement() {
                     className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                   />
                   <label htmlFor="isPhysicallyChallenged" className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Is Physically Challenged?
+                    {getFieldLabelById(1, 'isPhysicallyChallenged', 'Is Physically Challenged?')}
                   </label>
                 </div>
 
@@ -1858,118 +2315,246 @@ function UserManagement() {
                   </div>
                 )}
               </div>
+              )}
+
+              {/* Profile Image Upload (file upload, not base64) */}
+              {isFieldVisibleById(1, 'profileImage') && (
+              <div className="col-span-full mt-4">
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {getFieldLabelById(1, 'profileImage', 'Profile Image (Max 1MB)')}
+                </label>
+                <div className="flex items-center gap-4">
+                  {formData.profileImage && (
+                    <img
+                      src={getProfileImageUrl(formData.profileImage)}
+                      alt="Profile Preview"
+                      className="w-16 h-16 rounded-full object-cover border border-gray-300 dark:border-gray-600"
+                    />
+                  )}
+                  <input
+                    type="file"
+                    accept="image/jpeg, image/png"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (!file) return
+                      if (!['image/jpeg', 'image/png'].includes(file.type)) {
+                        toast.error('Only JPEG and PNG images are allowed')
+                        e.target.value = ''
+                        return
+                      }
+                      const maxSize = 1024 * 1024 // 1MB
+                      if (file.size > maxSize) {
+                        toast.error('Image size must be less than 1MB')
+                        e.target.value = ''
+                        return
+                      }
+                      setFormData(prev => {
+                        if (prev.profileImage && prev.profileImage.startsWith('blob:')) {
+                          try { URL.revokeObjectURL(prev.profileImage) } catch { /* revokeObjectURL may throw */ }
+                        }
+                        return { ...prev, profileImage: URL.createObjectURL(file) }
+                      })
+                      setProfileImageFile(file)
+                      toast.success('Image selected. Save section to upload.')
+                    }}
+                    className="block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-900/30 dark:file:text-indigo-300"
+                  />
+                </div>
+                {formData.profileImage && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (formData.profileImage && formData.profileImage.startsWith('blob:')) {
+                        try { URL.revokeObjectURL(formData.profileImage) } catch { /* revokeObjectURL may throw */ }
+                      }
+                      setFormData(prev => ({ ...prev, profileImage: '' }))
+                      setProfileImageFile(null)
+                      toast.success('Image removed')
+                    }}
+                    className="text-xs text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 mt-2 hover:underline"
+                  >
+                    Remove Image
+                  </button>
+                )}
+              </div>
+              )}
+              {renderSchemaExtraFields(1, ['employeeName', 'firstName', 'middleName', 'lastName', 'gender', 'bloodGroup', 'birthdayDate', 'dateOfBirth', 'maritalStatus', 'marriageDate', 'isPhysicallyChallenged', 'physicallyChallengedDetails', 'profileImage', 'isInternationalEmployee', 'countryOfOrigin', 'cityLocation'])}
             </FormSection>
 
             {/* Contact Information (New Section) */}
             <FormSection
-              title="Contact Information"
+              title={getSectionTitleById(12, 'Contact Information')}
               sectionId={12}
               isOpen={expandedSections.includes(12)}
               onToggle={() => toggleSection(12)}
               onSave={handleSubmit}
               isSubmitting={submittingSection === 12}
+              isEditMode={isAddFlow || editingSectionId === 12}
+              onEditClick={handleSectionEditClick}
+              showEditButton={!isAddFlow}
             >
-              {/* Primary Contact */}
-              <div className="col-span-full md:col-span-1 flex gap-2 w-full">
-                <div className="w-1/2">
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Code</label>
-                  <select
-                    name="primaryCountryCode"
-                    value={formData.primaryCountryCode || '+91'}
-                    onChange={handleChange}
-                    className="w-full px-2 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  >
-                    {countryCodes.map((country, index) => (
-                      <option key={`${country.code}-${index}`} value={country.code}>
-                        {country.name} ({country.code})
-                      </option>
-                    ))}
-                  </select>
+              <div className="col-span-full space-y-3">
+                {/* Primary Contact */}
+                {isFieldVisibleById(12, 'phone') && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {getFieldLabelById(12, 'phone', 'Primary Contact')} <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex items-center gap-2 w-full">
+                    <div className="w-16">
+                      <select
+                        name="primaryCountryCode"
+                        value={formData.primaryCountryCode || '+91'}
+                        onChange={handleChange}
+                        className="w-full px-2 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      >
+                        {countryCodes.map((country, index) => (
+                          <option key={`${country.code}-${index}`} value={country.code}>
+                            {country.code}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <input
+                      type="tel"
+                      name="phone"
+                      value={formData.phone || ''}
+                      onChange={handleChange}
+                      maxLength={10}
+                      className="w-44 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      placeholder={getFieldLabelById(12, 'phone', 'Primary contact number')}
+                    />
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <FormField label="Primary Contact" name="phone" type="tel" required formData={formData} handleChange={handleChange} />
+                )}
+
+                {/* Secondary Contact */}
+                {isFieldVisibleById(12, 'secondaryContact') && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {getFieldLabelById(12, 'secondaryContact', 'Secondary Contact')}
+                  </label>
+                  <div className="flex items-center gap-2 w-full">
+                    <div className="w-16">
+                      <select
+                        name="secondaryCountryCode"
+                        value={formData.secondaryCountryCode || '+91'}
+                        onChange={handleChange}
+                        className="w-full px-2 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      >
+                        {countryCodes.map((country, index) => (
+                          <option key={`${country.code}-${index}`} value={country.code}>
+                            {country.code}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <input
+                      type="tel"
+                      name="secondaryContact"
+                      value={formData.secondaryContact || ''}
+                      onChange={handleChange}
+                      maxLength={10}
+                      className="w-44 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      placeholder={getFieldLabelById(12, 'secondaryContact', 'Secondary contact number')}
+                    />
+                  </div>
                 </div>
+                )}
+
+                {/* Emergency Contact */}
+                {isFieldVisibleById(12, 'emergencyContactNumber') && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {getFieldLabelById(12, 'emergencyContactNumber', 'Emergency Contact Number')} <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex items-center gap-2 w-full">
+                    <div className="w-16">
+                      <select
+                        name="emergencyCountryCode"
+                        value={formData.emergencyCountryCode || '+91'}
+                        onChange={handleChange}
+                        className="w-full px-2 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      >
+                        {countryCodes.map((country, index) => (
+                          <option key={`${country.code}-${index}`} value={country.code}>
+                            {country.code}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <input
+                      type="tel"
+                      name="emergencyContact"
+                      value={formData.emergencyContact || ''}
+                      onChange={handleChange}
+                      maxLength={10}
+                      className="w-44 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      placeholder={getFieldLabelById(12, 'emergencyContactNumber', 'Emergency contact number')}
+                    />
+                  </div>
+                </div>
+                )}
               </div>
 
-              {/* Secondary Contact */}
-              <div className="col-span-full md:col-span-1 flex gap-2 w-full">
-                <div className="w-1/2">
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Code</label>
-                  <select
-                    name="secondaryCountryCode"
-                    value={formData.secondaryCountryCode || '+91'}
-                    onChange={handleChange}
-                    className="w-full px-2 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  >
-                    {countryCodes.map((country, index) => (
-                      <option key={`${country.code}-${index}`} value={country.code}>
-                        {country.name} ({country.code})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex-1">
-                  <FormField label="Secondary Contact" name="secondaryContact" type="tel" formData={formData} handleChange={handleChange} />
-                </div>
-              </div>
-
-              {/* Emergency Contact */}
-              <div className="col-span-full md:col-span-1 flex gap-2 w-full">
-                <div className="w-1/2">
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Code</label>
-                  <select
-                    name="emergencyCountryCode"
-                    value={formData.emergencyCountryCode || '+91'}
-                    onChange={handleChange}
-                    className="w-full px-2 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  >
-                    {countryCodes.map((country, index) => (
-                      <option key={`${country.code}-${index}`} value={country.code}>
-                        {country.name} ({country.code})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex-1">
-                  <FormField label="Emergency Contact Number" name="emergencyContact" required formData={formData} handleChange={handleChange} />
-                </div>
-              </div>
-
-              <FormField label="Emergency Contact Name" name="emergencyContactName" required formData={formData} handleChange={handleChange} />
+              {isFieldVisibleById(12, 'emergencyContactName') && (
+                <FormField label={getFieldLabelById(12, 'emergencyContactName', 'Emergency Contact Name')} name="emergencyContactName" required formData={formData} handleChange={handleChange} />
+              )}
 
               {/* Emails */}
-              <FormField label="Personal Email ID" name="email" type="email" formData={formData} handleChange={handleChange} />
-              <FormField label="Alternative Email ID" name="alternativeEmail" type="email" formData={formData} handleChange={handleChange} />
+              {isFieldVisibleById(12, 'email') && (
+                <FormField label={getFieldLabelById(12, 'email', 'Personal Email ID')} name="email" type="email" formData={formData} handleChange={handleChange} />
+              )}
+              {isFieldVisibleById(12, 'alternativeEmail') && (
+                <FormField label={getFieldLabelById(12, 'alternativeEmail', 'Alternative Email ID')} name="alternativeEmail" type="email" formData={formData} handleChange={handleChange} />
+              )}
+
+              {renderSchemaExtraFields(12, ['phone', 'secondaryContact', 'emergencyContact', 'emergencyContactNumber', 'emergencyContactName', 'email', 'alternativeEmail', 'primaryCountryCode', 'secondaryCountryCode', 'emergencyCountryCode', 'mobileNumber'])}
 
             </FormSection>
 
             {/* Communication Details (Refined) */}
             <FormSection
-              title="Communication Details"
+              title={getSectionTitleById(16, 'Communication Details')}
               sectionId={16}
               isOpen={expandedSections.includes(16)}
               onToggle={() => toggleSection(16)}
               onSave={handleSubmit}
               isSubmitting={submittingSection === 16}
+              isEditMode={isAddFlow || editingSectionId === 16}
+              onEditClick={handleSectionEditClick}
+              showEditButton={!isAddFlow}
             >
               {/* Present Address */}
               <div className="col-span-full mt-2 mb-2">
-                <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 border-b pb-1">Present Address</h4>
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 border-b pb-1">{getFieldLabelById(16, 'headingPresentAddress', 'Present Address')}</h4>
               </div>
-              <div className="col-span-full">
-                <FormField label="Address Line 1" name="presentAddress.line1" required formData={formData} handleChange={handleChange} />
-              </div>
-              <div className="col-span-full">
-                <FormField label="Address Line 2" name="presentAddress.line2" formData={formData} handleChange={handleChange} />
-              </div>
-              <FormField label="City" name="presentAddress.district" required formData={formData} handleChange={handleChange} />
-              <FormField label="State/Province/Region" name="presentAddress.state" required formData={formData} handleChange={handleChange} />
-              <FormField label="ZIP/Postal Code" name="presentAddress.pincode" required formData={formData} handleChange={handleChange} />
-              <FormField label="Country" name="presentAddress.country" required formData={formData} handleChange={handleChange} />
+              {isFieldVisibleById(16, 'presentAddress.line1') && (
+                <div className="col-span-full">
+                  <FormField label={getFieldLabelById(16, 'presentAddress.line1', 'Address Line 1')} name="presentAddress.line1" required formData={formData} handleChange={handleChange} />
+                </div>
+              )}
+              {isFieldVisibleById(16, 'presentAddress.line2') && (
+                <div className="col-span-full">
+                  <FormField label={getFieldLabelById(16, 'presentAddress.line2', 'Address Line 2')} name="presentAddress.line2" formData={formData} handleChange={handleChange} />
+                </div>
+              )}
+              {isFieldVisibleById(16, 'presentAddress.district') && (
+                <FormField label={getFieldLabelById(16, 'presentAddress.district', 'City')} name="presentAddress.district" required formData={formData} handleChange={handleChange} />
+              )}
+              {isFieldVisibleById(16, 'presentAddress.state') && (
+                <FormField label={getFieldLabelById(16, 'presentAddress.state', 'State/Province/Region')} name="presentAddress.state" required formData={formData} handleChange={handleChange} />
+              )}
+              {isFieldVisibleById(16, 'presentAddress.pincode') && (
+                <FormField label={getFieldLabelById(16, 'presentAddress.pincode', 'ZIP/Postal Code')} name="presentAddress.pincode" required formData={formData} handleChange={handleChange} />
+              )}
+              {isFieldVisibleById(16, 'presentAddress.country') && (
+                <FormField label={getFieldLabelById(16, 'presentAddress.country', 'Country')} name="presentAddress.country" required formData={formData} handleChange={handleChange} />
+              )}
 
               {/* Permanent Address */}
               <div className="col-span-full mt-4 mb-2 flex flex-col md:flex-row md:items-center justify-between border-b pb-1">
-                <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Permanent Address</h4>
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{getFieldLabelById(16, 'headingPermanentAddress', 'Permanent Address')}</h4>
                 <div className="flex items-center mt-2 md:mt-0">
                   <input
                     type="checkbox"
@@ -1978,122 +2563,189 @@ function UserManagement() {
                     onChange={handleSameAsPresentChange}
                     className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                   />
-                  <label htmlFor="sameAsPresent" className="ml-2 text-xs text-gray-600 dark:text-gray-400">Same as Present Address</label>
+                  <label htmlFor="sameAsPresent" className="ml-2 text-xs text-gray-600 dark:text-gray-400">{getFieldLabelById(16, 'sameAsPresentAddress', 'Same as Present Address')}</label>
                 </div>
               </div>
-              <div className="col-span-full">
-                <FormField label="Address Line 1" name="permanentAddress.line1" required formData={formData} handleChange={handleChange} />
-              </div>
-              <div className="col-span-full">
-                <FormField label="Address Line 2" name="permanentAddress.line2" formData={formData} handleChange={handleChange} />
-              </div>
-              <FormField label="City" name="permanentAddress.district" required formData={formData} handleChange={handleChange} />
-              <FormField label="State/Province/Region" name="permanentAddress.state" required formData={formData} handleChange={handleChange} />
-              <FormField label="ZIP/Postal Code" name="permanentAddress.pincode" required formData={formData} handleChange={handleChange} />
-              <FormField label="Country" name="permanentAddress.country" required formData={formData} handleChange={handleChange} />
+              {isFieldVisibleById(16, 'permanentAddress.line1') && (
+                <div className="col-span-full">
+                  <FormField label={getFieldLabelById(16, 'permanentAddress.line1', 'Address Line 1')} name="permanentAddress.line1" required formData={formData} handleChange={handleChange} />
+                </div>
+              )}
+              {isFieldVisibleById(16, 'permanentAddress.line2') && (
+                <div className="col-span-full">
+                  <FormField label={getFieldLabelById(16, 'permanentAddress.line2', 'Address Line 2')} name="permanentAddress.line2" formData={formData} handleChange={handleChange} />
+                </div>
+              )}
+              {isFieldVisibleById(16, 'permanentAddress.district') && (
+                <FormField label={getFieldLabelById(16, 'permanentAddress.district', 'City')} name="permanentAddress.district" required formData={formData} handleChange={handleChange} />
+              )}
+              {isFieldVisibleById(16, 'permanentAddress.state') && (
+                <FormField label={getFieldLabelById(16, 'permanentAddress.state', 'State/Province/Region')} name="permanentAddress.state" required formData={formData} handleChange={handleChange} />
+              )}
+              {isFieldVisibleById(16, 'permanentAddress.pincode') && (
+                <FormField label={getFieldLabelById(16, 'permanentAddress.pincode', 'ZIP/Postal Code')} name="permanentAddress.pincode" required formData={formData} handleChange={handleChange} />
+              )}
+              {isFieldVisibleById(16, 'permanentAddress.country') && (
+                <FormField label={getFieldLabelById(16, 'permanentAddress.country', 'Country')} name="permanentAddress.country" required formData={formData} handleChange={handleChange} />
+              )}
 
               {/* Address as per Aadhaar */}
               <div className="col-span-full mt-4 mb-2 flex flex-col md:flex-row md:items-center justify-between border-b pb-1">
-                <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Address as per Aadhaar</h4>
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{getFieldLabelById(16, 'headingAadhaarAddress', 'Address as per Aadhaar')}</h4>
                 <div className="flex flex-wrap gap-4 mt-2 md:mt-0 text-xs text-gray-600 dark:text-gray-400">
                   <label className="flex items-center cursor-pointer">
                     <input type="radio" name="aadhaarAddressOption" value="present" checked={formData.aadhaarAddressOption === 'present'} onChange={handleAadhaarAddressOptionChange} className="mr-1" />
-                    Same as Present
+                    {getFieldLabelById(16, 'aadhaarSameAsPresent', 'Same as Present')}
                   </label>
                   <label className="flex items-center cursor-pointer">
                     <input type="radio" name="aadhaarAddressOption" value="permanent" checked={formData.aadhaarAddressOption === 'permanent'} onChange={handleAadhaarAddressOptionChange} className="mr-1" />
-                    Same as Permanent
-                  </label>
-                  <label className="flex items-center cursor-pointer">
-                    <input type="radio" name="aadhaarAddressOption" value="none" checked={formData.aadhaarAddressOption === 'none'} onChange={handleAadhaarAddressOptionChange} className="mr-1" />
-                    Other
+                    {getFieldLabelById(16, 'aadhaarSameAsPermanent', 'Same as Permanent')}
                   </label>
                 </div>
               </div>
-              <div className="col-span-full">
-                <FormField label="Address Line 1" name="aadhaarAddress.line1" required formData={formData} handleChange={handleChange} disabled={formData.aadhaarAddressOption !== 'none'} />
-              </div>
-              <div className="col-span-full">
-                <FormField label="Address Line 2" name="aadhaarAddress.line2" formData={formData} handleChange={handleChange} disabled={formData.aadhaarAddressOption !== 'none'} />
-              </div>
-              <FormField label="City" name="aadhaarAddress.district" required formData={formData} handleChange={handleChange} disabled={formData.aadhaarAddressOption !== 'none'} />
-              <FormField label="State/Province/Region" name="aadhaarAddress.state" required formData={formData} handleChange={handleChange} disabled={formData.aadhaarAddressOption !== 'none'} />
-              <FormField label="ZIP/Postal Code" name="aadhaarAddress.pincode" required formData={formData} handleChange={handleChange} disabled={formData.aadhaarAddressOption !== 'none'} />
-              <FormField label="Country" name="aadhaarAddress.country" required formData={formData} handleChange={handleChange} disabled={formData.aadhaarAddressOption !== 'none'} />
-
+              {isFieldVisibleById(16, 'aadhaarAddress.line1') && (
+                <div className="col-span-full">
+                  <FormField
+                    label={getFieldLabelById(16, 'aadhaarAddress.line1', 'Address Line 1')}
+                    name="aadhaarAddress.line1"
+                    required
+                    formData={formData}
+                    handleChange={handleChange}
+                    disabled={formData.aadhaarAddressOption === 'present' || formData.aadhaarAddressOption === 'permanent'}
+                  />
+                </div>
+              )}
+              {isFieldVisibleById(16, 'aadhaarAddress.line2') && (
+                <div className="col-span-full">
+                  <FormField
+                    label={getFieldLabelById(16, 'aadhaarAddress.line2', 'Address Line 2')}
+                    name="aadhaarAddress.line2"
+                    formData={formData}
+                    handleChange={handleChange}
+                    disabled={formData.aadhaarAddressOption === 'present' || formData.aadhaarAddressOption === 'permanent'}
+                  />
+                </div>
+              )}
+              {isFieldVisibleById(16, 'aadhaarAddress.district') && (
+                <FormField
+                  label={getFieldLabelById(16, 'aadhaarAddress.district', 'City')}
+                  name="aadhaarAddress.district"
+                  required
+                  formData={formData}
+                  handleChange={handleChange}
+                  disabled={formData.aadhaarAddressOption === 'present' || formData.aadhaarAddressOption === 'permanent'}
+                />
+              )}
+              {isFieldVisibleById(16, 'aadhaarAddress.state') && (
+                <FormField
+                  label={getFieldLabelById(16, 'aadhaarAddress.state', 'State/Province/Region')}
+                  name="aadhaarAddress.state"
+                  required
+                  formData={formData}
+                  handleChange={handleChange}
+                  disabled={formData.aadhaarAddressOption === 'present' || formData.aadhaarAddressOption === 'permanent'}
+                />
+              )}
+              {isFieldVisibleById(16, 'aadhaarAddress.pincode') && (
+                <FormField
+                  label={getFieldLabelById(16, 'aadhaarAddress.pincode', 'ZIP/Postal Code')}
+                  name="aadhaarAddress.pincode"
+                  required
+                  formData={formData}
+                  handleChange={handleChange}
+                  disabled={formData.aadhaarAddressOption === 'present' || formData.aadhaarAddressOption === 'permanent'}
+                />
+              )}
+              {isFieldVisibleById(16, 'aadhaarAddress.country') && (
+                <FormField
+                  label={getFieldLabelById(16, 'aadhaarAddress.country', 'Country')}
+                  name="aadhaarAddress.country"
+                  required
+                  formData={formData}
+                  handleChange={handleChange}
+                  disabled={formData.aadhaarAddressOption === 'present' || formData.aadhaarAddressOption === 'permanent'}
+                />
+              )}
+              {renderSchemaExtraFields(16, ['headingPresentAddress', 'presentAddress.line1', 'presentAddress.line2', 'presentAddress.district', 'presentAddress.state', 'presentAddress.pincode', 'presentAddress.country', 'headingPermanentAddress', 'sameAsPresentAddress', 'permanentAddress.line1', 'permanentAddress.line2', 'permanentAddress.district', 'permanentAddress.state', 'permanentAddress.pincode', 'permanentAddress.country', 'headingAadhaarAddress', 'aadhaarSameAsPresent', 'aadhaarSameAsPermanent', 'aadhaarAddressOption', 'aadhaarAddress.line1', 'aadhaarAddress.line2', 'aadhaarAddress.district', 'aadhaarAddress.state', 'aadhaarAddress.pincode', 'aadhaarAddress.country'])}
 
             </FormSection>
 
             {/* Family Details (New Section) */}
             <FormSection
-              title="Family Details"
+              title={getSectionTitleById(13, 'Family Details')}
               sectionId={13}
               isOpen={expandedSections.includes(13)}
               onToggle={() => toggleSection(13)}
               onSave={handleSubmit}
               isSubmitting={submittingSection === 13}
+              isEditMode={isAddFlow || editingSectionId === 13}
+              onEditClick={handleSectionEditClick}
+              showEditButton={!isAddFlow}
             >
               {/* Header */}
               <div className="col-span-full hidden md:grid md:grid-cols-12 gap-4 mb-2 font-semibold text-sm text-gray-700 dark:text-gray-300">
-                <div className="col-span-4">Name</div>
-                <div className="col-span-4">Relationship</div>
-                <div className="col-span-3">DOB</div>
+                <div className="col-span-4">{getFieldLabelById(13, 'name', 'Name')}</div>
+                <div className="col-span-4">{getFieldLabelById(13, 'relation', 'Relationship')}</div>
+                <div className="col-span-3">{getFieldLabelById(13, 'dob', 'DOB')}</div>
                 <div className="col-span-1">Action</div>
               </div>
 
               {(formData.familyDetails || []).map((member, index) => (
                 <div key={index} className="col-span-full grid grid-cols-1 md:grid-cols-12 gap-4 mb-4 items-end border-b pb-4 md:border-0 md:pb-0">
                   <div className="col-span-4">
-                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 md:hidden">Name</label>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 md:hidden">{getFieldLabelById(13, 'name', 'Name')}</label>
                     <input
                       type="text"
-                      placeholder="Name"
+                      placeholder={getFieldLabelById(13, 'name', 'Name')}
                       value={member.name}
                       onChange={(e) => handleFamilyDetailChange(index, 'name', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     />
                   </div>
                   <div className="col-span-4">
-                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 md:hidden">Relationship</label>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 md:hidden">{getFieldLabelById(13, 'relation', 'Relationship')}</label>
                     {(() => {
-                      const relationshipOptions = ['Father', 'Mother', 'Spouse', 'Son', 'Daughter', 'Brother', 'Sister']
-                      const isCustom = member.relation && !relationshipOptions.includes(member.relation)
+                      const relationshipOptions = ['Father', 'Mother', 'Spouse']
+                      const isCustom = member.relation && (!relationshipOptions.includes(member.relation) || member.relation === 'Other')
 
                       return (
-                        <div className="space-y-2">
-                          <select
-                            value={isCustom || member.relation === 'Other' ? 'Other' : member.relation}
-                            onChange={(e) => {
-                              const val = e.target.value
-                              if (val === 'Other') {
-                                handleFamilyDetailChange(index, 'relation', 'Other')
-                              } else {
-                                handleFamilyDetailChange(index, 'relation', val)
-                              }
-                            }}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                          >
-                            <option value="">Select Relationship</option>
-                            {relationshipOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                            <option value="Other">Other (Specify)</option>
-                          </select>
-
-                          {(isCustom || member.relation === 'Other') && (
+                        <>
+                          {isCustom ? (
                             <input
                               type="text"
-                              placeholder="Specify Relationship"
-                              value={member.relation === 'Other' ? '' : member.relation}
+                              placeholder={getFieldLabelById(13, 'relation', 'Specify Relationship')}
+                              value={member.relation === 'Other' ? '' : (member.relation || '')}
                               onChange={(e) => handleFamilyDetailChange(index, 'relation', e.target.value)}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                              autoFocus={member.relation === 'Other'}
+                              autoFocus
                             />
+                          ) : (
+                            <select
+                              value={member.relation || ''}
+                              onChange={(e) => {
+                                const val = e.target.value
+                                if (val === '__other__') {
+                                  // Switch to custom input mode, start with empty custom value
+                                  handleFamilyDetailChange(index, 'relation', 'Other')
+                                } else {
+                                  handleFamilyDetailChange(index, 'relation', val)
+                                }
+                              }}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            >
+                              <option value="">{getFieldLabelById(13, 'selectRelationship', 'Select Relationship')}</option>
+                              {relationshipOptions.map(opt => (
+                                <option key={opt} value={opt}>{opt}</option>
+                              ))}
+                              <option value="__other__">Other (Specify)</option>
+                            </select>
                           )}
-                        </div>
+                        </>
                       )
                     })()}
                   </div>
                   <div className="col-span-3">
-                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 md:hidden">DOB</label>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 md:hidden">{getFieldLabelById(13, 'dob', 'DOB')}</label>
                     <input
                       type="date"
                       value={member.dob ? new Date(member.dob).toISOString().split('T')[0] : ''}
@@ -2125,9 +2777,10 @@ function UserManagement() {
                   <svg className="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
                   </svg>
-                  Add
+                  {getFieldLabelById(13, 'addMember', 'Add')}
                 </button>
               </div>
+              {renderSchemaExtraFields(13, ['name', 'relation', 'dob', 'addMember', 'selectRelationship'])}
             </FormSection>
 
 
@@ -2136,16 +2789,20 @@ function UserManagement() {
 
             {/* Employment Information */}
             <FormSection
-              title="Employment Information"
+              title={getSectionTitleById(2, 'Employment Information')}
               sectionId={2}
               isOpen={expandedSections.includes(2)}
               onToggle={() => toggleSection(2)}
               onSave={handleSubmit}
               isSubmitting={submittingSection === 2}
+              isEditMode={isAddFlow || editingSectionId === 2}
+              onEditClick={handleSectionEditClick}
+              showEditButton={!isAddFlow}
             >
+              {isFieldVisibleById(2, 'employeeId') && (
               <div className="col-span-full">
                 <label className="block text-sm font-bold text-gray-900 dark:text-gray-100 mb-1">
-                  Employee ID <span className="text-red-500">*</span>
+                  {getFieldLabelById(2, 'employeeId', 'Employee ID')} <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -2156,10 +2813,12 @@ function UserManagement() {
                   className="w-full px-3 py-2 border-2 border-indigo-500 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm font-bold dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 />
               </div>
+              )}
 
+              {isFieldVisibleById(2, 'officialEmail') && (
               <div className="col-span-full">
                 <label className="block text-sm font-bold text-gray-900 dark:text-gray-100 mb-1">
-                  Official Email ID <span className="text-red-500">*</span>
+                  {getFieldLabelById(2, 'officialEmail', 'Official Email ID')} <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="email"
@@ -2174,14 +2833,26 @@ function UserManagement() {
                   This email will be used for login and all system notifications
                 </p>
               </div>
+              )}
 
-              <FormField label="Department/Business Unit" name="businessUnitHR" type="select" options={['BU1', 'BU2', 'BU3']} formData={formData} handleChange={handleChange} />
-              <FormField label="Designation" name="designation" formData={formData} handleChange={handleChange} />
-              <FormField label="Role" name="role" type="select" required options={roles} formData={formData} handleChange={handleChange} />
-              <FormField label="Employee Status" name="employeeStatus" type="select" required options={['Active', 'Inactive']} formData={formData} handleChange={handleChange} />
-              <FormField label="Joining Date" name="joiningDate" type="date" formData={formData} handleChange={handleChange} />
+              {isFieldVisibleById(2, 'businessUnitHR') && (
+                <FormField label={getFieldLabelById(2, 'businessUnitHR', 'Department/Business Unit')} name="businessUnitHR" type="select" options={['BU1', 'BU2', 'BU3']} formData={formData} handleChange={handleChange} />
+              )}
+              {isFieldVisibleById(2, 'designation') && (
+                <FormField label={getFieldLabelById(2, 'designation', 'Designation')} name="designation" formData={formData} handleChange={handleChange} />
+              )}
+              {isFieldVisibleById(2, 'role') && (
+                <FormField label={getFieldLabelById(2, 'role', 'Role')} name="role" type="select" required options={roles} formData={formData} handleChange={handleChange} />
+              )}
+              {isFieldVisibleById(2, 'employeeStatus') && (
+                <FormField label={getFieldLabelById(2, 'employeeStatus', 'Employee Status')} name="employeeStatus" type="select" required options={['Active', 'Inactive']} formData={formData} handleChange={handleChange} />
+              )}
+              {isFieldVisibleById(2, 'joiningDate') && (
+                <FormField label={getFieldLabelById(2, 'joiningDate', 'Joining Date')} name="joiningDate" type="date" formData={formData} handleChange={handleChange} />
+              )}
+              {isFieldVisibleById(2, 'probationPeriod') && (
               <div className="col-span-1">
-                <FormField label="Probation Period (days)" name="probationPeriod" type="number" formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(2, 'probationPeriod', 'Probation Period (days)')} name="probationPeriod" type="number" formData={formData} handleChange={handleChange} />
                 {(() => {
                   // Probation Action Logic
                   if (formData.joiningDate && formData.probationPeriod && !formData.confirmDate) {
@@ -2219,11 +2890,11 @@ function UserManagement() {
                   return null
                 })()}
               </div>
-              <FormField label="Employee Exit Date" name="exitDate" type="date" formData={formData} handleChange={handleChange} />
-
-              <FormField label="Confirm Date" name="confirmDate" type="date" formData={formData} handleChange={handleChange} />
-
-              <FormField label="Cost Center" name="costCenter" formData={formData} handleChange={handleChange} />
+              )}
+              {isFieldVisibleById(2, 'costCenter') && (
+                <FormField label={getFieldLabelById(2, 'costCenter', 'Cost Center')} name="costCenter" formData={formData} handleChange={handleChange} />
+              )}
+              {renderSchemaExtraFields(2, ['employeeId', 'officialEmail', 'businessUnitHR', 'designation', 'role', 'employeeStatus', 'joiningDate', 'probationPeriod', 'costCenter', 'department', 'cid', 'managerId', 'superManagerId', 'noticePeriod', 'division', 'grade', 'location', 'employeeNumberSeries'])}
 
             </FormSection>
 
@@ -2231,15 +2902,18 @@ function UserManagement() {
 
             {/* Education Details */}
             <FormSection
-              title="Education Details"
+              title={getSectionTitleById(3, 'Education Details')}
               sectionId={3}
               isOpen={expandedSections.includes(3)}
               onToggle={() => toggleSection(3)}
               onSave={handleSubmit}
               isSubmitting={submittingSection === 3}
+              isEditMode={isAddFlow || editingSectionId === 3}
+              onEditClick={handleSectionEditClick}
+              showEditButton={!isAddFlow}
             >
               <div className="col-span-full">
-                <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">Qualifications</h4>
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">{getFieldLabelById(3, 'headingQualifications', 'Qualifications')}</h4>
                 {formData.education && formData.education.map((edu, index) => (
                   <div key={index} className="flex flex-col gap-4 mb-4 bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 relative">
                     <button
@@ -2256,7 +2930,7 @@ function UserManagement() {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Institute Name</label>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(3, 'institute', 'Institute Name')}</label>
                         <input
                           type="text"
                           value={edu.institute || ''}
@@ -2266,50 +2940,65 @@ function UserManagement() {
                             setFormData({ ...formData, education: newEducation })
                           }}
                           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                          placeholder="Enter Institute Name"
+                          placeholder={getFieldLabelById(3, 'institute', 'Enter Institute Name')}
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Degree / Qualification</label>
-                        <div className="space-y-2">
-                          <select
-                            value={['SSC', 'Intermediate', 'Diploma', 'UG', 'PG', 'PhD'].includes(edu.degree) ? edu.degree : 'Other'}
-                            onChange={(e) => {
-                              const newEducation = [...formData.education]
-                              newEducation[index].degree = e.target.value === 'Other' ? '' : e.target.value
-                              setFormData({ ...formData, education: newEducation })
-                            }}
-                            className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                          >
-                            <option value="">Select Degree</option>
-                            <option value="SSC">SSC / 10th</option>
-                            <option value="Intermediate">Intermediate / 12th</option>
-                            <option value="Diploma">Diploma</option>
-                            <option value="UG">UG (Undergraduate)</option>
-                            <option value="PG">PG (Postgraduate)</option>
-                            <option value="PhD">PhD</option>
-                            <option value="Other">Other (Specify)</option>
-                          </select>
-                          {(!['SSC', 'Intermediate', 'Diploma', 'UG', 'PG', 'PhD', ''].includes(edu.degree) || edu.degree === '') && (
-                            <input
-                              type="text"
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(3, 'degree', 'Degree / Qualification')}</label>
+                        {(() => {
+                          const standardDegrees = ['SSC/CBSE/ICSE', 'Intermediate', 'Diploma', 'UG', 'PG', 'PHD']
+                          const isCustom = edu.degree && (!standardDegrees.includes(edu.degree) || edu.degree === 'Other')
+
+                          if (isCustom) {
+                            return (
+                              <input
+                                type="text"
+                                value={edu.degree === 'Other' ? '' : (edu.degree || '')}
+                                onChange={(e) => {
+                                  const newEducation = [...formData.education]
+                                  newEducation[index].degree = e.target.value
+                                  setFormData({ ...formData, education: newEducation })
+                                }}
+                                className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                placeholder={getFieldLabelById(3, 'degree', 'Specify Degree/Qualification')}
+                                autoFocus
+                              />
+                            )
+                          }
+
+                          return (
+                            <select
                               value={edu.degree || ''}
                               onChange={(e) => {
+                                const val = e.target.value
                                 const newEducation = [...formData.education]
-                                newEducation[index].degree = e.target.value
+                                if (val === '__other__') {
+                                  // switch to custom input mode
+                                  newEducation[index].degree = 'Other'
+                                } else {
+                                  newEducation[index].degree = val
+                                }
                                 setFormData({ ...formData, education: newEducation })
                               }}
                               className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                              placeholder="Specify Degree/Qualification"
-                            />
-                          )}
-                        </div>
+                            >
+                              <option value="">{getFieldLabelById(3, 'selectDegree', 'Select Degree')}</option>
+                              <option value="SSC/CBSE/ICSE">SSC/CBSE/ICSE</option>
+                              <option value="Intermediate">Intermediate</option>
+                              <option value="Diploma">Diploma</option>
+                              <option value="UG">UG</option>
+                              <option value="PG">PG</option>
+                              <option value="PHD">PHD</option>
+                              <option value="__other__">Others (specify)</option>
+                            </select>
+                          )
+                        })()}
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Percentage / CGPA</label>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(3, 'percentage', 'Percentage / CGPA')}</label>
                         <input
                           type="text"
                           value={edu.percentage || ''}
@@ -2319,11 +3008,11 @@ function UserManagement() {
                             setFormData({ ...formData, education: newEducation })
                           }}
                           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                          placeholder="e.g. 85% or 8.5"
+                          placeholder={getFieldLabelById(3, 'percentage', 'e.g. 85% or 8.5')}
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">From</label>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(3, 'fromDate', 'From')}</label>
                         <input
                           type="date"
                           value={edu.fromDate ? edu.fromDate.split('T')[0] : ''}
@@ -2336,7 +3025,7 @@ function UserManagement() {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">To</label>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(3, 'toDate', 'To')}</label>
                         <input
                           type="date"
                           value={edu.toDate ? edu.toDate.split('T')[0] : ''}
@@ -2351,8 +3040,8 @@ function UserManagement() {
                     </div>
 
                     <div className="mt-4">
-                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Attachment</label>
-                      <div className="flex items-center gap-2">
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(3, 'attachment', 'Attachment')}</label>
+                      <div className="flex items-center gap-3">
                         <input
                           type="file"
                           onChange={(e) => {
@@ -2360,14 +3049,41 @@ function UserManagement() {
                             if (file) {
                               const newEducation = [...formData.education]
                               newEducation[index].fileName = file.name
-                              // Ideally upload logic here
+                              // For now we store a local object URL for preview; backend upload can later set a permanent fileUrl
+                              if (newEducation[index].fileUrl && newEducation[index].fileUrl.startsWith('blob:')) {
+                                try { URL.revokeObjectURL(newEducation[index].fileUrl) } catch { /* revokeObjectURL may throw */ }
+                              }
+                              newEducation[index].fileUrl = URL.createObjectURL(file)
                               setFormData({ ...formData, education: newEducation })
                               toast.success(`Selected: ${file.name}`)
                             }
                           }}
                           className="text-sm text-gray-500 file:mr-4 file:py-1.5 file:px-2.5 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
                         />
-                        {edu.fileName && <span className="text-xs text-gray-500 truncate max-w-[100px]">{edu.fileName}</span>}
+                        {edu.fileName && (
+                          <>
+                            <span className="text-xs text-gray-500 truncate max-w-[120px]">{edu.fileName}</span>
+                            {edu.fileUrl && (
+                              <div className="flex items-center gap-1">
+                                <a
+                                  href={edu.fileUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-indigo-600 hover:text-indigo-800 text-xs underline"
+                                >
+                                  View
+                                </a>
+                                <a
+                                  href={edu.fileUrl}
+                                  download={edu.fileName}
+                                  className="text-indigo-600 hover:text-indigo-800 text-xs underline"
+                                >
+                                  Download
+                                </a>
+                              </div>
+                            )}
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -2377,11 +3093,25 @@ function UserManagement() {
                   onClick={() => setFormData({ ...formData, education: [...(formData.education || []), { institute: '', degree: '', percentage: '', fromDate: '', toDate: '', fileName: '', fileUrl: '' }] })}
                   className="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium mb-6"
                 >
-                  <FiPlus className="w-4 h-4" /> Add Qualification
+                  <FiPlus className="w-4 h-4" /> {getFieldLabelById(3, 'addQualification', 'Add Qualification')}
                 </button>
+              </div>
+              {renderSchemaExtraFields(3, ['institute', 'degree', 'percentage', 'fromDate', 'toDate', 'attachment', 'headingQualifications', 'selectDegree', 'addQualification'])}
+            </FormSection>
 
-                {/* Languages Section */}
-                <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2 border-t pt-4">Languages Known</h4>
+            {/* Languages Known (Separate Section) */}
+            <FormSection
+              title={getSectionTitleById(14, 'Languages Known')}
+              sectionId={14}
+              isOpen={expandedSections.includes(14)}
+              onToggle={() => toggleSection(14)}
+              onSave={handleSubmit}
+              isSubmitting={submittingSection === 14}
+              isEditMode={isAddFlow || editingSectionId === 14}
+              onEditClick={handleSectionEditClick}
+              showEditButton={!isAddFlow}
+            >
+              <div className="col-span-full">
                 {formData.languages && formData.languages.map((lang, index) => (
                   <div key={index} className="flex flex-col md:flex-row gap-4 mb-2 items-center bg-gray-50 dark:bg-gray-900/50 p-2 rounded-lg border border-gray-200 dark:border-gray-700">
                     <div className="flex-1">
@@ -2394,7 +3124,7 @@ function UserManagement() {
                           setFormData({ ...formData, languages: newLangs })
                         }}
                         className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                        placeholder="Language (e.g. English)"
+                        placeholder={getFieldLabelById(14, 'name', 'Language (e.g. English)')}
                       />
                     </div>
                     <div className="flex items-center gap-4">
@@ -2408,7 +3138,7 @@ function UserManagement() {
                             setFormData({ ...formData, languages: newLangs })
                           }}
                           className="mr-1 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                        /> Read
+                        /> {getFieldLabelById(14, 'read', 'Read')}
                       </label>
                       <label className="flex items-center text-xs text-gray-700 dark:text-gray-300">
                         <input
@@ -2420,7 +3150,7 @@ function UserManagement() {
                             setFormData({ ...formData, languages: newLangs })
                           }}
                           className="mr-1 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                        /> Write
+                        /> {getFieldLabelById(14, 'write', 'Write')}
                       </label>
                       <label className="flex items-center text-xs text-gray-700 dark:text-gray-300">
                         <input
@@ -2432,7 +3162,7 @@ function UserManagement() {
                             setFormData({ ...formData, languages: newLangs })
                           }}
                           className="mr-1 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                        /> Speak
+                        /> {getFieldLabelById(14, 'speak', 'Speak')}
                       </label>
                     </div>
                     <button
@@ -2453,19 +3183,23 @@ function UserManagement() {
                   onClick={() => setFormData({ ...formData, languages: [...(formData.languages || []), { name: '', read: false, write: false, speak: false }] })}
                   className="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium"
                 >
-                  <FiPlus className="w-4 h-4" /> Add Language
+                  <FiPlus className="w-4 h-4" /> {getFieldLabelById(14, 'addLanguage', 'Add Language')}
                 </button>
               </div>
+              {renderSchemaExtraFields(14, ['name', 'read', 'write', 'speak', 'addLanguage'])}
             </FormSection>
 
             {/* Experience Details */}
             <FormSection
-              title="Experience Details"
+              title={getSectionTitleById(10, 'Experience Details')}
               sectionId={10}
               isOpen={expandedSections.includes(10)}
               onToggle={() => toggleSection(10)}
               onSave={handleSubmit}
               isSubmitting={submittingSection === 10}
+              isEditMode={isAddFlow || editingSectionId === 10}
+              onEditClick={handleSectionEditClick}
+              showEditButton={!isAddFlow}
             >
               <div className="col-span-full">
                 {formData.experience && formData.experience.map((exp, index) => (
@@ -2484,7 +3218,7 @@ function UserManagement() {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Organization</label>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(10, 'organization', 'Organization')}</label>
                         <input
                           type="text"
                           value={exp.organization || ''}
@@ -2494,11 +3228,11 @@ function UserManagement() {
                             setFormData({ ...formData, experience: newExperience })
                           }}
                           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                          placeholder="Enter Organization Name"
+                          placeholder={getFieldLabelById(10, 'organization', 'Enter Organization Name')}
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Position / Designation</label>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(10, 'designation', 'Position / Designation')}</label>
                         <input
                           type="text"
                           value={exp.designation || ''}
@@ -2508,14 +3242,14 @@ function UserManagement() {
                             setFormData({ ...formData, experience: newExperience })
                           }}
                           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                          placeholder="Enter Designation"
+                          placeholder={getFieldLabelById(10, 'designation', 'Enter Designation')}
                         />
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">From</label>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(10, 'fromDate', 'From')}</label>
                         <input
                           type="date"
                           value={exp.fromDate ? exp.fromDate.split('T')[0] : ''}
@@ -2528,7 +3262,7 @@ function UserManagement() {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">To</label>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(10, 'toDate', 'To')}</label>
                         <input
                           type="date"
                           value={exp.toDate ? exp.toDate.split('T')[0] : ''}
@@ -2548,26 +3282,31 @@ function UserManagement() {
                   onClick={() => setFormData({ ...formData, experience: [...(formData.experience || []), { organization: '', designation: '', fromDate: '', toDate: '' }] })}
                   className="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium"
                 >
-                  <FiPlus className="w-4 h-4" /> Add Experience
+                  <FiPlus className="w-4 h-4" /> {getFieldLabelById(10, 'addExperience', 'Add Experience')}
                 </button>
               </div>
+              {renderSchemaExtraFields(10, ['organization', 'designation', 'fromDate', 'toDate', 'addExperience'])}
             </FormSection>
 
 
 
             {/* Bank Details */}
             <FormSection
-              title="Bank Details"
+              title={getSectionTitleById(4, 'Bank Details')}
               sectionId={4}
               isOpen={expandedSections.includes(4)}
               onToggle={() => toggleSection(4)}
               onSave={handleSubmit}
               isSubmitting={submittingSection === 4}
+              isEditMode={isAddFlow || editingSectionId === 4}
+              onEditClick={handleSectionEditClick}
+              showEditButton={!isAddFlow}
             >
-              {/* Custom Account Number Field with Masking */}
+              {isFieldVisibleById(4, 'accountNumber') && (
+              <>
               <div className="flex flex-col">
                 <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Account Number
+                  {getFieldLabelById(4, 'accountNumber', 'Account Number')}
                 </label>
                 <input
                   type="text"
@@ -2577,14 +3316,13 @@ function UserManagement() {
                   onFocus={() => setIsAccountNumberFocused(true)}
                   onBlur={() => setIsAccountNumberFocused(false)}
                   className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-                  placeholder="Enter Account Number"
+                  placeholder={getFieldLabelById(4, 'accountNumber', 'Enter Account Number')}
                 />
               </div>
 
-              {/* Custom Confirm Account Number Field with Validation */}
               <div className="flex flex-col">
                 <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Confirm Account Number
+                  {getFieldLabelById(4, 'confirmAccountNumber', 'Confirm Account Number')}
                 </label>
                 <div className="relative">
                   <input
@@ -2598,7 +3336,7 @@ function UserManagement() {
                         : 'border-red-500 focus:ring-red-500 focus:border-red-500'
                       : 'border-gray-300 dark:border-gray-600 focus:ring-indigo-500 focus:border-indigo-500'
                       }`}
-                    placeholder="Re-enter Account Number"
+                    placeholder={getFieldLabelById(4, 'confirmAccountNumber', 'Re-enter Account Number')}
                   />
                   {formData.confirmAccountNumber && formData.accountNumber && (
                     <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
@@ -2611,25 +3349,47 @@ function UserManagement() {
                   )}
                 </div>
               </div>
-              <FormField label="Bank Name" name="bankName" formData={formData} handleChange={handleChange} />
-              <FormField label="IFSC Code" name="ifscCode" formData={formData} handleChange={handleChange} />
-              <FormField label="Account Type" name="accountType" type="select" options={accountTypes} formData={formData} handleChange={handleChange} />
-              <FormField label="Branch Name" name="branchName" formData={formData} handleChange={handleChange} />
+              </>
+              )}
+              {isFieldVisibleById(4, 'bankName') && (
+                <FormField label={getFieldLabelById(4, 'bankName', 'Bank Name')} name="bankName" formData={formData} handleChange={handleChange} />
+              )}
+              {isFieldVisibleById(4, 'ifscCode') && (
+                <FormField label={getFieldLabelById(4, 'ifscCode', 'IFSC Code')} name="ifscCode" formData={formData} handleChange={handleChange} />
+              )}
+              {isFieldVisibleById(4, 'accountType') && (
+                <FormField label={getFieldLabelById(4, 'accountType', 'Account Type')} name="accountType" type="select" options={accountTypes} formData={formData} handleChange={handleChange} />
+              )}
+              {isFieldVisibleById(4, 'branchName') && (
+                <FormField label={getFieldLabelById(4, 'branchName', 'Branch Name')} name="branchName" formData={formData} handleChange={handleChange} />
+              )}
 
-              <FormField label="Salary Payment Mode" name="salaryPaymentMode" type="select" options={paymentModes} formData={formData} handleChange={handleChange} />
-              <FormField label="Name as per Bank Records" name="nameAsPerBankRecords" formData={formData} handleChange={handleChange} />
-              <FormField label="IBAN" name="iban" formData={formData} handleChange={handleChange} />
-              <FormField label="Swift Code" name="swiftCode" formData={formData} handleChange={handleChange} />
+              {isFieldVisibleById(4, 'salaryPaymentMode') && (
+                <FormField label={getFieldLabelById(4, 'salaryPaymentMode', 'Salary Payment Mode')} name="salaryPaymentMode" type="select" options={paymentModes} formData={formData} handleChange={handleChange} />
+              )}
+              {isFieldVisibleById(4, 'nameAsPerBankRecords') && (
+                <FormField label={getFieldLabelById(4, 'nameAsPerBankRecords', 'Name as per Bank Records')} name="nameAsPerBankRecords" formData={formData} handleChange={handleChange} />
+              )}
+              {isFieldVisibleById(4, 'iban') && (
+                <FormField label={getFieldLabelById(4, 'iban', 'IBAN')} name="iban" formData={formData} handleChange={handleChange} />
+              )}
+              {isFieldVisibleById(4, 'swiftCode') && (
+                <FormField label={getFieldLabelById(4, 'swiftCode', 'Swift Code')} name="swiftCode" formData={formData} handleChange={handleChange} />
+              )}
+              {renderSchemaExtraFields(4, ['accountNumber', 'confirmAccountNumber', 'bankName', 'ifscCode', 'accountType', 'branchName', 'salaryPaymentMode', 'nameAsPerBankRecords', 'iban', 'swiftCode', 'bankBranch'])}
             </FormSection>
 
             {/* Documents */}
             <FormSection
-              title="Documents"
+              title={getSectionTitleById(5, 'Documents')}
               sectionId={5}
               isOpen={expandedSections.includes(5)}
               onToggle={() => toggleSection(5)}
               onSave={handleSubmit}
               isSubmitting={submittingSection === 5}
+              isEditMode={isAddFlow || editingSectionId === 5}
+              onEditClick={handleSectionEditClick}
+              showEditButton={!isAddFlow}
             >
               <div className="col-span-full">
                 {formData.documents && formData.documents.map((doc, index) => (
@@ -2648,7 +3408,7 @@ function UserManagement() {
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Document Type <span className="text-red-500">*</span></label>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(5, 'documentType', 'Document Type')} <span className="text-red-500">*</span></label>
                         <select
                           value={doc.documentType || ''}
                           onChange={(e) => {
@@ -2658,7 +3418,7 @@ function UserManagement() {
                           }}
                           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                         >
-                          <option value="">Select Type</option>
+                          <option value="">{getFieldLabelById(5, 'documentType', 'Select Type')}</option>
                           <option value="Aadhar Card">Aadhar Card</option>
                           <option value="PAN Card">PAN Card</option>
                           <option value="Passport">Passport</option>
@@ -2668,7 +3428,7 @@ function UserManagement() {
                         </select>
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Document Number <span className="text-red-500">*</span></label>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(5, 'documentNumber', 'Document Number')} <span className="text-red-500">*</span></label>
                         <input
                           type="text"
                           value={doc.documentNumber || ''}
@@ -2678,11 +3438,11 @@ function UserManagement() {
                             setFormData({ ...formData, documents: newDocs })
                           }}
                           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                          placeholder="Enter Number"
+                          placeholder={getFieldLabelById(5, 'documentNumber', 'Enter Number')}
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Attachment</label>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(5, 'attachment', 'Attachment')}</label>
                         <div className="flex items-center gap-2">
                           <input
                             type="file"
@@ -2709,126 +3469,102 @@ function UserManagement() {
                   onClick={() => setFormData({ ...formData, documents: [...(formData.documents || []), { documentType: '', documentNumber: '', fileName: '' }] })}
                   className="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium"
                 >
-                  <FiPlus className="w-4 h-4" /> Add Document
+                  <FiPlus className="w-4 h-4" /> {getFieldLabelById(5, 'addDocument', 'Add Document')}
                 </button>
               </div>
+              {renderSchemaExtraFields(5, ['documentType', 'documentNumber', 'attachment', 'addDocument'])}
             </FormSection>
 
             {/* PF Details */}
             <FormSection
-              title="PF Details"
+              title={getSectionTitleById(6, 'PF Details')}
               sectionId={6}
               isOpen={expandedSections.includes(6)}
               onToggle={() => toggleSection(6)}
               onSave={handleSubmit}
               isSubmitting={submittingSection === 6}
+              isEditMode={isAddFlow || editingSectionId === 6}
+              onEditClick={handleSectionEditClick}
+              showEditButton={!isAddFlow}
             >
-              <FormField label="Is Employee Eligible for PF" name="isEligibleForPF" type="checkbox" formData={formData} handleChange={handleChange} />
-              <FormField label="PF Number" name="pfNumber" formData={formData} handleChange={handleChange} />
-              <FormField label="PF Scheme" name="pfScheme" formData={formData} handleChange={handleChange} />
-              <FormField label="PF Joining Date" name="pfJoiningDate" type="date" formData={formData} handleChange={handleChange} />
-              <FormField label="Eligible for Excess EPF Contribution" name="eligibleForExcessEPFContribution" type="checkbox" formData={formData} handleChange={handleChange} />
-              <FormField label="Is Employee Eligible for Excess EPS Contribution" name="isEligibleForExcessEPSContribution" type="checkbox" formData={formData} handleChange={handleChange} />
-              <FormField label="Is Existing Member of PF" name="isExistingMemberOfPF" type="checkbox" formData={formData} handleChange={handleChange} />
-              <FormField label="Salary" name="salary" type="number" formData={formData} handleChange={handleChange} />
-              <FormField label="Universal Account Number" name="universalAccountNumber" formData={formData} handleChange={handleChange} />
+              {isFieldVisibleById(6, 'isEligibleForPF') && (
+                <FormField label={getFieldLabelById(6, 'isEligibleForPF', 'Is Employee Eligible for PF')} name="isEligibleForPF" type="checkbox" formData={formData} handleChange={handleChange} />
+              )}
+              {isFieldVisibleById(6, 'pfNumber') && (
+                <FormField label={getFieldLabelById(6, 'pfNumber', 'PF Number')} name="pfNumber" formData={formData} handleChange={handleChange} />
+              )}
+              {isFieldVisibleById(6, 'pfScheme') && (
+                <FormField label={getFieldLabelById(6, 'pfScheme', 'PF Scheme')} name="pfScheme" formData={formData} handleChange={handleChange} />
+              )}
+              {isFieldVisibleById(6, 'pfJoiningDate') && (
+                <FormField label={getFieldLabelById(6, 'pfJoiningDate', 'PF Joining Date')} name="pfJoiningDate" type="date" formData={formData} handleChange={handleChange} />
+              )}
+              {isFieldVisibleById(6, 'eligibleForExcessEPFContribution') && (
+                <FormField label={getFieldLabelById(6, 'eligibleForExcessEPFContribution', 'Eligible for Excess EPF Contribution')} name="eligibleForExcessEPFContribution" type="checkbox" formData={formData} handleChange={handleChange} />
+              )}
+              {isFieldVisibleById(6, 'isEligibleForExcessEPSContribution') && (
+                <FormField label={getFieldLabelById(6, 'isEligibleForExcessEPSContribution', 'Is Employee Eligible for Excess EPS Contribution')} name="isEligibleForExcessEPSContribution" type="checkbox" formData={formData} handleChange={handleChange} />
+              )}
+              {isFieldVisibleById(6, 'isExistingMemberOfPF') && (
+                <FormField label={getFieldLabelById(6, 'isExistingMemberOfPF', 'Is Existing Member of PF')} name="isExistingMemberOfPF" type="checkbox" formData={formData} handleChange={handleChange} />
+              )}
+              {isFieldVisibleById(6, 'salary') && (
+                <FormField label={getFieldLabelById(6, 'salary', 'Salary')} name="salary" type="number" formData={formData} handleChange={handleChange} />
+              )}
+              {isFieldVisibleById(6, 'universalAccountNumber') && (
+                <FormField label={getFieldLabelById(6, 'universalAccountNumber', 'Universal Account Number')} name="universalAccountNumber" formData={formData} handleChange={handleChange} />
+              )}
+              {renderSchemaExtraFields(6, ['isEligibleForPF', 'pfNumber', 'pfScheme', 'pfJoiningDate', 'eligibleForExcessEPFContribution', 'isEligibleForExcessEPSContribution', 'isExistingMemberOfPF', 'salary', 'universalAccountNumber'])}
             </FormSection>
 
             {/* ESI Details */}
             <FormSection
-              title="ESI Details"
+              title={getSectionTitleById(7, 'ESI Details')}
               sectionId={7}
               isOpen={expandedSections.includes(7)}
               onToggle={() => toggleSection(7)}
               onSave={handleSubmit}
               isSubmitting={submittingSection === 7}
+              isEditMode={isAddFlow || editingSectionId === 7}
+              onEditClick={handleSectionEditClick}
+              showEditButton={!isAddFlow}
             >
-              <FormField label="Is Employee Eligible for ESI" name="isEligibleForESI" type="checkbox" formData={formData} handleChange={handleChange} />
-              <FormField label="ESI Number" name="esiNumber" formData={formData} handleChange={handleChange} />
-              <FormField label="Is Covered Under LWF" name="isCoveredUnderLWF" type="checkbox" formData={formData} handleChange={handleChange} />
+              {isFieldVisibleById(7, 'isEligibleForESI') && (
+                <FormField label={getFieldLabelById(7, 'isEligibleForESI', 'Is Employee Eligible for ESI')} name="isEligibleForESI" type="checkbox" formData={formData} handleChange={handleChange} />
+              )}
+              {isFieldVisibleById(7, 'esiNumber') && (
+                <FormField label={getFieldLabelById(7, 'esiNumber', 'ESI Number')} name="esiNumber" formData={formData} handleChange={handleChange} />
+              )}
+              {isFieldVisibleById(7, 'isCoveredUnderLWF') && (
+                <FormField label={getFieldLabelById(7, 'isCoveredUnderLWF', 'Is Covered Under LWF')} name="isCoveredUnderLWF" type="checkbox" formData={formData} handleChange={handleChange} />
+              )}
+              {renderSchemaExtraFields(7, ['isEligibleForESI', 'esiNumber', 'isCoveredUnderLWF'])}
             </FormSection>
 
             {/* Account Setup */}
             <FormSection
-              title="Account Setup"
+              title={getSectionTitleById(8, 'Account Setup')}
               sectionId={8}
               isOpen={expandedSections.includes(8)}
               onToggle={() => toggleSection(8)}
               onSave={handleSubmit}
               isSubmitting={submittingSection === 8}
+              isEditMode={isAddFlow || editingSectionId === 8}
+              onEditClick={handleSectionEditClick}
+              showEditButton={!isAddFlow}
             >
-              <FormField
-                label="Password"
-                name="password"
-                type="password"
-                required={!editingEmployee || isNewEntry}
-                placeholder={(!editingEmployee || isNewEntry) ? "Enter password" : "Leave blank to keep current password"}
-                formData={formData}
-                handleChange={handleChange}
-              />
-
-              {/* Profile Image Upload */}
-              <div className="mt-4">
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Profile Image (Max 300KB)
-                </label>
-                <div className="flex items-center gap-4">
-                  {formData.profileImage && (
-                    <img
-                      src={formData.profileImage}
-                      alt="Profile Preview"
-                      className="w-16 h-16 rounded-full object-cover border border-gray-300"
-                    />
-                  )}
-                  <input
-                    type="file"
-                    accept="image/jpeg, image/png"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (!file) return
-
-                      // 1. Validation: File Type
-                      if (!['image/jpeg', 'image/png'].includes(file.type)) {
-                        toast.error('Only JPEG and PNG images are allowed')
-                        e.target.value = '' // Reset input
-                        return
-                      }
-
-                      // 2. Validation: File Size (300KB limit)
-                      const maxSize = 300 * 1024 // 300KB in bytes
-                      if (file.size > maxSize) {
-                        toast.error('Image size must be less than 300KB')
-                        e.target.value = '' // Reset input
-                        return
-                      }
-
-                      // 3. Convert to Base64
-                      const reader = new FileReader()
-                      reader.onloadend = () => {
-                        setFormData(prev => ({ ...prev, profileImage: reader.result }))
-                        toast.success('Image uploaded successfully')
-                      }
-                      reader.onerror = () => {
-                        toast.error('Failed to process image')
-                      }
-                      reader.readAsDataURL(file)
-                    }}
-                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-                  />
-                </div>
-                {formData.profileImage && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFormData(prev => ({ ...prev, profileImage: '' }))
-                      toast.success('Image removed')
-                    }}
-                    className="text-xs text-red-600 hover:text-red-800 mt-2 hover:underline"
-                  >
-                    Remove Image
-                  </button>
-                )}
-              </div>
+              {isFieldVisibleById(8, 'password') && (
+                <FormField
+                  label={getFieldLabelById(8, 'password', 'Password')}
+                  name="password"
+                  type="password"
+                  required={!editingEmployee || isNewEntry}
+                  placeholder={(!editingEmployee || isNewEntry) ? "Enter password" : "Leave blank to keep current password"}
+                  formData={formData}
+                  handleChange={handleChange}
+                />
+              )}
+              {renderSchemaExtraFields(8, ['password'])}
             </FormSection>
           </div>
 

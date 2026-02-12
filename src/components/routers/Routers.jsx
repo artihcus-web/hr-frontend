@@ -15,6 +15,10 @@ import HolidayCalendar from '../pages/HolidayCalendar'
 import Grievance from '../pages/common/Grievance'
 import GrievanceConfig from '../pages/admin/GrievanceConfig'
 import FormBuilder from '../pages/admin/FormBuilder'
+import EmployeeFormSchema from '../pages/admin/EmployeeFormSchema'
+import TimesheetSchema from '../pages/admin/TimesheetSchema'
+import DynamicFormSchema from '../pages/admin/DynamicFormSchema'
+import AdminControllers from '../pages/admin/AdminControllers'
 import ProtectedRoute from './ProtectedRoute'
 import { Routes, Route, Navigate } from 'react-router-dom'
 
@@ -53,6 +57,10 @@ function Routers() {
           <Route path='/admin/employee-management' element={<Navigate to='/admin/projects' replace />} />
           <Route path='/admin/grievance-config' element={<GrievanceConfig />} />
           <Route path='/admin/form-builder' element={<FormBuilder />} />
+          <Route path='/admin/form-builder/employee' element={<EmployeeFormSchema />} />
+          <Route path='/admin/form-builder/timesheet' element={<TimesheetSchema />} />
+          <Route path='/admin/form-builder/:formType' element={<DynamicFormSchema />} />
+          <Route path='/admin/controllers' element={<AdminControllers />} />
         </Route>
 
         {/* C-Suite Protected Routes */}
