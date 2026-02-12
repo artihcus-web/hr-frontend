@@ -34,7 +34,7 @@ const paymentModes = ['Bank Transfer', 'Cheque', 'Cash']
 // ]
 
 // FormField component - moved outside to prevent re-creation on every render
-const FormField = ({ label, name, type = 'text', required, formData, handleChange, options, placeholder, ...props }) => {
+const FormField = ({ label, name, type = 'text', required, formData, handleChange, options = [], placeholder, otherOptionLabel = 'Please specify', ...props }) => {
   // Helper to get nested value
   const getValue = (obj, path) => {
     if (!path || !obj) return ''
@@ -45,6 +45,10 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
   }
 
   const value = getValue(formData, name)
+  const hasOtherOption = options.some(opt => opt && String(opt).toLowerCase().includes('other'))
+  const isOtherSelected = value && String(value).toLowerCase().includes('other')
+  const otherFieldName = `${name}Other`
+  const otherValue = getValue(formData, otherFieldName)
 
   return (
     <div className="flex flex-col">
@@ -52,21 +56,34 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
         {label} {required && <span className="text-red-500">*</span>}
       </label>
       {type === 'select' ? (
-        <select
-          name={name}
-          value={value}
-          onChange={handleChange}
-          required={required}
-          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors appearance-none"
-          {...props}
-        >
-          <option value="">Select {label}</option>
-          {options.map((opt, index) => (
-            <option key={index} value={opt}>
-              {opt}
-            </option>
-          ))}
-        </select>
+        <>
+          <select
+            name={name}
+            value={value}
+            onChange={handleChange}
+            required={required}
+            className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors appearance-none"
+            {...props}
+          >
+            <option value="">Select {label}</option>
+            {options.map((opt, index) => (
+              <option key={index} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+          {hasOtherOption && isOtherSelected && (
+            <input
+              type="text"
+              name={otherFieldName}
+              value={otherValue}
+              onChange={handleChange}
+              placeholder={otherOptionLabel}
+              className="mt-2 w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+              aria-label={otherOptionLabel}
+            />
+          )}
+        </>
       ) : type === 'checkbox' ? (
         <div className="flex items-center">
           <input

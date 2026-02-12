@@ -7,19 +7,24 @@ const DynamicFormSchema = () => {
   const [formName, setFormName] = useState('')
 
   useEffect(() => {
-    // Fetch form type details to get the name
-    const saved = localStorage.getItem('formTypes')
-    if (saved) {
-      const formTypes = JSON.parse(saved)
-      const found = formTypes.find(t => t.slug === formType)
-      if (found) {
-        setFormName(found.name)
-      } else {
-        setFormName(formType.charAt(0).toUpperCase() + formType.slice(1).replace(/-/g, ' '))
+    if (!formType || typeof formType !== 'string') return
+    const formattedFallback = formType.charAt(0).toUpperCase() + formType.slice(1).replace(/-/g, ' ')
+    try {
+      const saved = localStorage.getItem('formTypes')
+      if (saved) {
+        const formTypes = JSON.parse(saved)
+        if (Array.isArray(formTypes)) {
+          const found = formTypes.find(t => t.slug === formType)
+          if (found) {
+            setFormName(found.name)
+            return
+          }
+        }
       }
-    } else {
-      setFormName(formType.charAt(0).toUpperCase() + formType.slice(1).replace(/-/g, ' '))
+    } catch {
+      // ignore parse failure
     }
+    setFormName(formattedFallback)
   }, [formType])
 
   return <FormSchemaEditor formType={formType} formName={formName} />
