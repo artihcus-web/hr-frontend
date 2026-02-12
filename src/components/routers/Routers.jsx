@@ -21,7 +21,7 @@ import DynamicFormSchema from '../pages/admin/DynamicFormSchema'
 import AdminControllers from '../pages/admin/AdminControllers'
 import ProtectedRoute from './ProtectedRoute'
 import { Routes, Route, Navigate } from 'react-router-dom'
-
+import KnowYourEmployee from '../pages/common/KnowYourEmployee'
 function Routers() {
   return (
     <div>
@@ -39,6 +39,7 @@ function Routers() {
           <Route path='/timesheet' element={<Timesheet />} />
           <Route path='/holiday-calendar' element={<HolidayCalendar />} />
           <Route path='/grievance' element={<Grievance />} />
+          <Route path='/know-your-employee' element={<KnowYourEmployee />} />
         </Route>
 
         {/* Manager/HR Protected Routes */}

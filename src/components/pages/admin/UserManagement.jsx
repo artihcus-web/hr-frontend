@@ -112,6 +112,46 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
           {...props}
         />
+      ) : type === 'number' ? (
+        <input
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9.]*"
+          name={name}
+          value={value}
+          onChange={(e) => {
+            // Filter out non-numeric characters (allow digits and decimal point)
+            const filteredValue = e.target.value.replace(/[^0-9.]/g, '')
+            // Prevent multiple decimal points
+            const parts = filteredValue.split('.')
+            const finalValue = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : filteredValue
+            handleChange({ ...e, target: { ...e.target, value: finalValue } })
+          }}
+          onKeyPress={(e) => {
+            // Only allow digits, decimal point, and backspace/delete/arrow keys
+            const char = String.fromCharCode(e.which)
+            if (!/[0-9.]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
+              e.preventDefault()
+            }
+            // Prevent multiple decimal points
+            if (char === '.' && e.target.value.includes('.')) {
+              e.preventDefault()
+            }
+          }}
+          onPaste={(e) => {
+            e.preventDefault()
+            const pastedText = e.clipboardData.getData('text')
+            // Filter out non-numeric characters
+            const filteredValue = pastedText.replace(/[^0-9.]/g, '')
+            const parts = filteredValue.split('.')
+            const finalValue = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : filteredValue
+            handleChange({ target: { name, value: finalValue, type: 'text' } })
+          }}
+          required={required}
+          placeholder={placeholder}
+          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+          {...props}
+        />
       ) : (
         <input
           type={type}
@@ -383,6 +423,8 @@ function UserManagement() {
   }
 
   const [profileImageFile, setProfileImageFile] = useState(null) // File to upload (not base64)
+  const [headerProfileImageError, setHeaderProfileImageError] = useState(false) // fallback to initials when img fails to load
+  const [failedProfileImageIds, setFailedProfileImageIds] = useState(() => new Set()) // list row avatars that failed to load
   const [formData, setFormData] = useState({
     // Basic Information
     profileImage: '', // URL path from server or blob URL for preview
@@ -429,6 +471,7 @@ function UserManagement() {
     managerId: '',
     superManagerId: '',
     probationPeriod: '',
+    confirmDate: '',
     noticePeriod: '',
     division: '',
     costCenter: '',
@@ -517,6 +560,7 @@ function UserManagement() {
 
       const nonAdminUsers = (data.users || []).filter(u => u.role !== 'admin')
       setEmployees(nonAdminUsers)
+      setFailedProfileImageIds(new Set())
     } catch (error) {
       console.error('Error fetching employees:', error)
       // Global toast handles 5xx/network. 
@@ -563,7 +607,29 @@ function UserManagement() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.firstName, formData.middleName, formData.lastName, formData.employeeName])
 
+  const editingEmployeeId = editingEmployee?.id ?? (typeof editingEmployee === 'string' ? editingEmployee : undefined)
+  // Reset header profile image error when switching employee or when profile image changes
+  useEffect(() => {
+    setHeaderProfileImageError(false)
+  }, [editingEmployeeId, formData.profileImage])
 
+  // Auto-calculate confirmation date from joining date + probation period
+  useEffect(() => {
+    if (formData.joiningDate && formData.probationPeriod) {
+      const joinDate = new Date(formData.joiningDate)
+      const probDays = parseInt(formData.probationPeriod) || 0
+      if (!isNaN(joinDate.getTime()) && probDays > 0) {
+        const confirmDate = new Date(joinDate)
+        confirmDate.setDate(joinDate.getDate() + probDays)
+        const confirmDateStr = confirmDate.toISOString().slice(0, 10)
+        // Only auto-set if confirmDate is empty or matches the calculated value (don't override manual edits)
+        if (!formData.confirmDate || formData.confirmDate === confirmDateStr) {
+          setFormData(prev => ({ ...prev, confirmDate: confirmDateStr }))
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.joiningDate, formData.probationPeriod])
 
   // Family Details Handlers
   const addFamilyMember = () => {
@@ -765,6 +831,7 @@ function UserManagement() {
         businessUnitHR: emp.businessUnitHR || '',
         superManagerId: emp.superManagerId || '',
         probationPeriod: emp.probationPeriod || '',
+        confirmDate: formatDate(emp.confirmDate),
         noticePeriod: emp.noticePeriod || '',
         division: emp.division || '',
         costCenter: emp.costCenter || '',
@@ -1325,6 +1392,7 @@ function UserManagement() {
       managerId: '',
       superManagerId: '',
       probationPeriod: '',
+      confirmDate: '',
       noticePeriod: '',
       division: '',
       costCenter: '',
@@ -1834,12 +1902,13 @@ function UserManagement() {
                           <td className="px-2 py-3 whitespace-nowrap">
                             <div className="flex items-center space-x-3">
                               {/* Profile Avatar */}
-{emp.profileImage ? (
+{(emp.profileImage && !failedProfileImageIds.has(emp.id ?? emp._id)) ? (
                                   <img
-                                  src={getProfileImageUrl(emp.profileImage)}
-                                  alt={fullName}
-                                  className="w-10 h-10 rounded-full object-cover shadow-md border border-gray-200"
-                                />
+                                    src={getProfileImageUrl(emp.profileImage)}
+                                    alt={fullName}
+                                    className="w-10 h-10 rounded-full object-cover shadow-md border border-gray-200"
+                                    onError={() => setFailedProfileImageIds(prev => new Set([...prev, emp.id ?? emp._id]))}
+                                  />
                               ) : (
                                 <div className={`${avatarColor} w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm shadow-md flex-shrink-0`}>
                                   {initials}
@@ -2202,11 +2271,12 @@ function UserManagement() {
           <div className="flex items-center gap-4">
             {!isAddFlow && (
               <div className="flex-shrink-0 w-12 h-12 rounded-full overflow-hidden border-2 border-gray-200 dark:border-gray-600 bg-gray-100 dark:bg-gray-800">
-                {formData.profileImage ? (
+                {formData.profileImage && !headerProfileImageError ? (
                   <img
                     src={getProfileImageUrl(formData.profileImage)}
                     alt="Profile"
                     className="w-full h-full object-cover"
+                    onError={() => setHeaderProfileImageError(true)}
                   />
                 ) : (
                   <div className={`w-full h-full flex items-center justify-center text-sm font-semibold text-white ${getAvatarColor(`${formData.firstName || ''} ${formData.lastName || ''}`.trim() || formData.employeeId || 'U')}`}>
@@ -2313,10 +2383,11 @@ function UserManagement() {
                 <FormField label={getFieldLabelById(1, 'bloodGroup', 'Blood Group')} name="bloodGroup" type="select" options={getFieldOptionsById(1, 'bloodGroup', ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'])} formData={formData} handleChange={handleChange} />
               )}
 
-              {/* Row 3: DOBs - valid 4-digit years only, no future; DOB (Actual) has 18+ restriction */}
+              {/* Row 3: DOBs - both must be at least 18 years ago (no future, 18+ only) */}
               {isFieldVisibleById(1, 'birthdayDate') && (() => {
                 const today = new Date()
-                const todayStr = today.toISOString().slice(0, 10)
+                const maxDob = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate())
+                const maxDobStr = maxDob.toISOString().slice(0, 10)
                 return (
                   <FormField
                     label={getFieldLabelById(1, 'birthdayDate', 'DOB as per Aadhaar')}
@@ -2325,7 +2396,7 @@ function UserManagement() {
                     formData={formData}
                     handleChange={handleChange}
                     min="1900-01-01"
-                    max={todayStr}
+                    max={maxDobStr}
                   />
                 )
               })()}
@@ -2350,9 +2421,21 @@ function UserManagement() {
               {isFieldVisibleById(1, 'maritalStatus') && (
                 <FormField label={getFieldLabelById(1, 'maritalStatus', 'Marital Status')} name="maritalStatus" type="select" options={getFieldOptionsById(1, 'maritalStatus', maritalStatuses)} formData={formData} handleChange={handleChange} />
               )}
-              {isFieldVisibleById(1, 'marriageDate') && String(formData.maritalStatus || '').trim().toLowerCase() !== 'single' && (
-                <FormField label={getFieldLabelById(1, 'marriageDate', 'Marriage Date')} name="marriageDate" type="date" formData={formData} handleChange={handleChange} />
-              )}
+              {isFieldVisibleById(1, 'marriageDate') && String(formData.maritalStatus || '').trim().toLowerCase() !== 'single' && (() => {
+                const today = new Date()
+                const todayStr = today.toISOString().slice(0, 10)
+                return (
+                  <FormField 
+                    label={getFieldLabelById(1, 'marriageDate', 'Marriage Date')} 
+                    name="marriageDate" 
+                    type="date" 
+                    formData={formData} 
+                    handleChange={handleChange}
+                    min="1900-01-01"
+                    max={todayStr}
+                  />
+                )
+              })()}
 
               {/* Physically Challenged - Conditional */}
               {isFieldVisibleById(1, 'isPhysicallyChallenged') && (
@@ -2396,13 +2479,18 @@ function UserManagement() {
                   {getFieldLabelById(1, 'profileImage', 'Profile Image (Max 1MB)')}
                 </label>
                 <div className="flex items-center gap-4">
-                  {formData.profileImage && (
+                  {(formData.profileImage && !headerProfileImageError) ? (
                     <img
                       src={getProfileImageUrl(formData.profileImage)}
                       alt="Profile Preview"
                       className="w-16 h-16 rounded-full object-cover border border-gray-300 dark:border-gray-600"
+                      onError={() => setHeaderProfileImageError(true)}
                     />
-                  )}
+                  ) : formData.profileImage ? (
+                    <div className={`w-16 h-16 rounded-full flex items-center justify-center text-lg font-semibold text-white border border-gray-300 dark:border-gray-600 ${getAvatarColor(`${formData.firstName || ''} ${formData.lastName || ''}`.trim() || formData.employeeId || 'U')}`}>
+                      {getInitials({ fullName: `${formData.firstName || ''} ${formData.lastName || ''}`.trim() || formData.employeeId || 'U' })}
+                    </div>
+                  ) : null}
                   <input
                     type="file"
                     accept="image/jpeg, image/png"
@@ -2854,7 +2942,9 @@ function UserManagement() {
                   {getFieldLabelById(13, 'addMember', 'Add')}
                 </button>
               </div>
-              {renderSchemaExtraFields(13, ['name', 'relation', 'dob', 'addMember', 'selectRelationship'])}
+              <div className="col-span-full">
+                {renderSchemaExtraFields(13, ['name', 'relation', 'dob', 'addMember', 'selectRelationship'])}
+              </div>
             </FormSection>
 
 
@@ -2965,10 +3055,13 @@ function UserManagement() {
                 })()}
               </div>
               )}
+              {isFieldVisibleById(2, 'confirmDate') && (
+                <FormField label={getFieldLabelById(2, 'confirmDate', 'Confirmation Date')} name="confirmDate" type="date" formData={formData} handleChange={handleChange} />
+              )}
               {isFieldVisibleById(2, 'costCenter') && (
                 <FormField label={getFieldLabelById(2, 'costCenter', 'Cost Center')} name="costCenter" formData={formData} handleChange={handleChange} />
               )}
-              {renderSchemaExtraFields(2, ['employeeId', 'officialEmail', 'businessUnitHR', 'designation', 'role', 'employeeStatus', 'joiningDate', 'probationPeriod', 'costCenter', 'department', 'cid', 'managerId', 'superManagerId', 'noticePeriod', 'division', 'grade', 'location', 'employeeNumberSeries'])}
+              {renderSchemaExtraFields(2, ['employeeId', 'officialEmail', 'businessUnitHR', 'designation', 'role', 'employeeStatus', 'joiningDate', 'probationPeriod', 'confirmDate', 'costCenter', 'department', 'cid', 'managerId', 'superManagerId', 'noticePeriod', 'division', 'grade', 'location', 'employeeNumberSeries'])}
 
             </FormSection>
 
@@ -3072,10 +3165,39 @@ function UserManagement() {
                         <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(3, 'percentage', 'Percentage / CGPA')}</label>
                         <input
                           type="text"
+                          inputMode="numeric"
+                          pattern="[0-9.]*"
                           value={edu.percentage || ''}
                           onChange={(e) => {
+                            // Filter out non-numeric characters (allow digits and decimal point)
+                            const filteredValue = e.target.value.replace(/[^0-9.]/g, '')
+                            // Prevent multiple decimal points
+                            const parts = filteredValue.split('.')
+                            const finalValue = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : filteredValue
                             const newEducation = [...formData.education]
-                            newEducation[index].percentage = e.target.value
+                            newEducation[index].percentage = finalValue
+                            setFormData({ ...formData, education: newEducation })
+                          }}
+                          onKeyPress={(e) => {
+                            // Only allow digits, decimal point, and backspace/delete/arrow keys
+                            const char = String.fromCharCode(e.which)
+                            if (!/[0-9.]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
+                              e.preventDefault()
+                            }
+                            // Prevent multiple decimal points
+                            if (char === '.' && e.target.value.includes('.')) {
+                              e.preventDefault()
+                            }
+                          }}
+                          onPaste={(e) => {
+                            e.preventDefault()
+                            const pastedText = e.clipboardData.getData('text')
+                            // Filter out non-numeric characters
+                            const filteredValue = pastedText.replace(/[^0-9.]/g, '')
+                            const parts = filteredValue.split('.')
+                            const finalValue = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : filteredValue
+                            const newEducation = [...formData.education]
+                            newEducation[index].percentage = finalValue
                             setFormData({ ...formData, education: newEducation })
                           }}
                           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
@@ -3085,26 +3207,82 @@ function UserManagement() {
                       <div>
                         <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(3, 'fromDate', 'From')}</label>
                         <input
-                          type="date"
-                          value={edu.fromDate ? edu.fromDate.split('T')[0] : ''}
+                          type="month"
+                          value={(() => {
+                            // Convert date to month format (YYYY-MM) for month input
+                            if (!edu.fromDate) return ''
+                            const date = new Date(edu.fromDate)
+                            if (isNaN(date.getTime())) return ''
+                            return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+                          })()}
                           onChange={(e) => {
                             const newEducation = [...formData.education]
-                            newEducation[index].fromDate = e.target.value
+                            const fromMonth = e.target.value
+                            
+                            // Validate: From date should be before To date
+                            if (fromMonth && edu.toDate) {
+                              const toDate = new Date(edu.toDate)
+                              if (!isNaN(toDate.getTime())) {
+                                const toMonth = `${toDate.getFullYear()}-${String(toDate.getMonth() + 1).padStart(2, '0')}`
+                                if (fromMonth > toMonth) {
+                                  toast.error('From date must be before To date (e.g., From: 2021, To: 2025)')
+                                  return
+                                }
+                              }
+                            }
+                            
+                            newEducation[index].fromDate = fromMonth ? `${fromMonth}-01` : '' // Store as YYYY-MM-01 for backend compatibility
                             setFormData({ ...formData, education: newEducation })
                           }}
+                          max={edu.toDate ? (() => {
+                            // Set max to To date if it exists
+                            const toDate = new Date(edu.toDate)
+                            if (!isNaN(toDate.getTime())) {
+                              return `${toDate.getFullYear()}-${String(toDate.getMonth() + 1).padStart(2, '0')}`
+                            }
+                            return ''
+                          })() : ''}
                           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                         />
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(3, 'toDate', 'To')}</label>
                         <input
-                          type="date"
-                          value={edu.toDate ? edu.toDate.split('T')[0] : ''}
+                          type="month"
+                          value={(() => {
+                            // Convert date to month format (YYYY-MM) for month input
+                            if (!edu.toDate) return ''
+                            const date = new Date(edu.toDate)
+                            if (isNaN(date.getTime())) return ''
+                            return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+                          })()}
                           onChange={(e) => {
                             const newEducation = [...formData.education]
-                            newEducation[index].toDate = e.target.value
+                            const toMonth = e.target.value
+                            
+                            // Validate: To date should be after From date
+                            if (toMonth && edu.fromDate) {
+                              const fromDate = new Date(edu.fromDate)
+                              if (!isNaN(fromDate.getTime())) {
+                                const fromMonth = `${fromDate.getFullYear()}-${String(fromDate.getMonth() + 1).padStart(2, '0')}`
+                                if (fromMonth > toMonth) {
+                                  toast.error('To date must be after From date (e.g., From: 2021, To: 2025)')
+                                  return
+                                }
+                              }
+                            }
+                            
+                            newEducation[index].toDate = toMonth ? `${toMonth}-01` : '' // Store as YYYY-MM-01 for backend compatibility
                             setFormData({ ...formData, education: newEducation })
                           }}
+                          min={edu.fromDate ? (() => {
+                            // Set min to From date if it exists
+                            const fromDate = new Date(edu.fromDate)
+                            if (!isNaN(fromDate.getTime())) {
+                              return `${fromDate.getFullYear()}-${String(fromDate.getMonth() + 1).padStart(2, '0')}`
+                            }
+                            return ''
+                          })() : ''}
                           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                         />
                       </div>
@@ -3167,7 +3345,9 @@ function UserManagement() {
                   <FiPlus className="w-4 h-4" /> {getFieldLabelById(3, 'addQualification', 'Add Qualification')}
                 </button>
               </div>
-              {renderSchemaExtraFields(3, ['institute', 'degree', 'percentage', 'fromDate', 'toDate', 'attachment', 'headingQualifications', 'selectDegree', 'addQualification'])}
+              <div className="col-span-full">
+                {renderSchemaExtraFields(3, ['institute', 'degree', 'percentage', 'fromDate', 'toDate', 'attachment', 'headingQualifications', 'selectDegree', 'addQualification'])}
+              </div>
             </FormSection>
 
             {/* Languages Known (Separate Section) */}
@@ -3257,7 +3437,9 @@ function UserManagement() {
                   <FiPlus className="w-4 h-4" /> {getFieldLabelById(14, 'addLanguage', 'Add Language')}
                 </button>
               </div>
-              {renderSchemaExtraFields(14, ['name', 'read', 'write', 'speak', 'addLanguage'])}
+              <div className="col-span-full">
+                {renderSchemaExtraFields(14, ['name', 'read', 'write', 'speak', 'addLanguage'])}
+              </div>
             </FormSection>
 
             {/* Experience Details */}
@@ -3356,7 +3538,9 @@ function UserManagement() {
                   <FiPlus className="w-4 h-4" /> {getFieldLabelById(10, 'addExperience', 'Add Experience')}
                 </button>
               </div>
-              {renderSchemaExtraFields(10, ['organization', 'designation', 'fromDate', 'toDate', 'addExperience'])}
+              <div className="col-span-full">
+                {renderSchemaExtraFields(10, ['organization', 'designation', 'fromDate', 'toDate', 'addExperience'])}
+              </div>
             </FormSection>
 
 
@@ -3577,7 +3761,9 @@ function UserManagement() {
                   <FiPlus className="w-4 h-4" /> {getFieldLabelById(5, 'addDocument', 'Add Document')}
                 </button>
               </div>
-              {renderSchemaExtraFields(5, ['documentType', 'documentNumber', 'attachment', 'addDocument'])}
+              <div className="col-span-full">
+                {renderSchemaExtraFields(5, ['documentType', 'documentNumber', 'attachment', 'addDocument'])}
+              </div>
             </FormSection>
 
             {/* PF Details */}

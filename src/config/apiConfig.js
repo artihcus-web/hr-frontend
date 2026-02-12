@@ -10,10 +10,21 @@ export function getApiBaseUrl() {
   return (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/$/, '')
 }
 
-/** Build full URL for profile/avatar images so they work after deploy (same origin as API). */
+/**
+ * Build full URL for profile/avatar images so they work after deploy.
+ * When API base is still localhost but the app is opened from another origin (e.g. production),
+ * use current origin so /uploads/... resolves to the same host (assumes API is served from same origin).
+ */
 export function getProfileImageUrl(url) {
   if (!url) return ''
   if (url.startsWith('http') || url.startsWith('data:') || url.startsWith('blob:')) return url
-  const base = getApiBaseUrl()
-  return `${base}${url.startsWith('/') ? url : `/${url}`}`
+  const path = url.startsWith('/') ? url : `/${url}`
+  let base = getApiBaseUrl()
+  const isLocalhostBase = /^https?:\/\/localhost(:\d+)?$/i.test(base)
+  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : ''
+  const isDeployed = currentOrigin && !/^https?:\/\/localhost(:\d+)?$/i.test(currentOrigin)
+  if (isDeployed && isLocalhostBase) {
+    base = currentOrigin
+  }
+  return `${base}${path}`
 }

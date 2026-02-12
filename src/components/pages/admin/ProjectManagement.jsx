@@ -54,7 +54,8 @@ function ProjectManagement() {
   // Client Management State
   const [clientsData, setClientsData] = useState([]) // For new clients to add
   const [newClient, setNewClient] = useState({ email: '', password: '', name: '' })
-  // const [loadingAllUsers, setLoadingAllUsers] = useState(false) // Removed: unused
+  // Edit Profile: view mode (read-only) until admin clicks edit icon
+  const [profileViewMode, setProfileViewMode] = useState(true)
 
   // Filter projects based on search
   const filteredProjects = projects.filter(project =>
@@ -289,6 +290,7 @@ function ProjectManagement() {
         setClientsData(existingClients)
 
         setEditingProject(projectId)
+        setProfileViewMode(true) // Open in view-only mode; admin clicks edit icon to edit
         setShowForm(true)
         // Ensure we load the full user list for selection
         if (allUsers.length === 0) fetchAllUsers()
@@ -348,7 +350,6 @@ function ProjectManagement() {
     setFormData({
       projectName: '',
       projectId: '',
-
       description: '',
       status: 'active',
       clients: []
@@ -356,6 +357,7 @@ function ProjectManagement() {
     setClientsData([])
     setNewClient({ email: '', password: '', name: '' })
     setEditingProject(null)
+    setProfileViewMode(true)
     setError(null)
     setMessage(null)
     setCreationTeamIds([])
@@ -468,11 +470,11 @@ function ProjectManagement() {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'active': return 'bg-emerald-100 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50'
-      case 'inactive': return 'bg-slate-100 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700/50'
-      case 'completed': return 'bg-blue-100 dark:bg-blue-950/30 text-blue-800 dark:text-blue-400 border-blue-200 dark:border-blue-800/50'
-      case 'on-hold': return 'bg-amber-100 dark:bg-amber-950/30 text-amber-800 dark:text-amber-400 border-amber-200 dark:border-amber-800/50'
-      default: return 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+      case 'active': return 'bg-emerald-500/90 dark:bg-emerald-600 text-white border-0'
+      case 'inactive': return 'bg-slate-100 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300 border-0'
+      case 'completed': return 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 border-0'
+      case 'on-hold': return 'bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300 border-0'
+      default: return 'bg-slate-100 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300 border-0'
     }
   }
 
@@ -1039,59 +1041,43 @@ function ProjectManagement() {
                     <button onClick={() => { resetForm(); setShowForm(true); }} className="px-6 py-2 bg-indigo-600 dark:bg-indigo-500 text-white rounded-xl hover:bg-indigo-700 transition-all font-bold">Add First Project</button>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {filteredProjects.map((project) => (
                       <div
                         key={project._id || project.id}
-                        onClick={() => setViewingProject(project)}
-                        className="group relative bg-sky-50 dark:bg-slate-800/50 rounded-[2rem] shadow-sm hover:shadow-xl hover:-translate-y-1 border border-sky-100 dark:border-slate-700 transition-all duration-300 p-6 flex flex-col gap-4 overflow-hidden cursor-pointer"
+                        onClick={() => { window.scrollTo(0, 0); handleEdit(project._id || project.id); }}
+                        className="group relative bg-white dark:bg-slate-800/80 rounded-xl shadow-sm hover:shadow-md border border-slate-200 dark:border-slate-700 transition-all duration-200 p-4 flex flex-col min-h-[160px] cursor-pointer"
                       >
-                        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-sky-400 via-blue-500 to-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-
-                        {/* Header */}
-                        <div className="flex items-start justify-between">
-                          <div className="p-3 bg-indigo-50 dark:bg-indigo-500/10 rounded-xl text-indigo-600 dark:text-indigo-400 group-hover:scale-110 transition-transform duration-300">
-                            <FiFolder className="w-6 h-6" />
+                        {/* Top row: folder icon + status badge */}
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center justify-center w-10 h-10 rounded-lg border-2 border-indigo-200 dark:border-indigo-600/60 text-indigo-600 dark:text-indigo-400 bg-transparent group-hover:border-indigo-400 dark:group-hover:border-indigo-500 transition-colors">
+                            <FiFolder className="w-5 h-5" strokeWidth={2} />
                           </div>
-                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-widest border ${getStatusColor(project.status)}`}>
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${getStatusColor(project.status)}`}>
                             {project.status}
                           </span>
                         </div>
 
-                        {/* Title & info */}
-                        <div>
-                          <h3 className="text-lg font-bold text-slate-900 dark:text-white truncate tracking-tight mb-1" title={project.projectName}>
+                        {/* Project name + ID */}
+                        <div className="flex-1 min-h-0 mb-4">
+                          <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate leading-tight mb-0.5" title={project.projectName}>
                             {project.projectName}
                           </h3>
-                          <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-                            <FiHash className="w-3 h-3" />
-                            {project.projectId}
-                          </div>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                            # {project.projectId}
+                          </p>
                         </div>
 
-                        {/* Footer Stats */}
-                        <div className="mt-auto pt-4 border-t border-slate-50 dark:border-slate-800 flex items-center justify-between">
-                          <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400" title="Employees">
-                              <FiUsers className="w-4 h-4" />
-                              <span className="text-xs font-bold">{project.employees?.length || 0}</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400" title="Managers">
-                              <FiUserCheck className="w-4 h-4" />
-                              <span className="text-xs font-bold">{project.projectManagers?.length || 0}</span>
-                            </div>
-                          </div>
-
-                          <div onClick={(e) => e.stopPropagation()}>
-                            <button
-                              type="button"
-                              onClick={() => { window.scrollTo(0, 0); handleEdit(project._id || project.id); }}
-                              className="flex items-center justify-center w-8 h-8 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-all shadow-sm relative z-10"
-                              title="Edit Project Configuration"
-                            >
-                              <FiEdit2 className="w-4 h-4" />
-                            </button>
-                          </div>
+                        {/* Footer: metrics only (no edit icon) */}
+                        <div className="flex items-center gap-3 pt-3 border-t border-slate-100 dark:border-slate-700/80 text-slate-500 dark:text-slate-400">
+                          <span className="flex items-center gap-1" title="Team members">
+                            <FiUsers className="w-3.5 h-3.5" />
+                            <span className="text-xs font-semibold tabular-nums">{project.employees?.length || 0}</span>
+                          </span>
+                          <span className="flex items-center gap-1" title="Leads">
+                            <FiUserCheck className="w-3.5 h-3.5" />
+                            <span className="text-xs font-semibold tabular-nums">{project.projectManagers?.length || 0}</span>
+                          </span>
                         </div>
                       </div>
                     ))}
@@ -1379,6 +1365,11 @@ function ProjectManagement() {
   }
 
   // RETURN 3: Add/Edit Project Form
+  const managerIds = formData.projectManagers || []
+  const employeeIds = formData.employees || []
+  const memberIds = employeeIds.filter(id => !managerIds.includes(id))
+  const resolveUserName = (id) => allUsers.find(u => (u._id || u.id) === id)?.fullName || '—'
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors">
       <div className={`mx-auto px-4 sm:px-6 lg:px-8 py-8 ${editingProject ? 'w-full max-w-full' : 'max-w-6xl'}`}>
@@ -1399,6 +1390,25 @@ function ProjectManagement() {
               </p>
             </div>
           </div>
+          {editingProject && profileViewMode && (
+            <button
+              type="button"
+              onClick={() => setProfileViewMode(false)}
+              className="flex items-center justify-center w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700/80 text-indigo-600 dark:text-indigo-400 border-2 border-indigo-200 dark:border-indigo-600/60 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:border-indigo-300 dark:hover:border-indigo-500 transition-all shadow-sm"
+              title="Edit project details"
+            >
+              <FiEdit2 className="w-5 h-5" strokeWidth={2} />
+            </button>
+          )}
+          {editingProject && !profileViewMode && (
+            <button
+              type="button"
+              onClick={() => setProfileViewMode(true)}
+              className="px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+            >
+              Back to view
+            </button>
+          )}
         </div>
 
         {message && (
@@ -1414,6 +1424,101 @@ function ProjectManagement() {
           </div>
         )}
 
+        {editingProject && profileViewMode ? (
+          /* Read-only view: entire page in view mode until admin clicks edit icon */
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div className="p-6 space-y-8">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <div className="lg:col-span-4">
+                  <div className="flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-700 mb-4">
+                    <FiInfo className="w-4 h-4 text-indigo-500" />
+                    <h3 className="text-xs font-extrabold text-slate-900 dark:text-white uppercase tracking-widest">General Info</h3>
+                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Project Name</p>
+                      <p className="text-sm font-semibold text-slate-900 dark:text-white">{formData.projectName || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Project ID</p>
+                      <p className="text-sm font-semibold text-slate-700 dark:text-slate-300"># {formData.projectId || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Status</p>
+                      <span className={`inline-block px-2.5 py-1 rounded-md text-xs font-bold uppercase ${getStatusColor(formData.status)}`}>
+                        {formData.status || '—'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="lg:col-span-8">
+                  <div className="flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-700 mb-4">
+                    <FiUsers className="w-4 h-4 text-indigo-500" />
+                    <h3 className="text-xs font-extrabold text-slate-900 dark:text-white uppercase tracking-widest">Client Access</h3>
+                  </div>
+                  <div className="bg-slate-50/50 dark:bg-slate-800/30 rounded-xl p-4 min-h-[120px]">
+                    {clientsData.length === 0 ? (
+                      <p className="text-sm text-slate-500 dark:text-slate-400 italic">No clients assigned to this project.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {clientsData.map((client, idx) => (
+                          <div key={idx} className="flex items-center gap-3 p-3 bg-white dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700">
+                            <div className="w-9 h-9 rounded-full bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center text-indigo-600 dark:text-indigo-400 text-sm font-bold">
+                              {client.name ? client.name[0] : (client.email ? client.email[0].toUpperCase() : 'C')}
+                            </div>
+                            <div>
+                              <p className="text-sm font-semibold text-slate-900 dark:text-white">{client.name || 'Client'}</p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400">{client.email}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-700 mb-4">
+                  <FiUserCheck className="w-4 h-4 text-indigo-500" />
+                  <h3 className="text-xs font-extrabold text-slate-900 dark:text-white uppercase tracking-widest">Team Management</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-purple-50/50 dark:bg-purple-900/10 rounded-xl border border-purple-100 dark:border-purple-900/30 p-4">
+                    <p className="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider mb-3">Project Leads</p>
+                    {managerIds.length === 0 ? (
+                      <p className="text-sm text-slate-500 dark:text-slate-400 italic">No leads assigned.</p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {managerIds.map(id => (
+                          <li key={id} className="flex items-center gap-2 text-sm font-medium text-slate-800 dark:text-slate-200">
+                            <span className="w-6 h-6 rounded-full bg-purple-200 dark:bg-purple-800/50 flex items-center justify-center text-[10px] font-bold text-purple-700 dark:text-purple-300">L</span>
+                            {resolveUserName(id)}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  <div className="bg-slate-50/50 dark:bg-slate-800/30 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+                    <p className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-3">Team Members</p>
+                    {memberIds.length === 0 ? (
+                      <p className="text-sm text-slate-500 dark:text-slate-400 italic">No members assigned.</p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {memberIds.map(id => (
+                          <li key={id} className="flex items-center gap-2 text-sm font-medium text-slate-800 dark:text-slate-200">
+                            <span className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-600 dark:text-slate-300">M</span>
+                            {resolveUserName(id)}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
         <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-900/50 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden transition-colors flex flex-col h-full max-h-[85vh]">
           <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-700">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-6">
@@ -1528,104 +1633,104 @@ function ProjectManagement() {
 
             </div>
 
-            {/* Bottom Row: Team Management */}
-            {/* Bottom Row: Team Management (Unified Builder) */}
-            <div>
-              <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800 mb-4">
+            {/* Team Management - Redesigned UI */}
+            <div className="border-t border-slate-200 dark:border-slate-700 pt-6 mt-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
                 <div className="flex items-center gap-2">
-                  <FiUsers className="w-4 h-4 text-indigo-500" />
-                  <h3 className="text-[11px] font-extrabold text-slate-900 dark:text-white uppercase tracking-widest">Team Management</h3>
+                  <div className="p-2 rounded-lg bg-indigo-100 dark:bg-indigo-900/30">
+                    <FiUsers className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white">Team Management</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{allUsers.length} resources available</p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{allUsers.length} Resources</span>
-                  <input
-                    type="text"
-                    placeholder="Search resources..."
-                    value={builderSearchQuery}
-                    onChange={e => setBuilderSearchQuery(e.target.value)}
-                    className="w-40 px-3 py-1 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                  />
+                  <div className="relative">
+                    <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Search by name or email..."
+                      value={builderSearchQuery}
+                      onChange={e => setBuilderSearchQuery(e.target.value)}
+                      className="pl-9 pr-3 py-2 w-full sm:w-56 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="bg-slate-50/50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800 p-3">
-                {/* Action Bar */}
-                <div className="flex items-center gap-2 mb-3">
+              <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/30 flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Selected: {builderSelectedIds.length}</span>
                   <button
                     type="button"
                     onClick={() => handleBuilderAssign('employees')}
                     disabled={builderSelectedIds.length === 0}
-                    className="px-3 py-1.5 bg-white border border-slate-200 text-indigo-600 text-[9px] font-bold uppercase tracking-wider rounded-md hover:bg-indigo-50 disabled:opacity-50 transition-colors shadow-sm"
+                    className="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30 hover:text-indigo-700 dark:hover:text-indigo-300 disabled:opacity-50 transition-colors"
                   >
-                    Assign Member
+                    Assign as Member
                   </button>
                   <button
                     type="button"
                     onClick={() => handleBuilderAssign('projectManagers')}
                     disabled={builderSelectedIds.length === 0}
-                    className="px-3 py-1.5 bg-indigo-600 text-white text-[9px] font-bold uppercase tracking-wider rounded-md hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-sm"
+                    className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
                   >
-                    Assign Manager
+                    Assign as Manager
                   </button>
-                  {/* Optional: Unassign Button */}
                   <button
                     type="button"
                     onClick={() => handleBuilderAssign(null)}
                     disabled={builderSelectedIds.length === 0}
-                    className="ml-auto px-3 py-1.5 bg-red-50 text-red-600 border border-red-100 text-[9px] font-bold uppercase tracking-wider rounded-md hover:bg-red-100 disabled:opacity-50 transition-colors"
+                    className="px-3 py-1.5 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-xs font-semibold rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 disabled:opacity-50 transition-colors"
                   >
-                    Remove
+                    Remove from project
                   </button>
                 </div>
 
-                {/* Unified List - COMPACT GRID */}
-                <div className="h-48 overflow-y-auto pr-1 bg-white dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-800 p-2">
-                  <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+                <div className="h-52 overflow-y-auto p-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                     {allUsers
-                      .filter(u => u.fullName?.toLowerCase().includes(builderSearchQuery.toLowerCase()) || u.email?.toLowerCase().includes(builderSearchQuery.toLowerCase()))
+                      .filter(u => (u.fullName || '').toLowerCase().includes(builderSearchQuery.toLowerCase()) || (u.email || '').toLowerCase().includes(builderSearchQuery.toLowerCase()))
                       .map(user => {
-                        const isManager = (formData.projectManagers || []).includes(user._id || user.id);
-                        const isEmployee = (formData.employees || []).includes(user._id || user.id);
-                        const isSelected = builderSelectedIds.includes(user._id || user.id);
+                        const isManager = (formData.projectManagers || []).includes(user._id || user.id)
+                        const isEmployee = (formData.employees || []).includes(user._id || user.id)
+                        const isSelected = builderSelectedIds.includes(user._id || user.id)
 
                         return (
-                          <label key={user._id || user.id} className={`flex items-start gap-2 p-1.5 rounded border cursor-pointer transition-all h-full ${isSelected ? 'bg-indigo-50/50 border-indigo-200' : 'hover:bg-slate-50 border-transparent border-slate-50'
-                            } ${isManager || isEmployee ? 'bg-slate-50/30' : ''}`}>
-
+                          <label
+                            key={user._id || user.id}
+                            className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                              isSelected
+                                ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-300 dark:border-indigo-700'
+                                : 'bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                            } ${isManager || isEmployee ? 'ring-1 ring-offset-1 ring-indigo-200 dark:ring-indigo-800' : ''}`}
+                          >
                             <input
                               type="checkbox"
-                              className="rounded text-indigo-600 w-3 h-3 mt-0.5"
+                              className="rounded text-indigo-600 w-4 h-4 shrink-0 focus:ring-indigo-500"
                               checked={isSelected}
                               onChange={(e) => {
                                 const id = user._id || user.id
-                                setBuilderSelectedIds(prev => e.target.checked ? [...prev, id] : prev.filter(x => x !== id))
+                                setBuilderSelectedIds(prev => (e.target.checked ? [...prev, id] : prev.filter(x => x !== id)))
                               }}
                             />
-
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between gap-1 mb-0.5">
-                                <span className="text-[10px] font-bold text-slate-700 dark:text-slate-200 truncate" title={user.fullName}>{user.fullName}</span>
-                                {isManager && <div className="w-1.5 h-1.5 rounded-full bg-purple-500" title="Manager"></div>}
-                                {isEmployee && <div className="w-1.5 h-1.5 rounded-full bg-blue-500" title="Member"></div>}
+                              <p className="text-sm font-semibold text-slate-900 dark:text-white truncate" title={user.fullName}>{user.fullName}</p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{user.email}</p>
+                              <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                {isManager && <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 font-semibold">Lead</span>}
+                                {isEmployee && !isManager && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-semibold">Member</span>}
+                                {user.currentAssignments?.length > 0 && (
+                                  <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">{user.currentAssignments.length} assignment(s)</span>
+                                )}
                               </div>
-                              <div className="text-[8px] text-slate-400 truncate">{user.email}</div>
-
-                              {user.currentAssignments && user.currentAssignments.length > 0 && (
-                                <div className="flex flex-wrap gap-0.5 mt-0.5">
-                                  {user.currentAssignments.slice(0, 2).map((assign, idx) => (
-                                    <span key={idx} className="text-[7px] px-1 py-0 rounded bg-amber-50 text-amber-700 border border-amber-100 truncate max-w-[50px]">
-                                      {assign.projectName}
-                                    </span>
-                                  ))}
-                                  {user.currentAssignments.length > 2 && <span className="text-[7px] text-slate-400">+{user.currentAssignments.length - 2}</span>}
-                                </div>
-                              )}
                             </div>
                           </label>
                         )
                       })}
                   </div>
-                  {allUsers.length === 0 && <p className="text-center py-10 text-xs text-gray-400 italic col-span-full">No users available.</p>}
+                  {allUsers.length === 0 && <p className="text-center py-8 text-sm text-slate-500 dark:text-slate-400">No users available.</p>}
                 </div>
               </div>
             </div>
@@ -1637,6 +1742,7 @@ function ProjectManagement() {
             </button>
           </div>
         </form>
+        )}
 
         {/* VIEW PROJECT MODAL */}
         {viewingProject && (

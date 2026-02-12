@@ -1287,8 +1287,7 @@ const Timesheet = () => {
               )}
               <div>
                 <h2 className="text-base font-bold text-gray-800 dark:text-gray-200 leading-tight">{user?.fullName || "Poojitha Bandaru"},</h2>
-                <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">{user?.
-                  Id || "1432"}</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">{user?.employeeId || "—"}</span>
               </div>
             </div>
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { FiSend, FiInbox, FiClock, FiCheckCircle, FiAlertCircle, FiUser, FiBriefcase } from 'react-icons/fi'
+import { FiSend, FiInbox, FiClock, FiUser, FiBriefcase, FiGrid, FiArrowLeft, FiFolder, FiChevronDown } from 'react-icons/fi'
 import axiosInstance from '../../../utils/axiosInstance'
 import { toast } from 'react-hot-toast'
 import LoadingSpinner from '../../common/LoadingSpinner'
@@ -12,8 +12,15 @@ const Grievance = () => {
     const [sentGrievances, setSentGrievances] = useState([])
     const [receivedGrievances, setReceivedGrievances] = useState([])
     const [allGrievances, setAllGrievances] = useState([]) // For Admin
+    const [categories, setCategories] = useState([]) // Admin: from same API as GrievanceConfig
+    const [selectedCategoryId, setSelectedCategoryId] = useState(null) // Admin: drill-down into category
+    const [expandedTicketIds, setExpandedTicketIds] = useState({}) // Accordion: which tickets are expanded
 
     const isAdmin = user?.role === 'admin' || user?.role === 'super_admin'
+
+    const toggleTicketAccordion = (id) => {
+        setExpandedTicketIds(prev => ({ ...prev, [id]: !prev[id] }))
+    }
 
     useEffect(() => {
         if (isAdmin) setActiveTab('all_tickets')
@@ -34,11 +41,23 @@ const Grievance = () => {
     useEffect(() => {
         fetchTypes()
         checkHandlerStatus()
-        checkHandlerStatus()
         if (activeTab === 'sent') fetchSent()
         if (activeTab === 'received') fetchReceived()
-        if (activeTab === 'all_tickets') fetchAllAdmin()
-    }, [activeTab])
+        if (activeTab === 'all_tickets') {
+            fetchAllAdmin()
+            if (isAdmin) fetchAdminCategories()
+        }
+    }, [activeTab, isAdmin])
+
+    const fetchAdminCategories = async () => {
+        try {
+            const res = await axiosInstance.get('/api/grievance/admin/types')
+            setCategories(res.data.types || [])
+        } catch (error) {
+            console.error('Error fetching categories:', error)
+            toast.error('Failed to load categories')
+        }
+    }
 
     const checkHandlerStatus = async () => {
         try {
@@ -128,10 +147,8 @@ const Grievance = () => {
         try {
             await axiosInstance.put(`/api/grievance/${id}/status`, { status: newStatus })
             toast.success(`Status updated to ${newStatus}`)
-            await axiosInstance.put(`/api/grievance/${id}/status`, { status: newStatus })
-            toast.success(`Status updated to ${newStatus}`)
             if (activeTab === 'all_tickets') fetchAllAdmin()
-            else fetchReceived() // Refresh list
+            else fetchReceived()
         } catch (error) {
             console.error(error)
             toast.error('Failed to update status')
@@ -170,18 +187,30 @@ const Grievance = () => {
     const getListToFilter = () => {
         if (activeTab === 'sent') return sentGrievances
         if (activeTab === 'received') return receivedGrievances
-        if (activeTab === 'all_tickets') return allGrievances
+        if (activeTab === 'all_tickets') {
+            if (isAdmin && selectedCategoryId) {
+                return allGrievances.filter(t => (t.issueType?._id || t.issueType) === selectedCategoryId)
+            }
+            return allGrievances
+        }
         return []
     }
 
     const filteredList = filterGrievances(getListToFilter())
 
+    const getTicketCountForCategory = (typeId) =>
+        allGrievances.filter(t => (t.issueType?._id || t.issueType) === typeId).length
+
     return (
         <div className="p-6 max-w-6xl mx-auto space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Grievance Portal</h1>
-                    <p className="text-gray-500 dark:text-gray-400">Raise tickets to report issues or concerns.</p>
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                        {isAdmin ? 'Grievance Dashboard' : 'Grievance Portal'}
+                    </h1>
+                    <p className="text-gray-500 dark:text-gray-400">
+                        {isAdmin ? 'View tickets by category. Click a category to see its tickets.' : 'Raise tickets to report issues or concerns.'}
+                    </p>
                 </div>
 
                 <div className="flex bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm border border-gray-200 dark:border-gray-700">
@@ -208,16 +237,16 @@ const Grievance = () => {
                         </>
                     )}
 
-                    {/* Admin unique tab */}
+                    {/* Admin: Dashboard tab (category tiles) */}
                     {isAdmin && (
                         <button
-                            onClick={() => setActiveTab('all_tickets')}
+                            onClick={() => { setActiveTab('all_tickets'); setSelectedCategoryId(null) }}
                             className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'all_tickets'
                                 ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400 shadow-sm'
                                 : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
                                 }`}
                         >
-                            All Tickets (Global)
+                            Dashboard
                         </button>
                     )}
 
@@ -296,10 +325,62 @@ const Grievance = () => {
                 </div>
             )}
 
-            {/* List View (Sent or Received) */}
-            {activeTab !== 'raise' && (
+            {/* Admin Dashboard: Category Tiles (tickets not shown directly) */}
+            {activeTab !== 'raise' && isAdmin && activeTab === 'all_tickets' && !selectedCategoryId && (
+                <div className="space-y-6">
+                    <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                        <FiGrid className="w-4 h-4 text-indigo-500" />
+                        <span>Select a category to view its tickets</span>
+                    </div>
+                    {loading ? (
+                        <div className="flex justify-center py-12"><LoadingSpinner /></div>
+                    ) : categories.length === 0 ? (
+                        <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-xl border border-dashed border-gray-300 dark:border-gray-700">
+                            <FiFolder className="mx-auto h-12 w-12 text-gray-300 dark:text-gray-600 mb-3" />
+                            <h3 className="text-lg font-medium text-gray-900 dark:text-white">No categories yet</h3>
+                            <p className="text-gray-500 dark:text-gray-400">Configure categories in Grievance Configuration.</p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                            {categories.filter(c => c.isActive !== false).map(cat => {
+                                const count = getTicketCountForCategory(cat._id)
+                                return (
+                                    <button
+                                        key={cat._id}
+                                        type="button"
+                                        onClick={() => setSelectedCategoryId(cat._id)}
+                                        className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:border-indigo-400 dark:hover:border-indigo-600 hover:shadow-md transition-all text-left group"
+                                    >
+                                        <div className="flex items-start justify-between mb-3">
+                                            <div className="w-10 h-10 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center group-hover:bg-indigo-200 dark:group-hover:bg-indigo-800/50 transition-colors">
+                                                <FiBriefcase className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                                            </div>
+                                            <span className="text-2xl font-bold text-gray-900 dark:text-white tabular-nums">{count}</span>
+                                        </div>
+                                        <h3 className="text-base font-bold text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                                            {cat.name}
+                                        </h3>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                            {count === 1 ? '1 ticket' : `${count} tickets`}
+                                        </p>
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Admin: Ticket list for selected category (drill-down) */}
+            {activeTab !== 'raise' && isAdmin && activeTab === 'all_tickets' && selectedCategoryId && (
                 <div className="space-y-4">
-                    {/* Filters - Compact Toolbar */}
+                    <button
+                        type="button"
+                        onClick={() => setSelectedCategoryId(null)}
+                        className="flex items-center gap-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
+                    >
+                        <FiArrowLeft className="w-4 h-4" /> Back to Dashboard
+                    </button>
                     <div className="flex flex-wrap items-center gap-3">
                         <select
                             value={filterStatus}
@@ -312,7 +393,6 @@ const Grievance = () => {
                             <option value="Resolved">Resolved</option>
                             <option value="Closed">Closed</option>
                         </select>
-
                         <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 shadow-sm">
                             <span className="text-xs text-gray-400 font-medium pl-1">Date:</span>
                             <input
@@ -329,21 +409,133 @@ const Grievance = () => {
                                 className="border-none p-0 text-sm text-gray-700 dark:text-gray-200 bg-transparent focus:ring-0 cursor-pointer"
                             />
                         </div>
-
                         {(filterStatus !== 'All' || filterStartDate || filterEndDate) && (
                             <button
-                                onClick={() => {
-                                    setFilterStatus('All')
-                                    setFilterStartDate('')
-                                    setFilterEndDate('')
-                                }}
+                                onClick={() => { setFilterStatus('All'); setFilterStartDate(''); setFilterEndDate('') }}
                                 className="text-xs font-medium text-red-500 hover:text-red-600 transition-colors px-2"
                             >
                                 Clear Filters
                             </button>
                         )}
                     </div>
+                    {loading ? (
+                        <div className="flex justify-center py-12"><LoadingSpinner /></div>
+                    ) : filteredList.length === 0 ? (
+                        <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-xl border border-dashed border-gray-300 dark:border-gray-700">
+                            <FiInbox className="mx-auto h-12 w-12 text-gray-300 dark:text-gray-600 mb-3" />
+                            <h3 className="text-lg font-medium text-gray-900 dark:text-white">No tickets in this category</h3>
+                            <p className="text-gray-500 dark:text-gray-400">Try adjusting filters or check back later.</p>
+                        </div>
+                    ) : (
+                        <div className="grid gap-4">
+                            {filteredList.map(ticket => {
+                                const isExpanded = expandedTicketIds[ticket._id]
+                                return (
+                                    <div key={ticket._id} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                        <button
+                                            type="button"
+                                            onClick={() => toggleTicketAccordion(ticket._id)}
+                                            className="w-full flex items-center gap-3 p-5 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer"
+                                        >
+                                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold shrink-0 ${getStatusColor(ticket.status)}`}>
+                                                {ticket.status}
+                                            </span>
+                                            <span className="text-xs text-gray-500 flex items-center gap-1 shrink-0">
+                                                <FiClock className="w-3 h-3" />
+                                                {new Date(ticket.createdAt).toLocaleDateString()}
+                                            </span>
+                                            <h3 className="flex-1 min-w-0 text-lg font-bold text-gray-900 dark:text-white truncate">
+                                                {ticket.subject}
+                                            </h3>
+                                            <FiChevronDown className={`w-5 h-5 text-gray-500 shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                                        </button>
+                                        {isExpanded && (
+                                            <div className="px-5 pb-5 pt-0 border-t border-gray-100 dark:border-gray-700">
+                                                <p className="text-gray-600 dark:text-gray-300 text-sm mb-4">
+                                                    {ticket.description || '—'}
+                                                </p>
+                                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                                                        <FiUser className="w-3 h-3" />
+                                                        <span>From: <span className="font-semibold text-gray-700 dark:text-gray-300">{ticket.sender?.fullName || '—'}</span></span>
+                                                    </div>
+                                                    <div className="flex gap-2" onClick={e => e.stopPropagation()}>
+                                                        {ticket.status === 'Open' && (
+                                                            <button
+                                                                onClick={() => handleStatusUpdate(ticket._id, 'In Progress')}
+                                                                className="px-3 py-1 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-xs font-medium transition-colors"
+                                                            >
+                                                                Investigate
+                                                            </button>
+                                                        )}
+                                                        {ticket.status === 'In Progress' && (
+                                                            <button
+                                                                onClick={() => handleStatusUpdate(ticket._id, 'Resolved')}
+                                                                className="px-3 py-1 bg-green-50 text-green-600 hover:bg-green-100 rounded-lg text-xs font-medium transition-colors"
+                                                            >
+                                                                Resolve
+                                                            </button>
+                                                        )}
+                                                        {ticket.status === 'Resolved' && (
+                                                            <button
+                                                                onClick={() => handleStatusUpdate(ticket._id, 'Closed')}
+                                                                className="px-3 py-1 bg-gray-50 text-gray-600 hover:bg-gray-100 rounded-lg text-xs font-medium transition-colors"
+                                                            >
+                                                                Close Ticket
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    )}
+                </div>
+            )}
 
+            {/* List View (Sent or Received — non-admin or My Assignments) */}
+            {activeTab !== 'raise' && !(isAdmin && activeTab === 'all_tickets') && (
+                <div className="space-y-4">
+                    <div className="flex flex-wrap items-center gap-3">
+                        <select
+                            value={filterStatus}
+                            onChange={(e) => setFilterStatus(e.target.value)}
+                            className="px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent shadow-sm outline-none cursor-pointer"
+                        >
+                            <option value="All">All Status</option>
+                            <option value="Open">Open</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Resolved">Resolved</option>
+                            <option value="Closed">Closed</option>
+                        </select>
+                        <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 shadow-sm">
+                            <span className="text-xs text-gray-400 font-medium pl-1">Date:</span>
+                            <input
+                                type="date"
+                                value={filterStartDate}
+                                onChange={(e) => setFilterStartDate(e.target.value)}
+                                className="border-none p-0 text-sm text-gray-700 dark:text-gray-200 bg-transparent focus:ring-0 cursor-pointer"
+                            />
+                            <span className="text-gray-400">-</span>
+                            <input
+                                type="date"
+                                value={filterEndDate}
+                                onChange={(e) => setFilterEndDate(e.target.value)}
+                                className="border-none p-0 text-sm text-gray-700 dark:text-gray-200 bg-transparent focus:ring-0 cursor-pointer"
+                            />
+                        </div>
+                        {(filterStatus !== 'All' || filterStartDate || filterEndDate) && (
+                            <button
+                                onClick={() => { setFilterStatus('All'); setFilterStartDate(''); setFilterEndDate('') }}
+                                className="text-xs font-medium text-red-500 hover:text-red-600 transition-colors px-2"
+                            >
+                                Clear Filters
+                            </button>
+                        )}
+                    </div>
                     {loading ? (
                         <div className="flex justify-center py-12"><LoadingSpinner /></div>
                     ) : filteredList.length === 0 ? (
@@ -354,63 +546,76 @@ const Grievance = () => {
                         </div>
                     ) : (
                         <div className="grid gap-4">
-                            {filteredList.map(ticket => (
-                                <div key={ticket._id} className="bg-white dark:bg-gray-800 p-5 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-700 transition-colors group">
-                                    <div className="flex justify-between items-start mb-3">
-                                        <div className="flex items-center gap-3">
-                                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${getStatusColor(ticket.status)}`}>
+                            {filteredList.map(ticket => {
+                                const isExpanded = expandedTicketIds[ticket._id]
+                                const showActions = activeTab === 'received' || activeTab === 'all_tickets'
+                                return (
+                                    <div key={ticket._id} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                        <button
+                                            type="button"
+                                            onClick={() => toggleTicketAccordion(ticket._id)}
+                                            className="w-full flex items-center gap-3 p-5 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer"
+                                        >
+                                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold shrink-0 ${getStatusColor(ticket.status)}`}>
                                                 {ticket.status}
                                             </span>
-                                            <span className="text-xs text-gray-500 flex items-center gap-1">
+                                            <span className="text-xs text-gray-500 flex items-center gap-1 shrink-0">
                                                 <FiClock className="w-3 h-3" />
                                                 {new Date(ticket.createdAt).toLocaleDateString()}
                                             </span>
-                                        </div>
-                                        {(activeTab === 'received' || activeTab === 'all_tickets') && (
-                                            <div className="flex gap-2">
-                                                {ticket.status === 'Open' && (
-                                                    <button
-                                                        onClick={() => handleStatusUpdate(ticket._id, 'In Progress')}
-                                                        className="px-3 py-1 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-xs font-medium transition-colors"
-                                                    >
-                                                        Investigate
-                                                    </button>
-                                                )}
-                                                {ticket.status === 'In Progress' && (
-                                                    <button
-                                                        onClick={() => handleStatusUpdate(ticket._id, 'Resolved')}
-                                                        className="px-3 py-1 bg-green-50 text-green-600 hover:bg-green-100 rounded-lg text-xs font-medium transition-colors"
-                                                    >
-                                                        Resolve
-                                                    </button>
-                                                )}
-                                                {ticket.status === 'Resolved' && (
-                                                    <button
-                                                        onClick={() => handleStatusUpdate(ticket._id, 'Closed')}
-                                                        className="px-3 py-1 bg-gray-50 text-gray-600 hover:bg-gray-100 rounded-lg text-xs font-medium transition-colors"
-                                                    >
-                                                        Close Ticket
-                                                    </button>
-                                                )}
+                                            <h3 className="flex-1 min-w-0 text-lg font-bold text-gray-900 dark:text-white truncate">
+                                                {ticket.subject}
+                                            </h3>
+                                            <FiChevronDown className={`w-5 h-5 text-gray-500 shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                                        </button>
+                                        {isExpanded && (
+                                            <div className="px-5 pb-5 pt-0 border-t border-gray-100 dark:border-gray-700">
+                                                <p className="text-gray-600 dark:text-gray-300 text-sm mb-4">
+                                                    {ticket.description || '—'}
+                                                </p>
+                                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                                                        <FiUser className="w-3 h-3" />
+                                                        {activeTab === 'sent' ? (
+                                                            <span>Type: <span className="font-semibold text-gray-700 dark:text-gray-300">{ticket.issueType?.name || 'General'}</span></span>
+                                                        ) : (
+                                                            <span>From: <span className="font-semibold text-gray-700 dark:text-gray-300">{ticket.sender?.fullName || '—'}</span></span>
+                                                        )}
+                                                    </div>
+                                                    {showActions && (
+                                                        <div className="flex gap-2" onClick={e => e.stopPropagation()}>
+                                                            {ticket.status === 'Open' && (
+                                                                <button
+                                                                    onClick={() => handleStatusUpdate(ticket._id, 'In Progress')}
+                                                                    className="px-3 py-1 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-xs font-medium transition-colors"
+                                                                >
+                                                                    Investigate
+                                                                </button>
+                                                            )}
+                                                            {ticket.status === 'In Progress' && (
+                                                                <button
+                                                                    onClick={() => handleStatusUpdate(ticket._id, 'Resolved')}
+                                                                    className="px-3 py-1 bg-green-50 text-green-600 hover:bg-green-100 rounded-lg text-xs font-medium transition-colors"
+                                                                >
+                                                                    Resolve
+                                                                </button>
+                                                            )}
+                                                            {ticket.status === 'Resolved' && (
+                                                                <button
+                                                                    onClick={() => handleStatusUpdate(ticket._id, 'Closed')}
+                                                                    className="px-3 py-1 bg-gray-50 text-gray-600 hover:bg-gray-100 rounded-lg text-xs font-medium transition-colors"
+                                                                >
+                                                                    Close Ticket
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
                                         )}
                                     </div>
-                                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1 group-hover:text-indigo-600 transition-colors">
-                                        {ticket.subject}
-                                    </h3>
-                                    <p className="text-gray-600 dark:text-gray-300 text-sm mb-4 line-clamp-3">
-                                        {ticket.description}
-                                    </p>
-                                    <div className="flex items-center gap-2 text-xs text-gray-500 border-t border-gray-100 dark:border-gray-700 pt-3 mt-3">
-                                        <FiUser className="w-3 h-3" />
-                                        {activeTab === 'sent' ? (
-                                            <span>Type: <span className="font-semibold text-gray-700 dark:text-gray-300">{ticket.issueType?.name || 'General'}</span></span>
-                                        ) : (
-                                            <span>From: <span className="font-semibold text-gray-700 dark:text-gray-300">{ticket.sender?.fullName}</span></span>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
+                                )
+                            })}
                         </div>
                     )}
                 </div>

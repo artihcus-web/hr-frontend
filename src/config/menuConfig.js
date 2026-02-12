@@ -1,4 +1,4 @@
-import { FiHome, FiUser, FiClock, FiCalendar, FiUsers, FiCheckCircle, FiDollarSign, FiFileText, FiPlus, FiPieChart, FiSettings, FiBriefcase, FiTrendingUp, FiFolder, FiAlertCircle, FiMonitor } from 'react-icons/fi'
+import { FiHome, FiUser,FiUserCheck, FiClock, FiCalendar, FiUsers, FiCheckCircle, FiDollarSign, FiFileText, FiPlus, FiPieChart, FiSettings, FiBriefcase, FiTrendingUp, FiFolder, FiAlertCircle, FiMonitor } from 'react-icons/fi'
 
 
 
@@ -124,6 +124,13 @@ export const menuItems = [
     icon: FiSettings,
     path: '/admin/form-builder',
     roles: ['super_admin', 'hr_admin']
+  },
+  {
+    id: 'know-your-employee',
+    label: 'Know Your Employee',
+    icon: FiUser,
+    path: '/know-your-employee',
+    roles: ['employee', 'manager', 'hr_admin', 'team_lead', 'c_suite', 'super_manager']
   },
   {
     id: 'admin-controllers',
