@@ -106,24 +106,26 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
   // Number type: only numeric digits
   const isNumberType = normalizedType === 'number' && !isPercentageField
 
-  // Debug logging for text fields
-  if (name === 'firstName' || name === 'lastName' || name === 'middleName') {
-    console.log('🔍 FormField Debug:', {
-      name,
-      type,
-      normalizedType,
-      isTextType,
-      isAlphanumericType,
-      isNumberType,
-      isCommonTextField,
-      isCityField,
-      isPincodeField,
-      isCountryField,
-      isAccountNumberField,
-      isPercentageField,
-      value: value || '(empty)'
-    })
-  }
+  // Debug logging for ALL fields rendered through FormField
+  console.log('🧩 FormField Render:', {
+    name,
+    label,
+    type,
+    normalizedType,
+    required: !!required,
+    value: value ?? '',
+    isTextType,
+    isAlphanumericType,
+    isNumberType,
+    isCityField,
+    isPincodeField,
+    isCountryField,
+    isAccountNumberField,
+    isPercentageField,
+    isYearOnlyField,
+    isPhoneType,
+    isEmailType
+  })
 
   return (
     <div className="flex flex-col">
@@ -224,28 +226,43 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           name={name}
           value={value}
           onChange={(e) => {
-            // Filter out non-numeric characters (allow digits and decimal point)
-            let filteredValue = e.target.value.replace(/[^0-9.]/g, '')
-            // Prevent multiple decimal points
-            const parts = filteredValue.split('.')
-            filteredValue = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : filteredValue
-            // For year-only fields, enforce max 4 digits and no decimal
-            if (isYearOnlyField) {
-              filteredValue = filteredValue.replace(/\./g, '').slice(0, 4)
-            }
-            
-            // For percentage/CGPA fields, validate range
-            if (isPercentageField && filteredValue) {
-              const numValue = parseFloat(filteredValue)
-              const isCGPA = label && label.toLowerCase().includes('cgpa')
-              const maxValue = isCGPA ? 10 : 100
-              if (!isNaN(numValue) && numValue > maxValue) {
-                filteredValue = maxValue.toString()
-                toast.error(isCGPA ? `CGPA must be between 0 and ${maxValue}` : `Percentage must be between 0 and ${maxValue}`)
+            console.log('🔢 Number type onChange:', { name, originalValue: e.target.value, isEmployeeId: name === 'employeeId' })
+            // EXCEPTION: Employee ID should allow alphanumeric even if type is number
+            let filteredValue
+            if (name === 'employeeId') {
+              console.log('🆔 Employee ID with number type - allowing alphanumeric')
+              filteredValue = (e.target.value || '').replace(/[^a-zA-Z0-9]/g, '')
+            } else {
+              // Filter out non-numeric characters (allow digits and decimal point)
+              filteredValue = (e.target.value || '').replace(/[^0-9.]/g, '')
+              // Prevent multiple decimal points
+              const parts = filteredValue.split('.')
+              filteredValue = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : filteredValue
+              // For year-only fields, enforce max 4 digits and no decimal
+              if (isYearOnlyField) {
+                filteredValue = filteredValue.replace(/\./g, '').slice(0, 4)
+              }
+              
+              // For percentage/CGPA fields, validate range
+              if (isPercentageField && filteredValue) {
+                const numValue = parseFloat(filteredValue)
+                const isCGPA = label && label.toLowerCase().includes('cgpa')
+                const maxValue = isCGPA ? 10 : 100
+                if (!isNaN(numValue) && numValue > maxValue) {
+                  filteredValue = maxValue.toString()
+                  toast.error(isCGPA ? `CGPA must be between 0 and ${maxValue}` : `Percentage must be between 0 and ${maxValue}`)
+                }
               }
             }
-            
-            handleChange({ ...e, target: { ...e.target, value: filteredValue } })
+            console.log('🔢 Number type filtered:', { name, filteredValue })
+            handleChange({
+              target: {
+                name,
+                value: filteredValue,
+                type: 'text',
+                checked: false
+              }
+            })
           }}
           onKeyPress={(e) => {
             // Only allow digits, decimal point, and backspace/delete/arrow keys
@@ -313,12 +330,22 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           name={name}
           value={value}
           onChange={(e) => {
+            console.log('🏙 City onChange raw:', { name, original: e.target.value })
             // Only allow alphabets, spaces, hyphens, dots, and commas
-            const filteredValue = e.target.value.replace(/[^a-zA-Z\s\-.,]/g, '')
-            handleChange({ ...e, target: { ...e.target, value: filteredValue } })
+            const filteredValue = (e.target.value || '').replace(/[^a-zA-Z\s\-.,]/g, '')
+            console.log('🏙 City onChange filtered:', { name, filteredValue })
+            handleChange({
+              target: {
+                name,
+                value: filteredValue,
+                type: 'text',
+                checked: false
+              }
+            })
           }}
           onKeyPress={(e) => {
             const char = String.fromCharCode(e.which)
+            console.log('🏙 City onKeyPress:', { name, char })
             if (!/[a-zA-Z\s\-.,]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
               e.preventDefault()
             }
@@ -326,8 +353,16 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           onPaste={(e) => {
             e.preventDefault()
             const pastedText = e.clipboardData.getData('text')
-            const filteredValue = pastedText.replace(/[^a-zA-Z\s\-.,]/g, '')
-            handleChange({ target: { name, value: filteredValue, type: 'text' } })
+            const filteredValue = (pastedText || '').replace(/[^a-zA-Z\s\-.,]/g, '')
+            console.log('🏙 City onPaste:', { name, pastedText, filteredValue })
+            handleChange({
+              target: {
+                name,
+                value: filteredValue,
+                type: 'text',
+                checked: false
+              }
+            })
           }}
           required={required}
           placeholder={placeholder}
@@ -341,12 +376,22 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           name={name}
           value={value}
           onChange={(e) => {
+            console.log('📮 PIN onChange raw:', { name, original: e.target.value })
             // Only allow 6 digits
-            const filteredValue = e.target.value.replace(/[^0-9]/g, '').slice(0, 6)
-            handleChange({ ...e, target: { ...e.target, value: filteredValue } })
+            const filteredValue = (e.target.value || '').replace(/[^0-9]/g, '').slice(0, 6)
+            console.log('📮 PIN onChange filtered:', { name, filteredValue })
+            handleChange({
+              target: {
+                name,
+                value: filteredValue,
+                type: 'text',
+                checked: false
+              }
+            })
           }}
           onKeyPress={(e) => {
             const char = String.fromCharCode(e.which)
+            console.log('📮 PIN onKeyPress:', { name, char })
             if (!/[0-9]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
               e.preventDefault()
             }
@@ -357,8 +402,16 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           onPaste={(e) => {
             e.preventDefault()
             const pastedText = e.clipboardData.getData('text')
-            const filteredValue = pastedText.replace(/[^0-9]/g, '').slice(0, 6)
-            handleChange({ target: { name, value: filteredValue, type: 'text' } })
+            const filteredValue = (pastedText || '').replace(/[^0-9]/g, '').slice(0, 6)
+            console.log('📮 PIN onPaste:', { name, pastedText, filteredValue })
+            handleChange({
+              target: {
+                name,
+                value: filteredValue,
+                type: 'text',
+                checked: false
+              }
+            })
           }}
           maxLength={6}
           required={required}
@@ -441,9 +494,16 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           name={name}
           value={value}
           onChange={(e) => {
-            // Trim spaces while typing
-            const next = e.target.value.replace(/\s+/g, '')
-            handleChange({ ...e, target: { ...e.target, value: next } })
+            // Trim spaces while typing and pass a clean, synthetic event
+            const next = (e.target.value || '').replace(/\s+/g, '')
+            handleChange({
+              target: {
+                name,
+                value: next,
+                type: 'email',
+                checked: false
+              }
+            })
           }}
           onBlur={(e) => {
             const current = (e.target.value || '').trim()
@@ -471,9 +531,16 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           name={name}
           value={value}
           onChange={(e) => {
-            console.log('📝 Text field onChange:', { name, originalValue: e.target.value })
+            console.log('📝 Text field onChange:', { name, originalValue: e.target.value, isEmployeeId: name === 'employeeId' })
             // Text type: only alphabets, spaces, and valid special characters (.,-&) - NO NUMBERS
-            const filteredValue = e.target.value.replace(/[^a-zA-Z\s.,\-&]/g, '')
+            // EXCEPTION: Employee ID should allow alphanumeric
+            let filteredValue
+            if (name === 'employeeId') {
+              console.log('🆔 Employee ID detected - allowing alphanumeric')
+              filteredValue = e.target.value.replace(/[^a-zA-Z0-9\s.,\-&]/g, '')
+            } else {
+              filteredValue = e.target.value.replace(/[^a-zA-Z\s.,\-&]/g, '')
+            }
             console.log('📝 Text field filtered:', { name, filteredValue, removed: e.target.value !== filteredValue })
             // Create a proper event-like object for handleChange
             handleChange({
@@ -487,7 +554,7 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           }}
           onKeyDown={(e) => {
             const key = e.key
-            console.log('⌨️ Text field onKeyDown:', { name, key, ctrlKey: e.ctrlKey, metaKey: e.metaKey })
+            console.log('⌨️ Text field onKeyDown:', { name, key, ctrlKey: e.ctrlKey, metaKey: e.metaKey, isEmployeeId: name === 'employeeId' })
             // Allow control keys and navigation keys
             if (e.ctrlKey || e.metaKey || e.altKey || 
                 ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Tab', 'Enter', 'Home', 'End'].includes(key)) {
@@ -495,23 +562,39 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
               return
             }
             // Block numbers (0-9) and other invalid characters
-            if (/[0-9]/.test(key)) {
-              console.log('🚫 Blocked number:', key)
-              e.preventDefault()
-              return
+            // EXCEPTION: Employee ID should allow numbers
+            if (name === 'employeeId') {
+              if (!/[a-zA-Z0-9\s.,\-&]/.test(key) && key.length === 1) {
+                console.log('🚫 Blocked invalid char for Employee ID:', key)
+                e.preventDefault()
+                return
+              }
+              console.log('✅ Allowed key for Employee ID:', key)
+            } else {
+              if (/[0-9]/.test(key)) {
+                console.log('🚫 Blocked number:', key)
+                e.preventDefault()
+                return
+              }
+              if (!/[a-zA-Z\s.,\-&]/.test(key) && key.length === 1) {
+                console.log('🚫 Blocked invalid char:', key)
+                e.preventDefault()
+                return
+              }
+              console.log('✅ Allowed key:', key)
             }
-            if (!/[a-zA-Z\s.,\-&]/.test(key) && key.length === 1) {
-              console.log('🚫 Blocked invalid char:', key)
-              e.preventDefault()
-              return
-            }
-            console.log('✅ Allowed key:', key)
           }}
           onPaste={(e) => {
-            console.log('📋 Text field onPaste:', { name })
+            console.log('📋 Text field onPaste:', { name, isEmployeeId: name === 'employeeId' })
             e.preventDefault()
             const pastedText = e.clipboardData.getData('text')
-            const filteredValue = pastedText.replace(/[^a-zA-Z\s.,\-&]/g, '')
+            // EXCEPTION: Employee ID should allow alphanumeric
+            let filteredValue
+            if (name === 'employeeId') {
+              filteredValue = (pastedText || '').replace(/[^a-zA-Z0-9\s.,\-&]/g, '')
+            } else {
+              filteredValue = (pastedText || '').replace(/[^a-zA-Z\s.,\-&]/g, '')
+            }
             console.log('📋 Paste filtered:', { pastedText, filteredValue })
             handleChange({
               target: {
@@ -533,9 +616,18 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           name={name}
           value={value}
           onChange={(e) => {
+            console.log('🔤 Alphanumeric onChange:', { name, originalValue: e.target.value, isEmployeeId: name === 'employeeId' })
             // Alphanumeric type: allow alphabets, numbers, spaces, and common special characters
-            const filteredValue = e.target.value.replace(/[^a-zA-Z0-9\s.,\-&]/g, '')
-            handleChange({ ...e, target: { ...e.target, value: filteredValue } })
+            const filteredValue = (e.target.value || '').replace(/[^a-zA-Z0-9\s.,\-&]/g, '')
+            console.log('🔤 Alphanumeric filtered:', { name, filteredValue })
+            handleChange({
+              target: {
+                name,
+                value: filteredValue,
+                type: 'text',
+                checked: false
+              }
+            })
           }}
           onKeyPress={(e) => {
             const char = String.fromCharCode(e.which)
@@ -659,28 +751,69 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           name={name}
           value={value}
           onChange={(e) => {
+            console.log('📄 Fallback text onChange:', { name, originalValue: e.target.value, isEmployeeId: name === 'employeeId' })
             // Text type: only alphabets, spaces, and valid special characters (.,-&) - NO NUMBERS
-            const filteredValue = e.target.value.replace(/[^a-zA-Z\s.,\-&]/g, '')
-            handleChange({ ...e, target: { ...e.target, value: filteredValue } })
+            // EXCEPTION: Employee ID should allow alphanumeric
+            let filteredValue
+            if (name === 'employeeId') {
+              console.log('🆔 Employee ID in fallback - allowing alphanumeric')
+              filteredValue = (e.target.value || '').replace(/[^a-zA-Z0-9\s.,\-&]/g, '')
+            } else {
+              filteredValue = (e.target.value || '').replace(/[^a-zA-Z\s.,\-&]/g, '')
+            }
+            console.log('📄 Fallback text filtered:', { name, filteredValue })
+            handleChange({
+              target: {
+                name,
+                value: filteredValue,
+                type: 'text',
+                checked: false
+              }
+            })
           }}
           onKeyDown={(e) => {
             // Prevent typing numbers and invalid characters
             const key = e.key
+            console.log('⌨️ Fallback text onKeyDown:', { name, key, isEmployeeId: name === 'employeeId' })
             // Allow control keys and navigation keys
             if (e.ctrlKey || e.metaKey || e.altKey || 
                 ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Tab', 'Enter', 'Home', 'End'].includes(key)) {
               return
             }
             // Block numbers (0-9) and other invalid characters
-            if (/[0-9]/.test(key) || (!/[a-zA-Z\s.,\-&]/.test(key) && key.length === 1)) {
-              e.preventDefault()
+            // EXCEPTION: Employee ID should allow numbers
+            if (name === 'employeeId') {
+              if (!/[a-zA-Z0-9\s.,\-&]/.test(key) && key.length === 1) {
+                console.log('🚫 Blocked invalid char for Employee ID:', key)
+                e.preventDefault()
+              } else {
+                console.log('✅ Allowed key for Employee ID:', key)
+              }
+            } else {
+              if (/[0-9]/.test(key) || (!/[a-zA-Z\s.,\-&]/.test(key) && key.length === 1)) {
+                console.log('🚫 Blocked:', key)
+                e.preventDefault()
+              }
             }
           }}
           onPaste={(e) => {
             e.preventDefault()
             const pastedText = e.clipboardData.getData('text')
-            const filteredValue = pastedText.replace(/[^a-zA-Z\s.,\-&]/g, '')
-            handleChange({ target: { name, value: filteredValue, type: 'text' } })
+            console.log('📋 Fallback text onPaste:', { name, pastedText, isEmployeeId: name === 'employeeId' })
+            let filteredValue
+            if (name === 'employeeId') {
+              filteredValue = (pastedText || '').replace(/[^a-zA-Z0-9\s.,\-&]/g, '')
+            } else {
+              filteredValue = (pastedText || '').replace(/[^a-zA-Z\s.,\-&]/g, '')
+            }
+            handleChange({
+              target: {
+                name,
+                value: filteredValue,
+                type: 'text',
+                checked: false
+              }
+            })
           }}
           required={required}
           placeholder={placeholder}
@@ -692,7 +825,10 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           type={type}
           name={name}
           value={value}
-          onChange={handleChange}
+          onChange={(e) => {
+            console.log('🌐 Final fallback onChange:', { name, type, value: e.target.value, isEmployeeId: name === 'employeeId' })
+            handleChange(e)
+          }}
           required={required}
           placeholder={placeholder}
           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
@@ -1251,9 +1387,13 @@ function UserManagement() {
     const { name, value, type, checked } = e.target || {}
 
     if (!name) {
-      console.error('handleChange: name is undefined', e)
+      // Some third-party or React internal events may call this without a proper target.
+      // Safely ignore those instead of logging noisy errors.
       return
     }
+
+    // Global debug log for every field change (all 13 sections)
+    console.log('🛠 handleChange:', { name, value, type, checked })
 
     if (name.includes('.')) {
       const [parent, child] = name.split('.')
@@ -3392,7 +3532,29 @@ function UserManagement() {
                       type="tel"
                       name="phone"
                       value={formData.phone || ''}
-                      onChange={handleChange}
+                      onChange={(e) => {
+                        // Only digits, max 10 characters
+                        const filteredValue = e.target.value.replace(/[^0-9]/g, '').slice(0, 10)
+                        handleChange({ ...e, target: { ...e.target, value: filteredValue } })
+                      }}
+                      onKeyPress={(e) => {
+                        const char = String.fromCharCode(e.which)
+                        // Block non-digits
+                        if (!/[0-9]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
+                          e.preventDefault()
+                          return
+                        }
+                        // Enforce max length 10
+                        if (e.target.value && e.target.value.length >= 10 && e.key !== 'Backspace' && e.key !== 'Delete') {
+                          e.preventDefault()
+                        }
+                      }}
+                      onPaste={(e) => {
+                        e.preventDefault()
+                        const pastedText = e.clipboardData.getData('text')
+                        const filteredValue = pastedText.replace(/[^0-9]/g, '').slice(0, 10)
+                        handleChange({ target: { name: 'phone', value: filteredValue, type: 'text' } })
+                      }}
                       maxLength={10}
                       required={getFieldRequiredById(12, 'phone', true)}
                       className="w-44 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
@@ -3427,7 +3589,26 @@ function UserManagement() {
                       type="tel"
                       name="secondaryContact"
                       value={formData.secondaryContact || ''}
-                      onChange={handleChange}
+                      onChange={(e) => {
+                        const filteredValue = e.target.value.replace(/[^0-9]/g, '').slice(0, 10)
+                        handleChange({ ...e, target: { ...e.target, value: filteredValue } })
+                      }}
+                      onKeyPress={(e) => {
+                        const char = String.fromCharCode(e.which)
+                        if (!/[0-9]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
+                          e.preventDefault()
+                          return
+                        }
+                        if (e.target.value && e.target.value.length >= 10 && e.key !== 'Backspace' && e.key !== 'Delete') {
+                          e.preventDefault()
+                        }
+                      }}
+                      onPaste={(e) => {
+                        e.preventDefault()
+                        const pastedText = e.clipboardData.getData('text')
+                        const filteredValue = pastedText.replace(/[^0-9]/g, '').slice(0, 10)
+                        handleChange({ target: { name: 'secondaryContact', value: filteredValue, type: 'text' } })
+                      }}
                       maxLength={10}
                       className="w-44 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
                       placeholder={getFieldLabelById(12, 'secondaryContact', 'Secondary contact number')}
@@ -3461,7 +3642,26 @@ function UserManagement() {
                       type="tel"
                       name="emergencyContact"
                       value={formData.emergencyContact || ''}
-                      onChange={handleChange}
+                      onChange={(e) => {
+                        const filteredValue = e.target.value.replace(/[^0-9]/g, '').slice(0, 10)
+                        handleChange({ ...e, target: { ...e.target, value: filteredValue } })
+                      }}
+                      onKeyPress={(e) => {
+                        const char = String.fromCharCode(e.which)
+                        if (!/[0-9]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
+                          e.preventDefault()
+                          return
+                        }
+                        if (e.target.value && e.target.value.length >= 10 && e.key !== 'Backspace' && e.key !== 'Delete') {
+                          e.preventDefault()
+                        }
+                      }}
+                      onPaste={(e) => {
+                        e.preventDefault()
+                        const pastedText = e.clipboardData.getData('text')
+                        const filteredValue = pastedText.replace(/[^0-9]/g, '').slice(0, 10)
+                        handleChange({ target: { name: 'emergencyContact', value: filteredValue, type: 'text' } })
+                      }}
                       maxLength={10}
                       required={getFieldRequiredById(12, 'emergencyContact', true)}
                       className="w-44 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
@@ -4626,7 +4826,13 @@ function UserManagement() {
               </>
               )}
               {isFieldVisibleById(4, 'bankName') && (
-                <FormField label={getFieldLabelById(4, 'bankName', 'Bank Name')} name="bankName" formData={formData} handleChange={handleChange} />
+                <FormField
+                  label={getFieldLabelById(4, 'bankName', 'Bank Name')}
+                  name="bankName"
+                  required={getFieldRequiredById(4, 'bankName', false)}
+                  formData={formData}
+                  handleChange={handleChange}
+                />
               )}
               {isFieldVisibleById(4, 'ifscCode') && (
                 <div>
@@ -4658,23 +4864,63 @@ function UserManagement() {
                 </div>
               )}
               {isFieldVisibleById(4, 'accountType') && (
-                <FormField label={getFieldLabelById(4, 'accountType', 'Account Type')} name="accountType" type="select" options={getFieldOptionsById(4, 'accountType', accountTypes)} formData={formData} handleChange={handleChange} />
+                <FormField
+                  label={getFieldLabelById(4, 'accountType', 'Account Type')}
+                  name="accountType"
+                  type="select"
+                  required={getFieldRequiredById(4, 'accountType', false)}
+                  options={getFieldOptionsById(4, 'accountType', accountTypes)}
+                  formData={formData}
+                  handleChange={handleChange}
+                />
               )}
               {isFieldVisibleById(4, 'branchName') && (
-                <FormField label={getFieldLabelById(4, 'branchName', 'Branch Name')} name="branchName" formData={formData} handleChange={handleChange} />
+                <FormField
+                  label={getFieldLabelById(4, 'branchName', 'Branch Name')}
+                  name="branchName"
+                  required={getFieldRequiredById(4, 'branchName', false)}
+                  formData={formData}
+                  handleChange={handleChange}
+                />
               )}
 
               {isFieldVisibleById(4, 'salaryPaymentMode') && (
-                <FormField label={getFieldLabelById(4, 'salaryPaymentMode', 'Salary Payment Mode')} name="salaryPaymentMode" type="select" options={getFieldOptionsById(4, 'salaryPaymentMode', paymentModes)} formData={formData} handleChange={handleChange} />
+                <FormField
+                  label={getFieldLabelById(4, 'salaryPaymentMode', 'Salary Payment Mode')}
+                  name="salaryPaymentMode"
+                  type="select"
+                  required={getFieldRequiredById(4, 'salaryPaymentMode', false)}
+                  options={getFieldOptionsById(4, 'salaryPaymentMode', paymentModes)}
+                  formData={formData}
+                  handleChange={handleChange}
+                />
               )}
               {isFieldVisibleById(4, 'nameAsPerBankRecords') && (
-                <FormField label={getFieldLabelById(4, 'nameAsPerBankRecords', 'Name as per Bank Records')} name="nameAsPerBankRecords" formData={formData} handleChange={handleChange} />
+                <FormField
+                  label={getFieldLabelById(4, 'nameAsPerBankRecords', 'Name as per Bank Records')}
+                  name="nameAsPerBankRecords"
+                  required={getFieldRequiredById(4, 'nameAsPerBankRecords', false)}
+                  formData={formData}
+                  handleChange={handleChange}
+                />
               )}
               {isFieldVisibleById(4, 'iban') && (
-                <FormField label={getFieldLabelById(4, 'iban', 'IBAN')} name="iban" formData={formData} handleChange={handleChange} />
+                <FormField
+                  label={getFieldLabelById(4, 'iban', 'IBAN')}
+                  name="iban"
+                  required={getFieldRequiredById(4, 'iban', false)}
+                  formData={formData}
+                  handleChange={handleChange}
+                />
               )}
               {isFieldVisibleById(4, 'swiftCode') && (
-                <FormField label={getFieldLabelById(4, 'swiftCode', 'Swift Code')} name="swiftCode" formData={formData} handleChange={handleChange} />
+                <FormField
+                  label={getFieldLabelById(4, 'swiftCode', 'Swift Code')}
+                  name="swiftCode"
+                  required={getFieldRequiredById(4, 'swiftCode', false)}
+                  formData={formData}
+                  handleChange={handleChange}
+                />
               )}
               {renderSchemaExtraFields(4, ['accountNumber', 'confirmAccountNumber', 'bankName', 'ifscCode', 'accountType', 'branchName', 'salaryPaymentMode', 'nameAsPerBankRecords', 'iban', 'swiftCode', 'bankBranch'])}
             </FormSection>
@@ -4912,31 +5158,91 @@ function UserManagement() {
               showEditButton={!isAddFlow}
             >
               {isFieldVisibleById(6, 'isEligibleForPF') && (
-                <FormField label={getFieldLabelById(6, 'isEligibleForPF', 'Is Employee Eligible for PF')} name="isEligibleForPF" type="checkbox" formData={formData} handleChange={handleChange} />
+                <FormField
+                  label={getFieldLabelById(6, 'isEligibleForPF', 'Is Employee Eligible for PF')}
+                  name="isEligibleForPF"
+                  type="checkbox"
+                  required={getFieldRequiredById(6, 'isEligibleForPF', false)}
+                  formData={formData}
+                  handleChange={handleChange}
+                />
               )}
               {isFieldVisibleById(6, 'pfNumber') && (
-                <FormField label={getFieldLabelById(6, 'pfNumber', 'PF Number')} name="pfNumber" formData={formData} handleChange={handleChange} />
+                <FormField
+                  label={getFieldLabelById(6, 'pfNumber', 'PF Number')}
+                  name="pfNumber"
+                  required={getFieldRequiredById(6, 'pfNumber', false)}
+                  formData={formData}
+                  handleChange={handleChange}
+                />
               )}
               {isFieldVisibleById(6, 'pfScheme') && (
-                <FormField label={getFieldLabelById(6, 'pfScheme', 'PF Scheme')} name="pfScheme" formData={formData} handleChange={handleChange} />
+                <FormField
+                  label={getFieldLabelById(6, 'pfScheme', 'PF Scheme')}
+                  name="pfScheme"
+                  required={getFieldRequiredById(6, 'pfScheme', false)}
+                  formData={formData}
+                  handleChange={handleChange}
+                />
               )}
               {isFieldVisibleById(6, 'pfJoiningDate') && (
-                <FormField label={getFieldLabelById(6, 'pfJoiningDate', 'PF Joining Date')} name="pfJoiningDate" type="date" formData={formData} handleChange={handleChange} />
+                <FormField
+                  label={getFieldLabelById(6, 'pfJoiningDate', 'PF Joining Date')}
+                  name="pfJoiningDate"
+                  type="date"
+                  required={getFieldRequiredById(6, 'pfJoiningDate', false)}
+                  formData={formData}
+                  handleChange={handleChange}
+                />
               )}
               {isFieldVisibleById(6, 'eligibleForExcessEPFContribution') && (
-                <FormField label={getFieldLabelById(6, 'eligibleForExcessEPFContribution', 'Eligible for Excess EPF Contribution')} name="eligibleForExcessEPFContribution" type="checkbox" formData={formData} handleChange={handleChange} />
+                <FormField
+                  label={getFieldLabelById(6, 'eligibleForExcessEPFContribution', 'Eligible for Excess EPF Contribution')}
+                  name="eligibleForExcessEPFContribution"
+                  type="checkbox"
+                  required={getFieldRequiredById(6, 'eligibleForExcessEPFContribution', false)}
+                  formData={formData}
+                  handleChange={handleChange}
+                />
               )}
               {isFieldVisibleById(6, 'isEligibleForExcessEPSContribution') && (
-                <FormField label={getFieldLabelById(6, 'isEligibleForExcessEPSContribution', 'Is Employee Eligible for Excess EPS Contribution')} name="isEligibleForExcessEPSContribution" type="checkbox" formData={formData} handleChange={handleChange} />
+                <FormField
+                  label={getFieldLabelById(6, 'isEligibleForExcessEPSContribution', 'Is Employee Eligible for Excess EPS Contribution')}
+                  name="isEligibleForExcessEPSContribution"
+                  type="checkbox"
+                  required={getFieldRequiredById(6, 'isEligibleForExcessEPSContribution', false)}
+                  formData={formData}
+                  handleChange={handleChange}
+                />
               )}
               {isFieldVisibleById(6, 'isExistingMemberOfPF') && (
-                <FormField label={getFieldLabelById(6, 'isExistingMemberOfPF', 'Is Existing Member of PF')} name="isExistingMemberOfPF" type="checkbox" formData={formData} handleChange={handleChange} />
+                <FormField
+                  label={getFieldLabelById(6, 'isExistingMemberOfPF', 'Is Existing Member of PF')}
+                  name="isExistingMemberOfPF"
+                  type="checkbox"
+                  required={getFieldRequiredById(6, 'isExistingMemberOfPF', false)}
+                  formData={formData}
+                  handleChange={handleChange}
+                />
               )}
               {isFieldVisibleById(6, 'salary') && (
-                <FormField label={getFieldLabelById(6, 'salary', 'Salary')} name="salary" type="number" formData={formData} handleChange={handleChange} />
+                <FormField
+                  label={getFieldLabelById(6, 'salary', 'Salary')}
+                  name="salary"
+                  type="number"
+                  required={getFieldRequiredById(6, 'salary', false)}
+                  formData={formData}
+                  handleChange={handleChange}
+                />
               )}
               {isFieldVisibleById(6, 'universalAccountNumber') && (
-                <FormField label={getFieldLabelById(6, 'universalAccountNumber', 'Universal Account Number')} name="universalAccountNumber" formData={formData} handleChange={handleChange} />
+                <FormField
+                  label={getFieldLabelById(6, 'universalAccountNumber', 'Universal Account Number')}
+                  name="universalAccountNumber"
+                  required={getFieldRequiredById(6, 'universalAccountNumber', false)}
+                  formData={formData}
+                  handleChange={handleChange}
+                />
               )}
               {renderSchemaExtraFields(6, ['isEligibleForPF', 'pfNumber', 'pfScheme', 'pfJoiningDate', 'eligibleForExcessEPFContribution', 'isEligibleForExcessEPSContribution', 'isExistingMemberOfPF', 'salary', 'universalAccountNumber'])}
             </FormSection>
@@ -4954,13 +5260,33 @@ function UserManagement() {
               showEditButton={!isAddFlow}
             >
               {isFieldVisibleById(7, 'isEligibleForESI') && (
-                <FormField label={getFieldLabelById(7, 'isEligibleForESI', 'Is Employee Eligible for ESI')} name="isEligibleForESI" type="checkbox" formData={formData} handleChange={handleChange} />
+                <FormField
+                  label={getFieldLabelById(7, 'isEligibleForESI', 'Is Employee Eligible for ESI')}
+                  name="isEligibleForESI"
+                  type="checkbox"
+                  required={getFieldRequiredById(7, 'isEligibleForESI', false)}
+                  formData={formData}
+                  handleChange={handleChange}
+                />
               )}
               {isFieldVisibleById(7, 'esiNumber') && (
-                <FormField label={getFieldLabelById(7, 'esiNumber', 'ESI Number')} name="esiNumber" formData={formData} handleChange={handleChange} />
+                <FormField
+                  label={getFieldLabelById(7, 'esiNumber', 'ESI Number')}
+                  name="esiNumber"
+                  required={getFieldRequiredById(7, 'esiNumber', false)}
+                  formData={formData}
+                  handleChange={handleChange}
+                />
               )}
               {isFieldVisibleById(7, 'isCoveredUnderLWF') && (
-                <FormField label={getFieldLabelById(7, 'isCoveredUnderLWF', 'Is Covered Under LWF')} name="isCoveredUnderLWF" type="checkbox" formData={formData} handleChange={handleChange} />
+                <FormField
+                  label={getFieldLabelById(7, 'isCoveredUnderLWF', 'Is Covered Under LWF')}
+                  name="isCoveredUnderLWF"
+                  type="checkbox"
+                  required={getFieldRequiredById(7, 'isCoveredUnderLWF', false)}
+                  formData={formData}
+                  handleChange={handleChange}
+                />
               )}
               {renderSchemaExtraFields(7, ['isEligibleForESI', 'esiNumber', 'isCoveredUnderLWF'])}
             </FormSection>
