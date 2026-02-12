@@ -1,9 +1,10 @@
 import axios from 'axios'
 import toast from 'react-hot-toast'
+import { getApiBaseUrl } from '../config/apiConfig.js'
 
-// Create axios instance
+// Create axios instance (uses same base URL as profile images for deploy consistency)
 const axiosInstance = axios.create({
-    baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000',
+    baseURL: getApiBaseUrl(),
     headers: {
         'Content-Type': 'application/json'
     }

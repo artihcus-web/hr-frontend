@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { FiArrowLeft, FiSearch, FiPower, FiSun, FiMoon } from 'react-icons/fi'
 import { useAuth } from '../../context/AuthContext'
 import { useTheme } from '../../context/ThemeContext'
+import { getProfileImageUrl } from '../../config/apiConfig'
 
 function Header() {
   const navigate = useNavigate()
@@ -76,7 +77,7 @@ function Header() {
               >
                 {user?.profileImage ? (
                   <img
-                    src={user.profileImage}
+                    src={getProfileImageUrl(user.profileImage)}
                     alt="User profile"
                     className="w-full h-full object-cover rounded-full"
                   />

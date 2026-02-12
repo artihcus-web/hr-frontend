@@ -6,16 +6,11 @@ import * as XLSX from 'xlsx'
 import toast from 'react-hot-toast'
 import { countryCodes } from '../../../utils/countryCodes'
 import axiosInstance from '../../../utils/axiosInstance'
+import { getProfileImageUrl } from '../../../config/apiConfig'
 import LoadingSpinner from '../../common/LoadingSpinner'
 
 const roles = ['admin', 'c-suite', 'hr', 'manager', 'supermanager', 'tl', 'employee', 'client']
 
-const getProfileImageUrl = (url) => {
-  if (!url) return ''
-  if (url.startsWith('http') || url.startsWith('data:') || url.startsWith('blob:')) return url
-  const base = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-  return `${base.replace(/\/$/, '')}${url.startsWith('/') ? url : `/${url}`}`
-}
 const genders = ['Male', 'Female', 'Other']
 const maritalStatuses = ['Single', 'Married', 'Divorced', 'Widowed']
 const accountTypes = ['Savings', 'Current']
@@ -329,6 +324,17 @@ function UserManagement() {
       const field = getFieldConfig(sectionKey, fieldName)
       const opts = field?.options
       return Array.isArray(opts) && opts.length > 0 ? opts : fallback
+    },
+    [getSectionKey, getFieldConfig]
+  )
+
+  // Helper to get field required flag from CMS schema (so Schema Configuration drives required asterisk and validation)
+  const getFieldRequiredById = useCallback(
+    (sectionId, fieldName, defaultValue = false) => {
+      const sectionKey = getSectionKey(sectionId)
+      if (!sectionKey) return defaultValue
+      const field = getFieldConfig(sectionKey, fieldName)
+      return field?.required === true
     },
     [getSectionKey, getFieldConfig]
   )
@@ -2253,7 +2259,7 @@ function UserManagement() {
               {isFieldVisibleById(1, 'employeeName') && (
               <div className="col-span-full">
                 <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
-                  {getFieldLabelById(1, 'employeeName', 'Employee Name')} <span className="text-red-500">*</span>
+                  {getFieldLabelById(1, 'employeeName', 'Employee Name')} {getFieldRequiredById(1, 'employeeName', true) && <span className="text-red-500">*</span>}
                 </label>
                 <input
                   type="text"
@@ -2271,7 +2277,7 @@ function UserManagement() {
                   <FormField
                     label={getFieldLabel('basic-info', 'firstName', 'First Name')}
                     name="firstName"
-                    required
+                    required={getFieldRequiredById(1, 'firstName', true)}
                     formData={formData}
                     handleChange={handleChange}
                     placeholder={getFieldLabel('basic-info', 'firstName', 'First Name')}
@@ -2281,6 +2287,7 @@ function UserManagement() {
                   <FormField
                     label={getFieldLabel('basic-info', 'middleName', 'Middle Name')}
                     name="middleName"
+                    required={getFieldRequiredById(1, 'middleName', false)}
                     formData={formData}
                     handleChange={handleChange}
                     placeholder={getFieldLabel('basic-info', 'middleName', 'Middle Name')}
@@ -2290,7 +2297,7 @@ function UserManagement() {
                   <FormField
                     label={getFieldLabel('basic-info', 'lastName', 'Last Name')}
                     name="lastName"
-                    required
+                    required={getFieldRequiredById(1, 'lastName', true)}
                     formData={formData}
                     handleChange={handleChange}
                     placeholder={getFieldLabel('basic-info', 'lastName', 'Last Name')}
@@ -2300,25 +2307,50 @@ function UserManagement() {
 
               {/* Row 2: Gender & Blood Group */}
               {isFieldVisibleById(1, 'gender') && (
-                <FormField label={getFieldLabelById(1, 'gender', 'Gender')} name="gender" type="select" required options={getFieldOptionsById(1, 'gender', genders)} formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(1, 'gender', 'Gender')} name="gender" type="select" required={getFieldRequiredById(1, 'gender', false)} options={getFieldOptionsById(1, 'gender', genders)} formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(1, 'bloodGroup') && (
                 <FormField label={getFieldLabelById(1, 'bloodGroup', 'Blood Group')} name="bloodGroup" type="select" options={getFieldOptionsById(1, 'bloodGroup', ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'])} formData={formData} handleChange={handleChange} />
               )}
 
-              {/* Row 3: DOBs */}
-              {isFieldVisibleById(1, 'birthdayDate') && (
-                <FormField label={getFieldLabelById(1, 'birthdayDate', 'DOB as per Aadhaar')} name="birthdayDate" type="date" formData={formData} handleChange={handleChange} />
-              )}
-              {isFieldVisibleById(1, 'dateOfBirth') && (
-                <FormField label={getFieldLabelById(1, 'dateOfBirth', 'Date of Birth (Actual)')} name="dateOfBirth" type="date" formData={formData} handleChange={handleChange} />
-              )}
+              {/* Row 3: DOBs - valid 4-digit years only, no future; DOB (Actual) has 18+ restriction */}
+              {isFieldVisibleById(1, 'birthdayDate') && (() => {
+                const today = new Date()
+                const todayStr = today.toISOString().slice(0, 10)
+                return (
+                  <FormField
+                    label={getFieldLabelById(1, 'birthdayDate', 'DOB as per Aadhaar')}
+                    name="birthdayDate"
+                    type="date"
+                    formData={formData}
+                    handleChange={handleChange}
+                    min="1900-01-01"
+                    max={todayStr}
+                  />
+                )
+              })()}
+              {isFieldVisibleById(1, 'dateOfBirth') && (() => {
+                const today = new Date()
+                const maxDob = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate())
+                const maxDobStr = maxDob.toISOString().slice(0, 10)
+                return (
+                  <FormField
+                    label={getFieldLabelById(1, 'dateOfBirth', 'Date of Birth (Actual)')}
+                    name="dateOfBirth"
+                    type="date"
+                    formData={formData}
+                    handleChange={handleChange}
+                    min="1900-01-01"
+                    max={maxDobStr}
+                  />
+                )
+              })()}
 
-              {/* Row 4: Marital Status */}
+              {/* Row 4: Marital Status; Marriage Date only when not Single */}
               {isFieldVisibleById(1, 'maritalStatus') && (
                 <FormField label={getFieldLabelById(1, 'maritalStatus', 'Marital Status')} name="maritalStatus" type="select" options={getFieldOptionsById(1, 'maritalStatus', maritalStatuses)} formData={formData} handleChange={handleChange} />
               )}
-              {isFieldVisibleById(1, 'marriageDate') && (
+              {isFieldVisibleById(1, 'marriageDate') && String(formData.maritalStatus || '').trim().toLowerCase() !== 'single' && (
                 <FormField label={getFieldLabelById(1, 'marriageDate', 'Marriage Date')} name="marriageDate" type="date" formData={formData} handleChange={handleChange} />
               )}
 
@@ -2438,7 +2470,7 @@ function UserManagement() {
                 {isFieldVisibleById(12, 'phone') && (
                 <div>
                   <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    {getFieldLabelById(12, 'phone', 'Primary Contact')} <span className="text-red-500">*</span>
+                    {getFieldLabelById(12, 'phone', 'Primary Contact')} {getFieldRequiredById(12, 'phone', true) && <span className="text-red-500">*</span>}
                   </label>
                   <div className="flex items-center gap-2 w-full">
                     <div className="w-16">
@@ -2461,6 +2493,7 @@ function UserManagement() {
                       value={formData.phone || ''}
                       onChange={handleChange}
                       maxLength={10}
+                      required={getFieldRequiredById(12, 'phone', true)}
                       className="w-44 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
                       placeholder={getFieldLabelById(12, 'phone', 'Primary contact number')}
                     />
@@ -2506,7 +2539,7 @@ function UserManagement() {
                 {isFieldVisibleById(12, 'emergencyContactNumber') && (
                 <div>
                   <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    {getFieldLabelById(12, 'emergencyContactNumber', 'Emergency Contact Number')} <span className="text-red-500">*</span>
+                    {getFieldLabelById(12, 'emergencyContactNumber', 'Emergency Contact Number')} {getFieldRequiredById(12, 'emergencyContact', true) && <span className="text-red-500">*</span>}
                   </label>
                   <div className="flex items-center gap-2 w-full">
                     <div className="w-16">
@@ -2529,6 +2562,7 @@ function UserManagement() {
                       value={formData.emergencyContact || ''}
                       onChange={handleChange}
                       maxLength={10}
+                      required={getFieldRequiredById(12, 'emergencyContact', true)}
                       className="w-44 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
                       placeholder={getFieldLabelById(12, 'emergencyContactNumber', 'Emergency contact number')}
                     />
@@ -2538,7 +2572,7 @@ function UserManagement() {
               </div>
 
               {isFieldVisibleById(12, 'emergencyContactName') && (
-                <FormField label={getFieldLabelById(12, 'emergencyContactName', 'Emergency Contact Name')} name="emergencyContactName" required formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(12, 'emergencyContactName', 'Emergency Contact Name')} name="emergencyContactName" required={getFieldRequiredById(12, 'emergencyContactName', false)} formData={formData} handleChange={handleChange} />
               )}
 
               {/* Emails */}
@@ -2571,7 +2605,7 @@ function UserManagement() {
               </div>
               {isFieldVisibleById(16, 'presentAddress.line1') && (
                 <div className="col-span-full">
-                  <FormField label={getFieldLabelById(16, 'presentAddress.line1', 'Address Line 1')} name="presentAddress.line1" required formData={formData} handleChange={handleChange} />
+                  <FormField label={getFieldLabelById(16, 'presentAddress.line1', 'Address Line 1')} name="presentAddress.line1" required={getFieldRequiredById(16, 'presentAddress.line1', false)} formData={formData} handleChange={handleChange} />
                 </div>
               )}
               {isFieldVisibleById(16, 'presentAddress.line2') && (
@@ -2580,16 +2614,16 @@ function UserManagement() {
                 </div>
               )}
               {isFieldVisibleById(16, 'presentAddress.district') && (
-                <FormField label={getFieldLabelById(16, 'presentAddress.district', 'City')} name="presentAddress.district" required formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(16, 'presentAddress.district', 'City')} name="presentAddress.district" required={getFieldRequiredById(16, 'presentAddress.district', false)} formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(16, 'presentAddress.state') && (
-                <FormField label={getFieldLabelById(16, 'presentAddress.state', 'State/Province/Region')} name="presentAddress.state" required formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(16, 'presentAddress.state', 'State/Province/Region')} name="presentAddress.state" required={getFieldRequiredById(16, 'presentAddress.state', false)} formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(16, 'presentAddress.pincode') && (
-                <FormField label={getFieldLabelById(16, 'presentAddress.pincode', 'ZIP/Postal Code')} name="presentAddress.pincode" required formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(16, 'presentAddress.pincode', 'ZIP/Postal Code')} name="presentAddress.pincode" required={getFieldRequiredById(16, 'presentAddress.pincode', false)} formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(16, 'presentAddress.country') && (
-                <FormField label={getFieldLabelById(16, 'presentAddress.country', 'Country')} name="presentAddress.country" required formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(16, 'presentAddress.country', 'Country')} name="presentAddress.country" required={getFieldRequiredById(16, 'presentAddress.country', false)} formData={formData} handleChange={handleChange} />
               )}
 
               {/* Permanent Address */}
@@ -2608,7 +2642,7 @@ function UserManagement() {
               </div>
               {isFieldVisibleById(16, 'permanentAddress.line1') && (
                 <div className="col-span-full">
-                  <FormField label={getFieldLabelById(16, 'permanentAddress.line1', 'Address Line 1')} name="permanentAddress.line1" required formData={formData} handleChange={handleChange} />
+                  <FormField label={getFieldLabelById(16, 'permanentAddress.line1', 'Address Line 1')} name="permanentAddress.line1" required={getFieldRequiredById(16, 'permanentAddress.line1', false)} formData={formData} handleChange={handleChange} />
                 </div>
               )}
               {isFieldVisibleById(16, 'permanentAddress.line2') && (
@@ -2617,16 +2651,16 @@ function UserManagement() {
                 </div>
               )}
               {isFieldVisibleById(16, 'permanentAddress.district') && (
-                <FormField label={getFieldLabelById(16, 'permanentAddress.district', 'City')} name="permanentAddress.district" required formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(16, 'permanentAddress.district', 'City')} name="permanentAddress.district" required={getFieldRequiredById(16, 'permanentAddress.district', false)} formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(16, 'permanentAddress.state') && (
-                <FormField label={getFieldLabelById(16, 'permanentAddress.state', 'State/Province/Region')} name="permanentAddress.state" required formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(16, 'permanentAddress.state', 'State/Province/Region')} name="permanentAddress.state" required={getFieldRequiredById(16, 'permanentAddress.state', false)} formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(16, 'permanentAddress.pincode') && (
-                <FormField label={getFieldLabelById(16, 'permanentAddress.pincode', 'ZIP/Postal Code')} name="permanentAddress.pincode" required formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(16, 'permanentAddress.pincode', 'ZIP/Postal Code')} name="permanentAddress.pincode" required={getFieldRequiredById(16, 'permanentAddress.pincode', false)} formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(16, 'permanentAddress.country') && (
-                <FormField label={getFieldLabelById(16, 'permanentAddress.country', 'Country')} name="permanentAddress.country" required formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(16, 'permanentAddress.country', 'Country')} name="permanentAddress.country" required={getFieldRequiredById(16, 'permanentAddress.country', false)} formData={formData} handleChange={handleChange} />
               )}
 
               {/* Address as per Aadhaar */}
@@ -2648,7 +2682,7 @@ function UserManagement() {
                   <FormField
                     label={getFieldLabelById(16, 'aadhaarAddress.line1', 'Address Line 1')}
                     name="aadhaarAddress.line1"
-                    required
+                    required={getFieldRequiredById(16, 'aadhaarAddress.line1', false)}
                     formData={formData}
                     handleChange={handleChange}
                     disabled={formData.aadhaarAddressOption === 'present' || formData.aadhaarAddressOption === 'permanent'}
@@ -2670,7 +2704,7 @@ function UserManagement() {
                 <FormField
                   label={getFieldLabelById(16, 'aadhaarAddress.district', 'City')}
                   name="aadhaarAddress.district"
-                  required
+                  required={getFieldRequiredById(16, 'aadhaarAddress.district', false)}
                   formData={formData}
                   handleChange={handleChange}
                   disabled={formData.aadhaarAddressOption === 'present' || formData.aadhaarAddressOption === 'permanent'}
@@ -2680,7 +2714,7 @@ function UserManagement() {
                 <FormField
                   label={getFieldLabelById(16, 'aadhaarAddress.state', 'State/Province/Region')}
                   name="aadhaarAddress.state"
-                  required
+                  required={getFieldRequiredById(16, 'aadhaarAddress.state', false)}
                   formData={formData}
                   handleChange={handleChange}
                   disabled={formData.aadhaarAddressOption === 'present' || formData.aadhaarAddressOption === 'permanent'}
@@ -2690,7 +2724,7 @@ function UserManagement() {
                 <FormField
                   label={getFieldLabelById(16, 'aadhaarAddress.pincode', 'ZIP/Postal Code')}
                   name="aadhaarAddress.pincode"
-                  required
+                  required={getFieldRequiredById(16, 'aadhaarAddress.pincode', false)}
                   formData={formData}
                   handleChange={handleChange}
                   disabled={formData.aadhaarAddressOption === 'present' || formData.aadhaarAddressOption === 'permanent'}
@@ -2700,7 +2734,7 @@ function UserManagement() {
                 <FormField
                   label={getFieldLabelById(16, 'aadhaarAddress.country', 'Country')}
                   name="aadhaarAddress.country"
-                  required
+                  required={getFieldRequiredById(16, 'aadhaarAddress.country', false)}
                   formData={formData}
                   handleChange={handleChange}
                   disabled={formData.aadhaarAddressOption === 'present' || formData.aadhaarAddressOption === 'permanent'}
@@ -2842,14 +2876,14 @@ function UserManagement() {
               {isFieldVisibleById(2, 'employeeId') && (
               <div className="col-span-full">
                 <label className="block text-sm font-bold text-gray-900 dark:text-gray-100 mb-1">
-                  {getFieldLabelById(2, 'employeeId', 'Employee ID')} <span className="text-red-500">*</span>
+                  {getFieldLabelById(2, 'employeeId', 'Employee ID')} {getFieldRequiredById(2, 'employeeId', true) && <span className="text-red-500">*</span>}
                 </label>
                 <input
                   type="text"
                   name="employeeId"
                   value={formData.employeeId || ''}
                   onChange={handleChange}
-                  required
+                  required={getFieldRequiredById(2, 'employeeId', true)}
                   className="w-full px-3 py-2 border-2 border-indigo-500 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm font-bold dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 />
               </div>
@@ -2858,14 +2892,14 @@ function UserManagement() {
               {isFieldVisibleById(2, 'officialEmail') && (
               <div className="col-span-full">
                 <label className="block text-sm font-bold text-gray-900 dark:text-gray-100 mb-1">
-                  {getFieldLabelById(2, 'officialEmail', 'Official Email ID')} <span className="text-red-500">*</span>
+                  {getFieldLabelById(2, 'officialEmail', 'Official Email ID')} {getFieldRequiredById(2, 'officialEmail', true) && <span className="text-red-500">*</span>}
                 </label>
                 <input
                   type="email"
                   name="officialEmail"
                   value={formData.officialEmail || ''}
                   onChange={handleChange}
-                  required
+                  required={getFieldRequiredById(2, 'officialEmail', true)}
                   className="w-full px-3 py-2 border-2 border-indigo-500 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm font-bold dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   placeholder="official.email@company.com"
                 />
@@ -2882,10 +2916,10 @@ function UserManagement() {
                 <FormField label={getFieldLabelById(2, 'designation', 'Designation')} name="designation" formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(2, 'role') && (
-                <FormField label={getFieldLabelById(2, 'role', 'Role')} name="role" type="select" required options={getFieldOptionsById(2, 'role', roles)} formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(2, 'role', 'Role')} name="role" type="select" required={getFieldRequiredById(2, 'role', true)} options={getFieldOptionsById(2, 'role', roles)} formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(2, 'employeeStatus') && (
-                <FormField label={getFieldLabelById(2, 'employeeStatus', 'Employee Status')} name="employeeStatus" type="select" required options={getFieldOptionsById(2, 'employeeStatus', ['Active', 'Inactive'])} formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(2, 'employeeStatus', 'Employee Status')} name="employeeStatus" type="select" required={getFieldRequiredById(2, 'employeeStatus', true)} options={getFieldOptionsById(2, 'employeeStatus', ['Active', 'Inactive'])} formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(2, 'joiningDate') && (
                 <FormField label={getFieldLabelById(2, 'joiningDate', 'Joining Date')} name="joiningDate" type="date" formData={formData} handleChange={handleChange} />
@@ -3445,7 +3479,7 @@ function UserManagement() {
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(5, 'documentType', 'Document Type')} <span className="text-red-500">*</span></label>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(5, 'documentType', 'Document Type')} {getFieldRequiredById(5, 'documentType', true) && <span className="text-red-500">*</span>}</label>
                         {(() => {
                           const docTypeOptions = getFieldOptionsById(5, 'documentType', ['Aadhar Card', 'PAN Card', 'Passport', 'Driving License', 'Voter ID', 'Other'])
                           const isOtherDocType = doc.documentType && String(doc.documentType).toLowerCase().includes('other')
@@ -3486,6 +3520,7 @@ function UserManagement() {
                                 newDocs[index].documentType = e.target.value
                                 setFormData({ ...formData, documents: newDocs })
                               }}
+                              required={getFieldRequiredById(5, 'documentType', true)}
                               className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                             >
                               <option value="">{getFieldLabelById(5, 'documentType', 'Select Type')}</option>
@@ -3497,7 +3532,7 @@ function UserManagement() {
                         })()}
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(5, 'documentNumber', 'Document Number')} <span className="text-red-500">*</span></label>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(5, 'documentNumber', 'Document Number')} {getFieldRequiredById(5, 'documentNumber', true) && <span className="text-red-500">*</span>}</label>
                         <input
                           type="text"
                           value={doc.documentNumber || ''}
@@ -3506,6 +3541,7 @@ function UserManagement() {
                             newDocs[index].documentNumber = e.target.value
                             setFormData({ ...formData, documents: newDocs })
                           }}
+                          required={getFieldRequiredById(5, 'documentNumber', true)}
                           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                           placeholder={getFieldLabelById(5, 'documentNumber', 'Enter Number')}
                         />
