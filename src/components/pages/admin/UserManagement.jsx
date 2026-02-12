@@ -134,13 +134,13 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
   // Schema-driven type validation
   // Text type: only alphabets, spaces, and valid special characters (no numbers)
   // Also check common text field names as fallback (firstName, lastName, middleName, etc.)
-  // IMPORTANT: Integer-only fields should NEVER be treated as text, even if schema type is 'text'
+  // IMPORTANT: Date fields and integer-only fields should NEVER be treated as text, even if schema type is 'text'
   const isCommonTextField = ['firstName', 'lastName', 'middleName', 'employeeName', 'name'].includes(name)
-  const isTextType = (normalizedType === 'text' || (isCommonTextField && normalizedType !== 'number' && normalizedType !== 'alphanumeric')) && !isCityField && !isPincodeField && !isCountryField && !isAccountNumberField && !isPercentageField && !isIntegerOnlyField
+  const isTextType = normalizedType !== 'date' && (normalizedType === 'text' || (isCommonTextField && normalizedType !== 'number' && normalizedType !== 'alphanumeric')) && !isCityField && !isPincodeField && !isCountryField && !isAccountNumberField && !isPercentageField && !isIntegerOnlyField
   // Alphanumeric type: allows both alphabets and numbers
-  const isAlphanumericType = normalizedType === 'alphanumeric' && !isCityField && !isPincodeField && !isCountryField && !isAccountNumberField && !isPercentageField && !isIntegerOnlyField
+  const isAlphanumericType = normalizedType !== 'date' && normalizedType === 'alphanumeric' && !isCityField && !isPincodeField && !isCountryField && !isAccountNumberField && !isPercentageField && !isIntegerOnlyField
   // Number type: only numeric digits (includes integer-only fields)
-  const isNumberType = (normalizedType === 'number' || isIntegerOnlyField) && !isPercentageField
+  const isNumberType = normalizedType !== 'date' && (normalizedType === 'number' || isIntegerOnlyField) && !isPercentageField
 
   // Debug logging for ALL fields rendered through FormField
   console.log('🧩 FormField Render:', {
@@ -252,6 +252,64 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           required={required}
           placeholder={placeholder}
           rows={2}
+          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+          {...props}
+        />
+      ) : type === 'date' || normalizedType === 'date' ? (
+        <input
+          type="date"
+          name={name}
+          value={value}
+          onChange={(e) => {
+            const dateValue = e.target.value
+            if (dateValue) {
+              // Validate year is exactly 4 digits (YYYY-MM-DD format)
+              const dateParts = dateValue.split('-')
+              if (dateParts.length === 3) {
+                const year = dateParts[0]
+                // Ensure year is exactly 4 digits and within valid range
+                if (year.length !== 4 || parseInt(year) < 1900 || parseInt(year) > 2100) {
+                  toast.error('Please enter a valid date with 4-digit year (1900-2100)')
+                  return
+                }
+              }
+            }
+            handleChange(e)
+          }}
+          onBlur={(e) => {
+            // Additional validation on blur
+            const dateValue = e.target.value
+            if (dateValue) {
+              const dateParts = dateValue.split('-')
+              if (dateParts.length === 3) {
+                const year = dateParts[0]
+                if (year.length !== 4) {
+                  toast.error('Year must be exactly 4 digits')
+                  e.target.value = ''
+                  handleChange({ target: { name, value: '', type: 'date' } })
+                  return
+                }
+
+                // Extra rule for DOB fields: must be at least 18 years before today
+                if (name === 'dateOfBirth' || name === 'birthdayDate') {
+                  const selected = new Date(dateValue)
+                  if (!isNaN(selected.getTime())) {
+                    const today = new Date()
+                    const minDob = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate())
+                    // If selected date is after the minimum allowed DOB (i.e. younger than 18)
+                    if (selected > minDob) {
+                      toast.error('Date of Birth must be at least 18 years before today')
+                      e.target.value = ''
+                      handleChange({ target: { name, value: '', type: 'date' } })
+                      return
+                    }
+                  }
+                }
+              }
+            }
+          }}
+          required={required}
+          placeholder={placeholder}
           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
           {...props}
         />
@@ -780,66 +838,6 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           }}
           required={required}
           placeholder={placeholder}
-          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-          {...props}
-        />
-      ) : normalizedType === 'date' ? (
-        <input
-          type="date"
-          name={name}
-          value={value}
-          onChange={(e) => {
-            const dateValue = e.target.value
-            if (dateValue) {
-              // Validate year is exactly 4 digits (YYYY-MM-DD format)
-              const dateParts = dateValue.split('-')
-              if (dateParts.length === 3) {
-                const year = dateParts[0]
-                // Ensure year is exactly 4 digits and within valid range
-                if (year.length !== 4 || parseInt(year) < 1900 || parseInt(year) > 2100) {
-                  toast.error('Please enter a valid date with 4-digit year (1900-2100)')
-                  return
-                }
-              }
-            }
-            handleChange(e)
-          }}
-          onBlur={(e) => {
-            // Additional validation on blur
-            const dateValue = e.target.value
-            if (dateValue) {
-              const dateParts = dateValue.split('-')
-              if (dateParts.length === 3) {
-                const year = dateParts[0]
-                if (year.length !== 4) {
-                  toast.error('Year must be exactly 4 digits')
-                  e.target.value = ''
-                  handleChange({ target: { name, value: '', type: 'date' } })
-                  return
-                }
-
-                // Extra rule for DOB fields: must be at least 18 years before today
-                if (name === 'dateOfBirth' || name === 'birthdayDate') {
-                  const selected = new Date(dateValue)
-                  if (!isNaN(selected.getTime())) {
-                    const today = new Date()
-                    const minDob = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate())
-                    // If selected date is after the minimum allowed DOB (i.e. younger than 18)
-                    if (selected > minDob) {
-                      toast.error('Date of Birth must be at least 18 years before today')
-                      e.target.value = ''
-                      handleChange({ target: { name, value: '', type: 'date' } })
-                      return
-                    }
-                  }
-                }
-              }
-            }
-          }}
-          required={required}
-          placeholder={placeholder}
-          min="1900-01-01"
-          max="2100-12-31"
           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
           {...props}
         />
