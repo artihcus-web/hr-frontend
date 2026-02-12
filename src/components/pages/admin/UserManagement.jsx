@@ -54,11 +54,19 @@ const countries = [
 
 // FormField component - moved outside to prevent re-creation on every render
 const FormField = ({ label, name, type = 'text', required, formData, handleChange, options = [], placeholder, otherOptionLabel = 'Please specify', ...props }) => {
-  // Helper to get nested value
+  // Helper to get nested value (supports dot notation and array indices)
   const getValue = (obj, path) => {
     if (!path || !obj) return ''
     if (path.includes('.')) {
-      return path.split('.').reduce((acc, part) => acc && acc[part], obj) || ''
+      return path.split('.').reduce((acc, part) => {
+        if (acc === null || acc === undefined) return null
+        // Handle numeric array indices
+        const numPart = parseInt(part, 10)
+        if (!isNaN(numPart) && Array.isArray(acc)) {
+          return acc[numPart]
+        }
+        return acc[part]
+      }, obj) || ''
     }
     return obj[path] || ''
   }
@@ -1148,7 +1156,8 @@ function UserManagement() {
   }
 
   // Render any extra fields from schema that are not in the known (hard-coded) list – makes every section fully dynamic
-  const renderSchemaExtraFields = (sectionId, knownFields) => {
+  // If arrayIndex and arrayName are provided, render fields inside array entries (e.g., education[0].fieldName)
+  const renderSchemaExtraFields = (sectionId, knownFields, arrayIndex = null, arrayName = null) => {
     const sectionKey = getSectionKey(sectionId)
     if (!sectionKey) return null
     const section = getSectionConfig(sectionKey)
@@ -1156,21 +1165,40 @@ function UserManagement() {
       (f) => !knownFields.includes(f.name) && f.isActive !== false
     ) || []
 
-    return extra.map((field) =>
-      isFieldVisibleById(sectionId, field.name) ? (
+    return extra.map((field) => {
+      if (!isFieldVisibleById(sectionId, field.name)) return null
+      
+      // Construct field name: if inside array entry, use arrayName[index].fieldName format
+      const fieldName = arrayIndex !== null && arrayName ? `${arrayName}.${arrayIndex}.${field.name}` : field.name
+      
+      // Custom handleChange for array entries
+      const customHandleChange = arrayIndex !== null && arrayName ? (e) => {
+        const { name, value, type, checked } = e.target || {}
+        const fieldNameOnly = name.split('.').pop() // Get just the field name without array path
+        const newArray = [...formData[arrayName]]
+        if (newArray[arrayIndex]) {
+          newArray[arrayIndex] = {
+            ...newArray[arrayIndex],
+            [fieldNameOnly]: type === 'checkbox' ? checked : value
+          }
+          setFormData({ ...formData, [arrayName]: newArray })
+        }
+      } : handleChange
+      
+      return (
         <FormField
-          key={field.name}
+          key={fieldName}
           label={getFieldLabelById(sectionId, field.name, field.label || field.name)}
-          name={field.name}
+          name={fieldName}
           type={field.type || 'text'}
           required={field.required || false}
           formData={formData}
-          handleChange={handleChange}
+          handleChange={customHandleChange}
           placeholder={field.placeholder}
           options={field.options || []}
         />
-      ) : null
-    )
+      )
+    })
   }
 
   // Address Copy Helpers
@@ -3596,6 +3624,11 @@ function UserManagement() {
                       </svg>
                     </button>
                   </div>
+                  
+                  {/* Render schema extra fields inside each family member entry */}
+                  <div className="col-span-full mt-2">
+                    {renderSchemaExtraFields(13, ['name', 'relation', 'dob', 'addMember', 'selectRelationship'], index, 'familyDetails')}
+                  </div>
                 </div>
               ))}
 
@@ -3610,9 +3643,6 @@ function UserManagement() {
                   </svg>
                   {getFieldLabelById(13, 'addMember', 'Add')}
                 </button>
-              </div>
-              <div className="col-span-full">
-                {renderSchemaExtraFields(13, ['name', 'relation', 'dob', 'addMember', 'selectRelationship'])}
               </div>
             </FormSection>
 
@@ -4055,6 +4085,11 @@ function UserManagement() {
                         )}
                       </div>
                     </div>
+
+                    {/* Render schema extra fields inside each qualification entry */}
+                    <div className="col-span-full mt-4">
+                      {renderSchemaExtraFields(3, ['institute', 'degree', 'percentage', 'fromDate', 'toDate', 'attachment', 'headingQualifications', 'selectDegree', 'addQualification'], index, 'education')}
+                    </div>
                   </div>
                 ))}
                 <button
@@ -4064,9 +4099,6 @@ function UserManagement() {
                 >
                   <FiPlus className="w-4 h-4" /> {getFieldLabelById(3, 'addQualification', 'Add Qualification')}
                 </button>
-              </div>
-              <div className="col-span-full">
-                {renderSchemaExtraFields(3, ['institute', 'degree', 'percentage', 'fromDate', 'toDate', 'attachment', 'headingQualifications', 'selectDegree', 'addQualification'])}
               </div>
             </FormSection>
 
@@ -4147,6 +4179,11 @@ function UserManagement() {
                     >
                       <FiX className="w-4 h-4" />
                     </button>
+                    
+                    {/* Render schema extra fields inside each language entry */}
+                    <div className="col-span-full mt-2">
+                      {renderSchemaExtraFields(14, ['name', 'read', 'write', 'speak', 'addLanguage'], index, 'languages')}
+                    </div>
                   </div>
                 ))}
                 <button
@@ -4156,9 +4193,6 @@ function UserManagement() {
                 >
                   <FiPlus className="w-4 h-4" /> {getFieldLabelById(14, 'addLanguage', 'Add Language')}
                 </button>
-              </div>
-              <div className="col-span-full">
-                {renderSchemaExtraFields(14, ['name', 'read', 'write', 'speak', 'addLanguage'])}
               </div>
             </FormSection>
 
@@ -4370,6 +4404,11 @@ function UserManagement() {
                         />
                       </div>
                     </div>
+                    
+                    {/* Render schema extra fields inside each experience entry */}
+                    <div className="col-span-full mt-4">
+                      {renderSchemaExtraFields(10, ['organization', 'designation', 'fromDate', 'toDate', 'addExperience'], index, 'experience')}
+                    </div>
                   </div>
                 ))}
                 <button
@@ -4379,9 +4418,6 @@ function UserManagement() {
                 >
                   <FiPlus className="w-4 h-4" /> {getFieldLabelById(10, 'addExperience', 'Add Experience')}
                 </button>
-              </div>
-              <div className="col-span-full">
-                {renderSchemaExtraFields(10, ['organization', 'designation', 'fromDate', 'toDate', 'addExperience'])}
               </div>
             </FormSection>
 
@@ -4705,6 +4741,11 @@ function UserManagement() {
                         </div>
                       </div>
                     </div>
+                    
+                    {/* Render schema extra fields inside each document entry */}
+                    <div className="col-span-full mt-4">
+                      {renderSchemaExtraFields(5, ['documentType', 'documentNumber', 'attachment', 'addDocument'], index, 'documents')}
+                    </div>
                   </div>
                 ))}
                 <button
@@ -4714,9 +4755,6 @@ function UserManagement() {
                 >
                   <FiPlus className="w-4 h-4" /> {getFieldLabelById(5, 'addDocument', 'Add Document')}
                 </button>
-              </div>
-              <div className="col-span-full">
-                {renderSchemaExtraFields(5, ['documentType', 'documentNumber', 'attachment', 'addDocument'])}
               </div>
             </FormSection>
 
