@@ -89,6 +89,10 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
   const isCountryField = name.includes('country') || (label && label.toLowerCase().includes('country'))
   const isAccountNumberField = name.includes('accountNumber') && !name.includes('confirm')
   const isPercentageField = name.includes('percentage') || (label && (label.toLowerCase().includes('percentage') || label.toLowerCase().includes('cgpa')))
+  // Year-only numeric fields (e.g. "From Year", "To Year")
+  const isYearOnlyField =
+    (name && name.toLowerCase().includes('year')) ||
+    (label && label.toLowerCase().includes('year'))
   const isPhoneType = normalizedType === 'phone'
   const isEmailType = normalizedType === 'email'
   
@@ -225,6 +229,10 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
             // Prevent multiple decimal points
             const parts = filteredValue.split('.')
             filteredValue = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : filteredValue
+            // For year-only fields, enforce max 4 digits and no decimal
+            if (isYearOnlyField) {
+              filteredValue = filteredValue.replace(/\./g, '').slice(0, 4)
+            }
             
             // For percentage/CGPA fields, validate range
             if (isPercentageField && filteredValue) {
@@ -246,7 +254,11 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
               e.preventDefault()
             }
             // Prevent multiple decimal points
-            if (char === '.' && e.target.value.includes('.')) {
+            if (!isYearOnlyField && char === '.' && e.target.value.includes('.')) {
+              e.preventDefault()
+            }
+            // Enforce 4 digits max for year-only fields
+            if (isYearOnlyField && e.target.value.length >= 4 && e.key !== 'Backspace' && e.key !== 'Delete') {
               e.preventDefault()
             }
           }}
@@ -257,6 +269,9 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
             let filteredValue = pastedText.replace(/[^0-9.]/g, '')
             const parts = filteredValue.split('.')
             filteredValue = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : filteredValue
+            if (isYearOnlyField) {
+              filteredValue = filteredValue.replace(/\./g, '').slice(0, 4)
+            }
             
             // Validate range for percentage/CGPA
             if (isPercentageField && filteredValue) {
@@ -547,7 +562,11 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           value={value}
           onChange={(e) => {
             // Number type: only numeric digits (no decimals unless percentage)
-            const filteredValue = e.target.value.replace(/[^0-9]/g, '')
+            let filteredValue = e.target.value.replace(/[^0-9]/g, '')
+            // For year-only fields, enforce max 4 digits
+            if (isYearOnlyField) {
+              filteredValue = filteredValue.slice(0, 4)
+            }
             handleChange({ ...e, target: { ...e.target, value: filteredValue } })
           }}
           onKeyPress={(e) => {
@@ -555,11 +574,17 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
             if (!/[0-9]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
               e.preventDefault()
             }
+            if (isYearOnlyField && e.target.value.length >= 4 && e.key !== 'Backspace' && e.key !== 'Delete') {
+              e.preventDefault()
+            }
           }}
           onPaste={(e) => {
             e.preventDefault()
             const pastedText = e.clipboardData.getData('text')
-            const filteredValue = pastedText.replace(/[^0-9]/g, '')
+            let filteredValue = pastedText.replace(/[^0-9]/g, '')
+            if (isYearOnlyField) {
+              filteredValue = filteredValue.slice(0, 4)
+            }
             handleChange({ target: { name, value: filteredValue, type: 'text' } })
           }}
           required={required}
@@ -599,6 +624,23 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
                   toast.error('Year must be exactly 4 digits')
                   e.target.value = ''
                   handleChange({ target: { name, value: '', type: 'date' } })
+                  return
+                }
+
+                // Extra rule for DOB fields: must be at least 18 years before today
+                if (name === 'dateOfBirth' || name === 'birthdayDate') {
+                  const selected = new Date(dateValue)
+                  if (!isNaN(selected.getTime())) {
+                    const today = new Date()
+                    const minDob = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate())
+                    // If selected date is after the minimum allowed DOB (i.e. younger than 18)
+                    if (selected > minDob) {
+                      toast.error('Date of Birth must be at least 18 years before today')
+                      e.target.value = ''
+                      handleChange({ target: { name, value: '', type: 'date' } })
+                      return
+                    }
+                  }
                 }
               }
             }
@@ -3436,10 +3478,24 @@ function UserManagement() {
 
               {/* Emails */}
               {isFieldVisibleById(12, 'email') && (
-                <FormField label={getFieldLabelById(12, 'email', 'Personal Email ID')} name="email" type="email" formData={formData} handleChange={handleChange} />
+                <FormField
+                  label={getFieldLabelById(12, 'email', 'Personal Email ID')}
+                  name="email"
+                  type="email"
+                  required={getFieldRequiredById(12, 'email', false)}
+                  formData={formData}
+                  handleChange={handleChange}
+                />
               )}
               {isFieldVisibleById(12, 'alternativeEmail') && (
-                <FormField label={getFieldLabelById(12, 'alternativeEmail', 'Alternative Email ID')} name="alternativeEmail" type="email" formData={formData} handleChange={handleChange} />
+                <FormField
+                  label={getFieldLabelById(12, 'alternativeEmail', 'Alternative Email ID')}
+                  name="alternativeEmail"
+                  type="email"
+                  required={getFieldRequiredById(12, 'alternativeEmail', false)}
+                  formData={formData}
+                  handleChange={handleChange}
+                />
               )}
 
               {renderSchemaExtraFields(12, ['phone', 'secondaryContact', 'emergencyContact', 'emergencyContactNumber', 'emergencyContactName', 'email', 'alternativeEmail', 'primaryCountryCode', 'secondaryCountryCode', 'emergencyCountryCode', 'mobileNumber'])}
@@ -3763,39 +3819,27 @@ function UserManagement() {
               showEditButton={!isAddFlow}
             >
               {isFieldVisibleById(2, 'employeeId') && (
-              <div className="col-span-full">
-                <label className="block text-sm font-bold text-gray-900 dark:text-gray-100 mb-1">
-                  {getFieldLabelById(2, 'employeeId', 'Employee ID')} {getFieldRequiredById(2, 'employeeId', true) && <span className="text-red-500">*</span>}
-                </label>
-                <input
-                  type="text"
+                <FormField
+                  label={getFieldLabelById(2, 'employeeId', 'Employee ID')}
                   name="employeeId"
-                  value={formData.employeeId || ''}
-                  onChange={handleChange}
+                  type={getFieldTypeById(2, 'employeeId', 'text')}
                   required={getFieldRequiredById(2, 'employeeId', true)}
-                  className="w-full px-3 py-2 border-2 border-indigo-500 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm font-bold dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  formData={formData}
+                  handleChange={handleChange}
+                  placeholder={getFieldLabelById(2, 'employeeId', 'Employee ID')}
                 />
-              </div>
               )}
 
               {isFieldVisibleById(2, 'officialEmail') && (
-              <div className="col-span-full">
-                <label className="block text-sm font-bold text-gray-900 dark:text-gray-100 mb-1">
-                  {getFieldLabelById(2, 'officialEmail', 'Official Email ID')} {getFieldRequiredById(2, 'officialEmail', true) && <span className="text-red-500">*</span>}
-                </label>
-                <input
-                  type="email"
+                <FormField
+                  label={getFieldLabelById(2, 'officialEmail', 'Official Email ID')}
                   name="officialEmail"
-                  value={formData.officialEmail || ''}
-                  onChange={handleChange}
+                  type={getFieldTypeById(2, 'officialEmail', 'email')}
                   required={getFieldRequiredById(2, 'officialEmail', true)}
-                  className="w-full px-3 py-2 border-2 border-indigo-500 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm font-bold dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  formData={formData}
+                  handleChange={handleChange}
                   placeholder="official.email@company.com"
                 />
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  This email will be used for login and all system notifications
-                </p>
-              </div>
               )}
 
               {isFieldVisibleById(2, 'businessUnitHR') && (
@@ -3882,13 +3926,10 @@ function UserManagement() {
                 })()}
               </div>
               )}
-              {isFieldVisibleById(2, 'confirmDate') && (
-                <FormField label={getFieldLabelById(2, 'confirmDate', 'Confirmation Date')} name="confirmDate" type="date" formData={formData} handleChange={handleChange} />
-              )}
               {isFieldVisibleById(2, 'costCenter') && (
                 <FormField label={getFieldLabelById(2, 'costCenter', 'Cost Center')} name="costCenter" formData={formData} handleChange={handleChange} />
               )}
-              {renderSchemaExtraFields(2, ['employeeId', 'officialEmail', 'businessUnitHR', 'designation', 'role', 'employeeStatus', 'joiningDate', 'probationPeriod', 'confirmDate', 'costCenter', 'department', 'cid', 'managerId', 'superManagerId', 'noticePeriod', 'division', 'grade', 'location', 'employeeNumberSeries'])}
+              {renderSchemaExtraFields(2, ['businessUnitHR', 'designation', 'role', 'employeeStatus', 'joiningDate', 'probationPeriod', 'costCenter', 'department', 'cid', 'managerId', 'superManagerId', 'noticePeriod', 'division', 'grade', 'location', 'employeeNumberSeries'])}
 
             </FormSection>
 
