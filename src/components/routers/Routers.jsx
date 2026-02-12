@@ -22,6 +22,7 @@ import AdminControllers from '../pages/admin/AdminControllers'
 import ProtectedRoute from './ProtectedRoute'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import KnowYourEmployee from '../pages/common/KnowYourEmployee'
+import AdminPolicies from '../pages/admin/Policies'
 function Routers() {
   return (
     <div>
@@ -62,6 +63,7 @@ function Routers() {
           <Route path='/admin/form-builder/timesheet' element={<TimesheetSchema />} />
           <Route path='/admin/form-builder/:formType' element={<DynamicFormSchema />} />
           <Route path='/admin/controllers' element={<AdminControllers />} />
+          <Route path='/admin/policies' element={<AdminPolicies />} />
         </Route>
 
         {/* C-Suite Protected Routes */}

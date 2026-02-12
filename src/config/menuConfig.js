@@ -138,6 +138,13 @@ export const menuItems = [
     icon: FiSettings,
     path: '/admin/controllers',
     roles: ['super_admin']
+  },
+  {
+    id: 'admin-policies',
+    label: 'Policies',
+    icon: FiFileText,
+    path: '/admin/policies',
+    roles: ['super_admin', 'hr_admin']
   }
 
 

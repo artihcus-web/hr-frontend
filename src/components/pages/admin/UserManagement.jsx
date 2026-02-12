@@ -16,6 +16,30 @@ const maritalStatuses = ['Single', 'Married', 'Divorced', 'Widowed']
 const accountTypes = ['Savings', 'Current']
 const paymentModes = ['Bank Transfer', 'Cheque', 'Cash']
 
+// Complete list of countries
+const countries = [
+  'Afghanistan', 'Albania', 'Algeria', 'Andorra', 'Angola', 'Antigua and Barbuda', 'Argentina', 'Armenia', 'Australia', 'Austria',
+  'Azerbaijan', 'Bahamas', 'Bahrain', 'Bangladesh', 'Barbados', 'Belarus', 'Belgium', 'Belize', 'Benin', 'Bhutan',
+  'Bolivia', 'Bosnia and Herzegovina', 'Botswana', 'Brazil', 'Brunei', 'Bulgaria', 'Burkina Faso', 'Burundi', 'Cabo Verde', 'Cambodia',
+  'Cameroon', 'Canada', 'Central African Republic', 'Chad', 'Chile', 'China', 'Colombia', 'Comoros', 'Congo', 'Costa Rica',
+  'Croatia', 'Cuba', 'Cyprus', 'Czech Republic', 'Denmark', 'Djibouti', 'Dominica', 'Dominican Republic', 'Ecuador', 'Egypt',
+  'El Salvador', 'Equatorial Guinea', 'Eritrea', 'Estonia', 'Eswatini', 'Ethiopia', 'Fiji', 'Finland', 'France', 'Gabon',
+  'Gambia', 'Georgia', 'Germany', 'Ghana', 'Greece', 'Grenada', 'Guatemala', 'Guinea', 'Guinea-Bissau', 'Guyana',
+  'Haiti', 'Honduras', 'Hungary', 'Iceland', 'India', 'Indonesia', 'Iran', 'Iraq', 'Ireland', 'Israel',
+  'Italy', 'Jamaica', 'Japan', 'Jordan', 'Kazakhstan', 'Kenya', 'Kiribati', 'Korea, North', 'Korea, South', 'Kuwait',
+  'Kyrgyzstan', 'Laos', 'Latvia', 'Lebanon', 'Lesotho', 'Liberia', 'Libya', 'Liechtenstein', 'Lithuania', 'Luxembourg',
+  'Madagascar', 'Malawi', 'Malaysia', 'Maldives', 'Mali', 'Malta', 'Marshall Islands', 'Mauritania', 'Mauritius', 'Mexico',
+  'Micronesia', 'Moldova', 'Monaco', 'Mongolia', 'Montenegro', 'Morocco', 'Mozambique', 'Myanmar', 'Namibia', 'Nauru',
+  'Nepal', 'Netherlands', 'New Zealand', 'Nicaragua', 'Niger', 'Nigeria', 'North Macedonia', 'Norway', 'Oman', 'Pakistan',
+  'Palau', 'Palestine', 'Panama', 'Papua New Guinea', 'Paraguay', 'Peru', 'Philippines', 'Poland', 'Portugal', 'Qatar',
+  'Romania', 'Russia', 'Rwanda', 'Saint Kitts and Nevis', 'Saint Lucia', 'Saint Vincent and the Grenadines', 'Samoa', 'San Marino', 'Sao Tome and Principe', 'Saudi Arabia',
+  'Senegal', 'Serbia', 'Seychelles', 'Sierra Leone', 'Singapore', 'Slovakia', 'Slovenia', 'Solomon Islands', 'Somalia', 'South Africa',
+  'South Sudan', 'Spain', 'Sri Lanka', 'Sudan', 'Suriname', 'Sweden', 'Switzerland', 'Syria', 'Taiwan', 'Tajikistan',
+  'Tanzania', 'Thailand', 'Timor-Leste', 'Togo', 'Tonga', 'Trinidad and Tobago', 'Tunisia', 'Turkey', 'Turkmenistan', 'Tuvalu',
+  'Uganda', 'Ukraine', 'United Arab Emirates', 'United Kingdom', 'United States', 'Uruguay', 'Uzbekistan', 'Vanuatu', 'Vatican City', 'Venezuela',
+  'Vietnam', 'Yemen', 'Zambia', 'Zimbabwe'
+]
+
 // const sections = [ // Removed unused
 //   { id: 1, title: 'Basic Information', slug: 'basic' },
 //   { id: 2, title: 'Employment', slug: 'employment' },
@@ -45,6 +69,19 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
   const otherFieldName = `${name}Other`
   const otherValue = getValue(formData, otherFieldName)
 
+  // Detect field type for special validation based on schema type and field name
+  const normalizedType = String(type || 'text').toLowerCase()
+  const isCityField = name.includes('district') || name.includes('city') || (label && label.toLowerCase().includes('city'))
+  const isPincodeField = name.includes('pincode') || name.includes('zip') || (label && (label.toLowerCase().includes('zip') || label.toLowerCase().includes('postal')))
+  const isCountryField = name.includes('country') || (label && label.toLowerCase().includes('country'))
+  const isAccountNumberField = name.includes('accountNumber') && !name.includes('confirm')
+  const isPercentageField = name.includes('percentage') || (label && (label.toLowerCase().includes('percentage') || label.toLowerCase().includes('cgpa')))
+  
+  // Schema-driven type validation
+  const isTextType = normalizedType === 'text' && !isCityField && !isPincodeField && !isCountryField && !isAccountNumberField && !isPercentageField
+  const isAlphanumericType = (normalizedType === 'alphanumeric' || normalizedType === 'alphanum') && !isCityField && !isPincodeField && !isCountryField && !isAccountNumberField && !isPercentageField
+  const isNumberType = (normalizedType === 'number' || normalizedType === 'numeric') && !isPercentageField
+
   return (
     <div className="flex flex-col">
       <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -58,7 +95,31 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
                 type="text"
                 name={otherFieldName}
                 value={otherValue}
-                onChange={handleChange}
+                onChange={(e) => {
+                  // For relationship "Other", only allow alphabets and spaces
+                  if (name.includes('relation')) {
+                    const filteredValue = e.target.value.replace(/[^a-zA-Z\s]/g, '')
+                    handleChange({ ...e, target: { ...e.target, name: otherFieldName, value: filteredValue } })
+                  } else {
+                    handleChange(e)
+                  }
+                }}
+                onKeyPress={(e) => {
+                  if (name.includes('relation')) {
+                    const char = String.fromCharCode(e.which)
+                    if (!/[a-zA-Z\s]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
+                      e.preventDefault()
+                    }
+                  }
+                }}
+                onPaste={(e) => {
+                  if (name.includes('relation')) {
+                    e.preventDefault()
+                    const pastedText = e.clipboardData.getData('text')
+                    const filteredValue = pastedText.replace(/[^a-zA-Z\s]/g, '')
+                    handleChange({ target: { name: otherFieldName, value: filteredValue, type: 'text' } })
+                  }
+                }}
                 placeholder={otherOptionLabel}
                 required={required}
                 className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
@@ -121,11 +182,23 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           value={value}
           onChange={(e) => {
             // Filter out non-numeric characters (allow digits and decimal point)
-            const filteredValue = e.target.value.replace(/[^0-9.]/g, '')
+            let filteredValue = e.target.value.replace(/[^0-9.]/g, '')
             // Prevent multiple decimal points
             const parts = filteredValue.split('.')
-            const finalValue = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : filteredValue
-            handleChange({ ...e, target: { ...e.target, value: finalValue } })
+            filteredValue = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : filteredValue
+            
+            // For percentage/CGPA fields, validate range
+            if (isPercentageField && filteredValue) {
+              const numValue = parseFloat(filteredValue)
+              const isCGPA = label && label.toLowerCase().includes('cgpa')
+              const maxValue = isCGPA ? 10 : 100
+              if (!isNaN(numValue) && numValue > maxValue) {
+                filteredValue = maxValue.toString()
+                toast.error(isCGPA ? `CGPA must be between 0 and ${maxValue}` : `Percentage must be between 0 and ${maxValue}`)
+              }
+            }
+            
+            handleChange({ ...e, target: { ...e.target, value: filteredValue } })
           }}
           onKeyPress={(e) => {
             // Only allow digits, decimal point, and backspace/delete/arrow keys
@@ -142,10 +215,207 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
             e.preventDefault()
             const pastedText = e.clipboardData.getData('text')
             // Filter out non-numeric characters
-            const filteredValue = pastedText.replace(/[^0-9.]/g, '')
+            let filteredValue = pastedText.replace(/[^0-9.]/g, '')
             const parts = filteredValue.split('.')
-            const finalValue = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : filteredValue
-            handleChange({ target: { name, value: finalValue, type: 'text' } })
+            filteredValue = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : filteredValue
+            
+            // Validate range for percentage/CGPA
+            if (isPercentageField && filteredValue) {
+              const numValue = parseFloat(filteredValue)
+              const isCGPA = label && label.toLowerCase().includes('cgpa')
+              const maxValue = isCGPA ? 10 : 100
+              if (!isNaN(numValue) && numValue > maxValue) {
+                filteredValue = maxValue.toString()
+                toast.error(isCGPA ? `CGPA must be between 0 and ${maxValue}` : `Percentage must be between 0 and ${maxValue}`)
+              }
+            }
+            
+            handleChange({ target: { name, value: filteredValue, type: 'text' } })
+          }}
+          required={required}
+          placeholder={placeholder || (isPercentageField ? (label && label.toLowerCase().includes('cgpa') ? '0-10' : '0-100') : '')}
+          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+          {...props}
+        />
+      ) : isCountryField ? (
+        <select
+          name={name}
+          value={value}
+          onChange={handleChange}
+          required={required}
+          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors appearance-none"
+          {...props}
+        >
+          <option value="">Select Country</option>
+          {countries.map((country, index) => (
+            <option key={index} value={country}>
+              {country}
+            </option>
+          ))}
+        </select>
+      ) : isCityField ? (
+        <input
+          type="text"
+          name={name}
+          value={value}
+          onChange={(e) => {
+            // Only allow alphabets, spaces, hyphens, dots, and commas
+            const filteredValue = e.target.value.replace(/[^a-zA-Z\s\-.,]/g, '')
+            handleChange({ ...e, target: { ...e.target, value: filteredValue } })
+          }}
+          onKeyPress={(e) => {
+            const char = String.fromCharCode(e.which)
+            if (!/[a-zA-Z\s\-.,]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
+              e.preventDefault()
+            }
+          }}
+          onPaste={(e) => {
+            e.preventDefault()
+            const pastedText = e.clipboardData.getData('text')
+            const filteredValue = pastedText.replace(/[^a-zA-Z\s\-.,]/g, '')
+            handleChange({ target: { name, value: filteredValue, type: 'text' } })
+          }}
+          required={required}
+          placeholder={placeholder}
+          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+          {...props}
+        />
+      ) : isPincodeField ? (
+        <input
+          type="text"
+          inputMode="numeric"
+          name={name}
+          value={value}
+          onChange={(e) => {
+            // Only allow 6 digits
+            const filteredValue = e.target.value.replace(/[^0-9]/g, '').slice(0, 6)
+            handleChange({ ...e, target: { ...e.target, value: filteredValue } })
+          }}
+          onKeyPress={(e) => {
+            const char = String.fromCharCode(e.which)
+            if (!/[0-9]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
+              e.preventDefault()
+            }
+            if (e.target.value.length >= 6 && e.key !== 'Backspace' && e.key !== 'Delete') {
+              e.preventDefault()
+            }
+          }}
+          onPaste={(e) => {
+            e.preventDefault()
+            const pastedText = e.clipboardData.getData('text')
+            const filteredValue = pastedText.replace(/[^0-9]/g, '').slice(0, 6)
+            handleChange({ target: { name, value: filteredValue, type: 'text' } })
+          }}
+          maxLength={6}
+          required={required}
+          placeholder={placeholder || '6-digit PIN code'}
+          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+          {...props}
+        />
+      ) : isAccountNumberField ? (
+        <input
+          type="text"
+          inputMode="numeric"
+          name={name}
+          value={value}
+          onChange={(e) => {
+            // Only allow numeric digits
+            const filteredValue = e.target.value.replace(/[^0-9]/g, '')
+            handleChange({ ...e, target: { ...e.target, value: filteredValue } })
+          }}
+          onKeyPress={(e) => {
+            const char = String.fromCharCode(e.which)
+            if (!/[0-9]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
+              e.preventDefault()
+            }
+          }}
+          onPaste={(e) => {
+            e.preventDefault()
+            const pastedText = e.clipboardData.getData('text')
+            const filteredValue = pastedText.replace(/[^0-9]/g, '')
+            handleChange({ target: { name, value: filteredValue, type: 'text' } })
+          }}
+          required={required}
+          placeholder={placeholder}
+          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+          {...props}
+        />
+      ) : isTextType ? (
+        <input
+          type="text"
+          name={name}
+          value={value}
+          onChange={(e) => {
+            // Text type: only alphabets, spaces, and valid special characters (.,-&)
+            const filteredValue = e.target.value.replace(/[^a-zA-Z\s.,\-&]/g, '')
+            handleChange({ ...e, target: { ...e.target, value: filteredValue } })
+          }}
+          onKeyPress={(e) => {
+            const char = String.fromCharCode(e.which)
+            if (!/[a-zA-Z\s.,\-&]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
+              e.preventDefault()
+            }
+          }}
+          onPaste={(e) => {
+            e.preventDefault()
+            const pastedText = e.clipboardData.getData('text')
+            const filteredValue = pastedText.replace(/[^a-zA-Z\s.,\-&]/g, '')
+            handleChange({ target: { name, value: filteredValue, type: 'text' } })
+          }}
+          required={required}
+          placeholder={placeholder}
+          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+          {...props}
+        />
+      ) : isAlphanumericType ? (
+        <input
+          type="text"
+          name={name}
+          value={value}
+          onChange={(e) => {
+            // Alphanumeric type: allow alphabets, numbers, spaces, and common special characters
+            const filteredValue = e.target.value.replace(/[^a-zA-Z0-9\s.,\-&]/g, '')
+            handleChange({ ...e, target: { ...e.target, value: filteredValue } })
+          }}
+          onKeyPress={(e) => {
+            const char = String.fromCharCode(e.which)
+            if (!/[a-zA-Z0-9\s.,\-&]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
+              e.preventDefault()
+            }
+          }}
+          onPaste={(e) => {
+            e.preventDefault()
+            const pastedText = e.clipboardData.getData('text')
+            const filteredValue = pastedText.replace(/[^a-zA-Z0-9\s.,\-&]/g, '')
+            handleChange({ target: { name, value: filteredValue, type: 'text' } })
+          }}
+          required={required}
+          placeholder={placeholder}
+          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+          {...props}
+        />
+      ) : isNumberType && !isPercentageField ? (
+        <input
+          type="text"
+          inputMode="numeric"
+          name={name}
+          value={value}
+          onChange={(e) => {
+            // Number type: only numeric digits (no decimals unless percentage)
+            const filteredValue = e.target.value.replace(/[^0-9]/g, '')
+            handleChange({ ...e, target: { ...e.target, value: filteredValue } })
+          }}
+          onKeyPress={(e) => {
+            const char = String.fromCharCode(e.which)
+            if (!/[0-9]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
+              e.preventDefault()
+            }
+          }}
+          onPaste={(e) => {
+            e.preventDefault()
+            const pastedText = e.clipboardData.getData('text')
+            const filteredValue = pastedText.replace(/[^0-9]/g, '')
+            handleChange({ target: { name, value: filteredValue, type: 'text' } })
           }}
           required={required}
           placeholder={placeholder}
@@ -1485,6 +1755,86 @@ function UserManagement() {
       return
     }
 
+    // Uniqueness validation for critical fields
+    const uniqueFields = [
+      { field: 'employeeId', label: 'Employee ID' },
+      { field: 'phone', label: 'Primary Contact' },
+      { field: 'secondaryContact', label: 'Alternative Number' },
+      { field: 'email', label: 'Personal Email ID' },
+      { field: 'alternativeEmail', label: 'Alternative Email ID' },
+      { field: 'accountNumber', label: 'Bank Account Number' },
+      { field: 'aadharNumber', label: 'Aadhaar Number' },
+      { field: 'panNumber', label: 'PAN Card Number' },
+      { field: 'passportNumber', label: 'Passport Number' },
+      { field: 'drivingLicense', label: 'Driving License' },
+      { field: 'voterId', label: 'Voter ID' },
+      { field: 'pfNumber', label: 'PF Number' },
+      { field: 'universalAccountNumber', label: 'UAN' },
+      { field: 'esiNumber', label: 'ESI Number' }
+    ]
+
+    // Check uniqueness for fields that have values
+    for (const { field, label } of uniqueFields) {
+      const value = formData[field]
+      if (value && String(value).trim()) {
+        try {
+          const res = await axiosInstance.post('/api/auth/users/check-uniqueness', {
+            field,
+            value: String(value).trim(),
+            excludeUserId: editingEmployee || null
+          })
+          if (!res.data.isUnique) {
+            toast.error(`${label} already exists. Please use a different ${label.toLowerCase()}.`)
+            setSubmittingSection(null)
+            return
+          }
+        } catch (error) {
+          console.error(`Error checking uniqueness for ${field}:`, error)
+          // Continue if check fails (don't block submission)
+        }
+      }
+    }
+
+    // Check uniqueness for schema-driven fields (check all formData keys that might be unique)
+    // This handles dynamically added fields from schema configuration
+    const schemaUniqueFieldPatterns = [
+      /^(.*[Aa]dhaar|.*[Aa]adhar).*$/i,
+      /^(.*[Pp][Aa][Nn]).*$/i,
+      /^(.*[Pp]assport).*$/i,
+      /^(.*[Dd]riving.*[Ll]icense).*$/i,
+      /^(.*[Vv]oter).*$/i,
+      /^(.*[Pp][Ff].*[Nn]umber|.*[Pp][Ff][Nn]o).*$/i,
+      /^(.*[Uu][Aa][Nn]|.*[Uu]niversal.*[Aa]ccount).*$/i,
+      /^(.*[Ee][Ss][Ii]).*$/i,
+      /^(.*[Aa]ccount.*[Nn]umber).*$/i,
+      /^(.*[Ee]mployee.*[Ii][Dd]).*$/i
+    ]
+
+    for (const [key, value] of Object.entries(formData)) {
+      if (!value || !String(value).trim()) continue
+      
+      // Check if field name matches any unique pattern
+      const matchesPattern = schemaUniqueFieldPatterns.some(pattern => pattern.test(key))
+      if (matchesPattern) {
+        try {
+          const res = await axiosInstance.post('/api/auth/users/check-uniqueness', {
+            field: key,
+            value: String(value).trim(),
+            excludeUserId: editingEmployee || null
+          })
+          if (!res.data.isUnique) {
+            const fieldLabel = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())
+            toast.error(`${fieldLabel} already exists. Please use a different value.`)
+            setSubmittingSection(null)
+            return
+          }
+        } catch (error) {
+          console.error(`Error checking uniqueness for schema field ${key}:`, error)
+          // Continue if check fails
+        }
+      }
+    }
+
     // Education Details validation (Section 3): require at least one complete qualification
     if (sectionId === 3) {
       const education = formData.education || []
@@ -1523,6 +1873,127 @@ function UserManagement() {
       )
       if (hasIncomplete) {
         toast.error('Please fill Name, Relationship, and DOB for all family members before saving.')
+        return
+      }
+    }
+
+    // Documents validation (Section 5): attachment mandatory, no duplicate types
+    if (sectionId === 5) {
+      const documents = formData.documents || []
+      const documentTypes = documents.map(d => d.documentType).filter(Boolean)
+      const duplicates = documentTypes.filter((type, index) => documentTypes.indexOf(type) !== index && type !== 'Other')
+      if (duplicates.length > 0) {
+        toast.error(`Duplicate document types found: ${[...new Set(duplicates)].join(', ')}. Please remove duplicates.`)
+        return
+      }
+      const missingAttachment = documents.some(d => d.documentType && !d.fileName)
+      if (missingAttachment) {
+        toast.error('Please upload the required document file for all selected document types.')
+        return
+      }
+      // Validate Aadhaar format (12 digits)
+      const invalidAadhaar = documents.find(d => d.documentType === 'Aadhar Card' && d.documentNumber && d.documentNumber.length !== 12)
+      if (invalidAadhaar) {
+        toast.error('Aadhaar Number must be exactly 12 digits.')
+        return
+      }
+      // Validate PAN format (ABCDE1234F)
+      const invalidPAN = documents.find(d => d.documentType === 'PAN Card' && d.documentNumber && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(d.documentNumber))
+      if (invalidPAN) {
+        toast.error('PAN Number must be in format ABCDE1234F (5 alphabets + 4 digits + 1 alphabet).')
+        return
+      }
+    }
+
+    // Experience Details validation (Section 10): dates validation
+    if (sectionId === 10) {
+      const experience = formData.experience || []
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      
+      for (const exp of experience) {
+        if (exp.fromDate) {
+          const fromDate = new Date(exp.fromDate)
+          fromDate.setHours(0, 0, 0, 0)
+          if (fromDate > today) {
+            toast.error('From Date must not be a future date.')
+            return
+          }
+        }
+        if (exp.toDate) {
+          const toDate = new Date(exp.toDate)
+          toDate.setHours(0, 0, 0, 0)
+          if (toDate > today) {
+            toast.error('To Date must not be a future date.')
+            return
+          }
+        }
+        if (exp.fromDate && exp.toDate) {
+          const fromDate = new Date(exp.fromDate)
+          const toDate = new Date(exp.toDate)
+          if (fromDate > toDate) {
+            toast.error('From Date must be earlier than To Date.')
+            return
+          }
+        }
+      }
+    }
+
+    // Joining Date validation: no future dates beyond 1 year
+    if (sectionId === 2 && formData.joiningDate) {
+      const joiningDate = new Date(formData.joiningDate)
+      const today = new Date()
+      const maxDate = new Date(today)
+      maxDate.setFullYear(today.getFullYear() + 1)
+      if (joiningDate > maxDate) {
+        toast.error('Joining Date cannot be more than 1 year in the future.')
+        return
+      }
+    }
+
+    // Confirm Date validation: must be after joining date and within probation period
+    if (sectionId === 2 && formData.confirmDate && formData.joiningDate && formData.probationPeriod) {
+      const joiningDate = new Date(formData.joiningDate)
+      const confirmDate = new Date(formData.confirmDate)
+      const probDays = parseInt(formData.probationPeriod) || 0
+      const expectedConfirmDate = new Date(joiningDate)
+      expectedConfirmDate.setDate(joiningDate.getDate() + probDays)
+      
+      if (confirmDate < joiningDate) {
+        toast.error('Confirmation Date must be after Joining Date.')
+        return
+      }
+      // Allow some flexibility (±30 days) for confirmation date
+      const minDate = new Date(expectedConfirmDate)
+      minDate.setDate(minDate.getDate() - 30)
+      const maxDate = new Date(expectedConfirmDate)
+      maxDate.setDate(maxDate.getDate() + 30)
+      
+      if (confirmDate < minDate || confirmDate > maxDate) {
+        toast.error(`Confirmation Date should be within probation completion timeline (around ${expectedConfirmDate.toLocaleDateString()}).`)
+        return
+      }
+    }
+
+    // Bank Name & IFSC matching validation
+    if (sectionId === 4 && formData.bankName && formData.ifscCode) {
+      const bankName = String(formData.bankName).toLowerCase()
+      const ifscCode = String(formData.ifscCode).toUpperCase()
+      const bankCodes = {
+        'canara': 'CNRB', 'canara bank': 'CNRB',
+        'icici': 'ICIC', 'icici bank': 'ICIC',
+        'hdfc': 'HDFC', 'hdfc bank': 'HDFC',
+        'sbi': 'SBIN', 'state bank': 'SBIN',
+        'axis': 'UTIB', 'axis bank': 'UTIB',
+        'pnb': 'PUNB', 'punjab national bank': 'PUNB',
+        'bob': 'BARB', 'bank of baroda': 'BARB',
+        'boi': 'BKID', 'bank of india': 'BKID',
+        'union': 'UBIN', 'union bank': 'UBIN',
+        'iob': 'IOBA', 'indian overseas bank': 'IOBA'
+      }
+      const expectedCode = Object.keys(bankCodes).find(key => bankName.includes(key))
+      if (expectedCode && !ifscCode.startsWith(bankCodes[expectedCode])) {
+        toast.error('Bank Name and IFSC Code do not match. Please enter valid details.')
         return
       }
     }
@@ -3012,11 +3483,39 @@ function UserManagement() {
                 <FormField label={getFieldLabelById(2, 'employeeStatus', 'Employee Status')} name="employeeStatus" type="select" required={getFieldRequiredById(2, 'employeeStatus', true)} options={getFieldOptionsById(2, 'employeeStatus', ['Active', 'Inactive'])} formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(2, 'joiningDate') && (
-                <FormField label={getFieldLabelById(2, 'joiningDate', 'Joining Date')} name="joiningDate" type="date" formData={formData} handleChange={handleChange} />
+                <FormField 
+                  label={getFieldLabelById(2, 'joiningDate', 'Joining Date')} 
+                  name="joiningDate" 
+                  type="date" 
+                  formData={formData} 
+                  handleChange={handleChange}
+                  min="1900-01-01"
+                  max={(() => {
+                    const today = new Date()
+                    // Allow dates up to 1 year in the future (for planned hires)
+                    const maxDate = new Date(today)
+                    maxDate.setFullYear(today.getFullYear() + 1)
+                    return maxDate.toISOString().slice(0, 10)
+                  })()}
+                />
               )}
               {isFieldVisibleById(2, 'probationPeriod') && (
               <div className="col-span-1">
-                <FormField label={getFieldLabelById(2, 'probationPeriod', 'Probation Period (days)')} name="probationPeriod" type="number" formData={formData} handleChange={handleChange} />
+                <FormField 
+                  label={getFieldLabelById(2, 'probationPeriod', 'Probation Period (days)')} 
+                  name="probationPeriod" 
+                  type="number" 
+                  formData={formData} 
+                  handleChange={(e) => {
+                    // Only allow positive integers
+                    const value = e.target.value.replace(/[^0-9]/g, '')
+                    if (value === '' || parseInt(value) >= 0) {
+                      handleChange({ ...e, target: { ...e.target, value } })
+                    }
+                  }}
+                  min="0"
+                  placeholder="e.g. 30, 60, 90"
+                />
                 {(() => {
                   // Probation Action Logic
                   if (formData.joiningDate && formData.probationPeriod && !formData.confirmDate) {
@@ -3102,8 +3601,24 @@ function UserManagement() {
                           type="text"
                           value={edu.institute || ''}
                           onChange={(e) => {
+                            // Only allow alphabets, spaces, and valid special characters (.,-&)
+                            const filteredValue = e.target.value.replace(/[^a-zA-Z\s.,\-&]/g, '')
                             const newEducation = [...formData.education]
-                            newEducation[index].institute = e.target.value
+                            newEducation[index].institute = filteredValue
+                            setFormData({ ...formData, education: newEducation })
+                          }}
+                          onKeyPress={(e) => {
+                            const char = String.fromCharCode(e.which)
+                            if (!/[a-zA-Z\s.,\-&]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
+                              e.preventDefault()
+                            }
+                          }}
+                          onPaste={(e) => {
+                            e.preventDefault()
+                            const pastedText = e.clipboardData.getData('text')
+                            const filteredValue = pastedText.replace(/[^a-zA-Z\s.,\-&]/g, '')
+                            const newEducation = [...formData.education]
+                            newEducation[index].institute = filteredValue
                             setFormData({ ...formData, education: newEducation })
                           }}
                           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
@@ -3293,9 +3808,16 @@ function UserManagement() {
                       <div className="flex items-center gap-3">
                         <input
                           type="file"
+                          accept=".pdf,application/pdf"
                           onChange={(e) => {
                             const file = e.target.files[0]
                             if (file) {
+                              // Validate PDF only
+                              if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+                                toast.error('Only PDF files are allowed')
+                                e.target.value = ''
+                                return
+                              }
                               const newEducation = [...formData.education]
                               newEducation[index].fileName = file.name
                               // For now we store a local object URL for preview; backend upload can later set a permanent fileUrl
@@ -3476,8 +3998,24 @@ function UserManagement() {
                           type="text"
                           value={exp.organization || ''}
                           onChange={(e) => {
+                            // Only allow alphabets, spaces, and valid special characters (.,-&)
+                            const filteredValue = e.target.value.replace(/[^a-zA-Z\s.,\-&]/g, '')
                             const newExperience = [...formData.experience]
-                            newExperience[index].organization = e.target.value
+                            newExperience[index].organization = filteredValue
+                            setFormData({ ...formData, experience: newExperience })
+                          }}
+                          onKeyPress={(e) => {
+                            const char = String.fromCharCode(e.which)
+                            if (!/[a-zA-Z\s.,\-&]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
+                              e.preventDefault()
+                            }
+                          }}
+                          onPaste={(e) => {
+                            e.preventDefault()
+                            const pastedText = e.clipboardData.getData('text')
+                            const filteredValue = pastedText.replace(/[^a-zA-Z\s.,\-&]/g, '')
+                            const newExperience = [...formData.experience]
+                            newExperience[index].organization = filteredValue
                             setFormData({ ...formData, experience: newExperience })
                           }}
                           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
@@ -3490,8 +4028,24 @@ function UserManagement() {
                           type="text"
                           value={exp.designation || ''}
                           onChange={(e) => {
+                            // Only allow alphabets, spaces, and valid special characters (.,-&)
+                            const filteredValue = e.target.value.replace(/[^a-zA-Z\s.,\-&]/g, '')
                             const newExperience = [...formData.experience]
-                            newExperience[index].designation = e.target.value
+                            newExperience[index].designation = filteredValue
+                            setFormData({ ...formData, experience: newExperience })
+                          }}
+                          onKeyPress={(e) => {
+                            const char = String.fromCharCode(e.which)
+                            if (!/[a-zA-Z\s.,\-&]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
+                              e.preventDefault()
+                            }
+                          }}
+                          onPaste={(e) => {
+                            e.preventDefault()
+                            const pastedText = e.clipboardData.getData('text')
+                            const filteredValue = pastedText.replace(/[^a-zA-Z\s.,\-&]/g, '')
+                            const newExperience = [...formData.experience]
+                            newExperience[index].designation = filteredValue
                             setFormData({ ...formData, experience: newExperience })
                           }}
                           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
@@ -3508,9 +4062,30 @@ function UserManagement() {
                           value={exp.fromDate ? exp.fromDate.split('T')[0] : ''}
                           onChange={(e) => {
                             const newExperience = [...formData.experience]
-                            newExperience[index].fromDate = e.target.value
+                            const fromDate = e.target.value
+                            const today = new Date()
+                            today.setHours(0, 0, 0, 0)
+                            const selectedDate = new Date(fromDate)
+                            selectedDate.setHours(0, 0, 0, 0)
+                            
+                            if (selectedDate > today) {
+                              toast.error('From Date must not be a future date.')
+                              return
+                            }
+                            
+                            // Validate From < To
+                            if (exp.toDate && fromDate > exp.toDate) {
+                              toast.error('From Date must be earlier than To Date.')
+                              return
+                            }
+                            
+                            newExperience[index].fromDate = fromDate
                             setFormData({ ...formData, experience: newExperience })
                           }}
+                          max={(() => {
+                            const today = new Date()
+                            return today.toISOString().slice(0, 10)
+                          })()}
                           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                         />
                       </div>
@@ -3521,9 +4096,31 @@ function UserManagement() {
                           value={exp.toDate ? exp.toDate.split('T')[0] : ''}
                           onChange={(e) => {
                             const newExperience = [...formData.experience]
-                            newExperience[index].toDate = e.target.value
+                            const toDate = e.target.value
+                            const today = new Date()
+                            today.setHours(0, 0, 0, 0)
+                            const selectedDate = new Date(toDate)
+                            selectedDate.setHours(0, 0, 0, 0)
+                            
+                            if (selectedDate > today) {
+                              toast.error('To Date must not be a future date.')
+                              return
+                            }
+                            
+                            // Validate From < To
+                            if (exp.fromDate && toDate < exp.fromDate) {
+                              toast.error('To Date must be after From Date.')
+                              return
+                            }
+                            
+                            newExperience[index].toDate = toDate
                             setFormData({ ...formData, experience: newExperience })
                           }}
+                          min={exp.fromDate || undefined}
+                          max={(() => {
+                            const today = new Date()
+                            return today.toISOString().slice(0, 10)
+                          })()}
                           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                         />
                       </div>
@@ -3610,7 +4207,33 @@ function UserManagement() {
                 <FormField label={getFieldLabelById(4, 'bankName', 'Bank Name')} name="bankName" formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(4, 'ifscCode') && (
-                <FormField label={getFieldLabelById(4, 'ifscCode', 'IFSC Code')} name="ifscCode" formData={formData} handleChange={handleChange} />
+                <div>
+                  <FormField label={getFieldLabelById(4, 'ifscCode', 'IFSC Code')} name="ifscCode" formData={formData} handleChange={(e) => {
+                    handleChange(e)
+                    // Validate IFSC matches bank name
+                    if (formData.bankName && e.target.value) {
+                      const bankName = String(formData.bankName).toLowerCase()
+                      const ifscCode = String(e.target.value).toUpperCase()
+                      // Basic IFSC validation: first 4 characters should match bank name
+                      const bankCodes = {
+                        'canara': 'CNRB', 'canara bank': 'CNRB',
+                        'icici': 'ICIC', 'icici bank': 'ICIC',
+                        'hdfc': 'HDFC', 'hdfc bank': 'HDFC',
+                        'sbi': 'SBIN', 'state bank': 'SBIN',
+                        'axis': 'UTIB', 'axis bank': 'UTIB',
+                        'pnb': 'PUNB', 'punjab national bank': 'PUNB',
+                        'bob': 'BARB', 'bank of baroda': 'BARB',
+                        'boi': 'BKID', 'bank of india': 'BKID',
+                        'union': 'UBIN', 'union bank': 'UBIN',
+                        'iob': 'IOBA', 'indian overseas bank': 'IOBA'
+                      }
+                      const expectedCode = Object.keys(bankCodes).find(key => bankName.includes(key))
+                      if (expectedCode && !ifscCode.startsWith(bankCodes[expectedCode])) {
+                        toast.error('Bank Name and IFSC Code do not match. Please enter valid details.')
+                      }
+                    }
+                  }} />
+                </div>
               )}
               {isFieldVisibleById(4, 'accountType') && (
                 <FormField label={getFieldLabelById(4, 'accountType', 'Account Type')} name="accountType" type="select" options={getFieldOptionsById(4, 'accountType', accountTypes)} formData={formData} handleChange={handleChange} />
@@ -3701,50 +4324,136 @@ function UserManagement() {
                               value={doc.documentType || ''}
                               onChange={(e) => {
                                 const newDocs = [...formData.documents]
-                                newDocs[index].documentType = e.target.value
+                                const selectedType = e.target.value
+                                
+                                // Check for duplicate document types
+                                if (selectedType && selectedType !== 'Other') {
+                                  const existingType = formData.documents.find((d, i) => i !== index && d.documentType === selectedType)
+                                  if (existingType) {
+                                    toast.error(`${selectedType} already added. Please select a different document type.`)
+                                    return
+                                  }
+                                }
+                                
+                                newDocs[index].documentType = selectedType
+                                newDocs[index].documentNumber = '' // Reset document number when type changes
                                 setFormData({ ...formData, documents: newDocs })
                               }}
                               required={getFieldRequiredById(5, 'documentType', true)}
                               className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                             >
                               <option value="">{getFieldLabelById(5, 'documentType', 'Select Type')}</option>
-                              {docTypeOptions.map((opt, i) => (
-                                <option key={i} value={opt}>{opt}</option>
-                              ))}
+                              {docTypeOptions.map((opt, i) => {
+                                // Disable option if it's already selected in another document
+                                const isDuplicate = formData.documents.some((d, idx) => idx !== index && d.documentType === opt && opt !== 'Other')
+                                return (
+                                  <option key={i} value={opt} disabled={isDuplicate}>
+                                    {opt} {isDuplicate ? '(Already added)' : ''}
+                                  </option>
+                                )
+                              })}
                             </select>
                           )
                         })()}
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(5, 'documentNumber', 'Document Number')} {getFieldRequiredById(5, 'documentNumber', true) && <span className="text-red-500">*</span>}</label>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          {doc.documentType === 'Aadhar Card' ? 'Aadhaar Number' : getFieldLabelById(5, 'documentNumber', 'Document Number')} 
+                          {getFieldRequiredById(5, 'documentNumber', true) && <span className="text-red-500">*</span>}
+                        </label>
                         <input
                           type="text"
                           value={doc.documentNumber || ''}
                           onChange={(e) => {
                             const newDocs = [...formData.documents]
-                            newDocs[index].documentNumber = e.target.value
+                            let value = e.target.value
+                            
+                            // Aadhaar: 12-digit numeric only
+                            if (doc.documentType === 'Aadhar Card') {
+                              value = value.replace(/[^0-9]/g, '').slice(0, 12)
+                            }
+                            // PAN: Format ABCDE1234F (5 alphabets + 4 digits + 1 alphabet)
+                            else if (doc.documentType === 'PAN Card') {
+                              const panValue = value.toUpperCase().replace(/[^A-Z0-9]/g, '')
+                              if (panValue.length <= 5) {
+                                value = panValue.replace(/[^A-Z]/g, '')
+                              } else if (panValue.length <= 9) {
+                                const first5 = panValue.slice(0, 5).replace(/[^A-Z]/g, '')
+                                const next4 = panValue.slice(5, 9).replace(/[^0-9]/g, '')
+                                value = first5 + next4
+                              } else {
+                                const first5 = panValue.slice(0, 5).replace(/[^A-Z]/g, '')
+                                const next4 = panValue.slice(5, 9).replace(/[^0-9]/g, '')
+                                const last1 = panValue.slice(9, 10).replace(/[^A-Z]/g, '')
+                                value = first5 + next4 + last1
+                              }
+                            }
+                            
+                            newDocs[index].documentNumber = value
                             setFormData({ ...formData, documents: newDocs })
                           }}
+                          onKeyPress={(e) => {
+                            if (doc.documentType === 'Aadhar Card') {
+                              const char = String.fromCharCode(e.which)
+                              if (!/[0-9]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
+                                e.preventDefault()
+                              }
+                              if (e.target.value.length >= 12 && e.key !== 'Backspace' && e.key !== 'Delete') {
+                                e.preventDefault()
+                              }
+                            } else if (doc.documentType === 'PAN Card') {
+                              const char = String.fromCharCode(e.which).toUpperCase()
+                              const currentLength = e.target.value.length
+                              if (currentLength < 5) {
+                                // First 5: alphabets only
+                                if (!/[A-Z]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
+                                  e.preventDefault()
+                                }
+                              } else if (currentLength < 9) {
+                                // Next 4: digits only
+                                if (!/[0-9]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
+                                  e.preventDefault()
+                                }
+                              } else if (currentLength < 10) {
+                                // Last 1: alphabet only
+                                if (!/[A-Z]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
+                                  e.preventDefault()
+                                }
+                              } else if (e.key !== 'Backspace' && e.key !== 'Delete') {
+                                e.preventDefault()
+                              }
+                            }
+                          }}
+                          maxLength={doc.documentType === 'Aadhar Card' ? 12 : doc.documentType === 'PAN Card' ? 10 : undefined}
                           required={getFieldRequiredById(5, 'documentNumber', true)}
                           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                          placeholder={getFieldLabelById(5, 'documentNumber', 'Enter Number')}
+                          placeholder={doc.documentType === 'Aadhar Card' ? '12-digit Aadhaar Number' : doc.documentType === 'PAN Card' ? 'ABCDE1234F' : getFieldLabelById(5, 'documentNumber', 'Enter Number')}
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(5, 'attachment', 'Attachment')}</label>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          {getFieldLabelById(5, 'attachment', 'Attachment')} {getFieldRequiredById(5, 'attachment', true) && <span className="text-red-500">*</span>}
+                        </label>
                         <div className="flex items-center gap-2">
                           <input
                             type="file"
+                            accept=".pdf,application/pdf"
                             onChange={(e) => {
                               const file = e.target.files[0]
                               if (file) {
+                                // Validate PDF only
+                                if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+                                  toast.error('Only PDF files are allowed')
+                                  e.target.value = ''
+                                  return
+                                }
                                 const newDocs = [...formData.documents]
                                 newDocs[index].fileName = file.name
-                                // Ideally upload logic here, currently storing just name for display
                                 setFormData({ ...formData, documents: newDocs })
                                 toast.success(`Selected: ${file.name}`)
                               }
                             }}
+                            required={getFieldRequiredById(5, 'attachment', true) && !doc.fileName}
                             className="text-sm text-gray-500 file:mr-4 file:py-1.5 file:px-2.5 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
                           />
                           {doc.fileName && <span className="text-xs text-gray-500 truncate max-w-[100px]">{doc.fileName}</span>}
