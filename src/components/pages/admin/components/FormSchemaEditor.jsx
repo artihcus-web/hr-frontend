@@ -39,6 +39,7 @@ const FormSchemaEditor = ({ formType, formName }) => {
 
   const fieldTypes = [
     { value: 'text', label: 'Text' },
+    { value: 'alphanumeric', label: 'Alphanumeric' },
     { value: 'email', label: 'Email' },
     { value: 'number', label: 'Number' },
     { value: 'date', label: 'Date' },

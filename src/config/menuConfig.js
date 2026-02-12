@@ -145,6 +145,13 @@ export const menuItems = [
     icon: FiFileText,
     path: '/admin/policies',
     roles: ['super_admin', 'hr_admin']
+  },
+  {
+    id: 'policies',
+    label: 'Policies',
+    icon: FiFileText,
+    path: '/policies',
+    roles: ['employee', 'manager', 'hr_admin', 'team_lead', 'c_suite', 'super_manager']
   }
 
 

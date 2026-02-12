@@ -70,7 +70,12 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
   const otherValue = getValue(formData, otherFieldName)
 
   // Detect field type for special validation based on schema type and field name
-  const normalizedType = String(type || 'text').toLowerCase()
+  // Normalize and map type variations
+  let normalizedType = String(type || 'text').toLowerCase().trim()
+  if (normalizedType === 'string') normalizedType = 'text'
+  if (normalizedType === 'numeric') normalizedType = 'number'
+  if (normalizedType === 'alphanum') normalizedType = 'alphanumeric'
+  
   const isCityField = name.includes('district') || name.includes('city') || (label && label.toLowerCase().includes('city'))
   const isPincodeField = name.includes('pincode') || name.includes('zip') || (label && (label.toLowerCase().includes('zip') || label.toLowerCase().includes('postal')))
   const isCountryField = name.includes('country') || (label && label.toLowerCase().includes('country'))
@@ -78,9 +83,33 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
   const isPercentageField = name.includes('percentage') || (label && (label.toLowerCase().includes('percentage') || label.toLowerCase().includes('cgpa')))
   
   // Schema-driven type validation
-  const isTextType = normalizedType === 'text' && !isCityField && !isPincodeField && !isCountryField && !isAccountNumberField && !isPercentageField
-  const isAlphanumericType = (normalizedType === 'alphanumeric' || normalizedType === 'alphanum') && !isCityField && !isPincodeField && !isCountryField && !isAccountNumberField && !isPercentageField
-  const isNumberType = (normalizedType === 'number' || normalizedType === 'numeric') && !isPercentageField
+  // Text type: only alphabets, spaces, and valid special characters (no numbers)
+  // Also check common text field names as fallback (firstName, lastName, middleName, etc.)
+  const isCommonTextField = ['firstName', 'lastName', 'middleName', 'employeeName', 'name'].includes(name)
+  const isTextType = (normalizedType === 'text' || (isCommonTextField && normalizedType !== 'number' && normalizedType !== 'alphanumeric')) && !isCityField && !isPincodeField && !isCountryField && !isAccountNumberField && !isPercentageField
+  // Alphanumeric type: allows both alphabets and numbers
+  const isAlphanumericType = normalizedType === 'alphanumeric' && !isCityField && !isPincodeField && !isCountryField && !isAccountNumberField && !isPercentageField
+  // Number type: only numeric digits
+  const isNumberType = normalizedType === 'number' && !isPercentageField
+
+  // Debug logging for text fields
+  if (name === 'firstName' || name === 'lastName' || name === 'middleName') {
+    console.log('🔍 FormField Debug:', {
+      name,
+      type,
+      normalizedType,
+      isTextType,
+      isAlphanumericType,
+      isNumberType,
+      isCommonTextField,
+      isCityField,
+      isPincodeField,
+      isCountryField,
+      isAccountNumberField,
+      isPercentageField,
+      value: value || '(empty)'
+    })
+  }
 
   return (
     <div className="flex flex-col">
@@ -346,21 +375,56 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           name={name}
           value={value}
           onChange={(e) => {
-            // Text type: only alphabets, spaces, and valid special characters (.,-&)
+            console.log('📝 Text field onChange:', { name, originalValue: e.target.value })
+            // Text type: only alphabets, spaces, and valid special characters (.,-&) - NO NUMBERS
             const filteredValue = e.target.value.replace(/[^a-zA-Z\s.,\-&]/g, '')
-            handleChange({ ...e, target: { ...e.target, value: filteredValue } })
+            console.log('📝 Text field filtered:', { name, filteredValue, removed: e.target.value !== filteredValue })
+            // Create a proper event-like object for handleChange
+            handleChange({
+              target: {
+                name: name,
+                value: filteredValue,
+                type: e.target.type || 'text',
+                checked: e.target.checked
+              }
+            })
           }}
-          onKeyPress={(e) => {
-            const char = String.fromCharCode(e.which)
-            if (!/[a-zA-Z\s.,\-&]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
-              e.preventDefault()
+          onKeyDown={(e) => {
+            const key = e.key
+            console.log('⌨️ Text field onKeyDown:', { name, key, ctrlKey: e.ctrlKey, metaKey: e.metaKey })
+            // Allow control keys and navigation keys
+            if (e.ctrlKey || e.metaKey || e.altKey || 
+                ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Tab', 'Enter', 'Home', 'End'].includes(key)) {
+              console.log('⌨️ Allowed control/nav key:', key)
+              return
             }
+            // Block numbers (0-9) and other invalid characters
+            if (/[0-9]/.test(key)) {
+              console.log('🚫 Blocked number:', key)
+              e.preventDefault()
+              return
+            }
+            if (!/[a-zA-Z\s.,\-&]/.test(key) && key.length === 1) {
+              console.log('🚫 Blocked invalid char:', key)
+              e.preventDefault()
+              return
+            }
+            console.log('✅ Allowed key:', key)
           }}
           onPaste={(e) => {
+            console.log('📋 Text field onPaste:', { name })
             e.preventDefault()
             const pastedText = e.clipboardData.getData('text')
             const filteredValue = pastedText.replace(/[^a-zA-Z\s.,\-&]/g, '')
-            handleChange({ target: { name, value: filteredValue, type: 'text' } })
+            console.log('📋 Paste filtered:', { pastedText, filteredValue })
+            handleChange({
+              target: {
+                name: name,
+                value: filteredValue,
+                type: 'text',
+                checked: false
+              }
+            })
           }}
           required={required}
           placeholder={placeholder}
@@ -415,6 +479,84 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
             e.preventDefault()
             const pastedText = e.clipboardData.getData('text')
             const filteredValue = pastedText.replace(/[^0-9]/g, '')
+            handleChange({ target: { name, value: filteredValue, type: 'text' } })
+          }}
+          required={required}
+          placeholder={placeholder}
+          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+          {...props}
+        />
+      ) : normalizedType === 'date' ? (
+        <input
+          type="date"
+          name={name}
+          value={value}
+          onChange={(e) => {
+            const dateValue = e.target.value
+            if (dateValue) {
+              // Validate year is exactly 4 digits (YYYY-MM-DD format)
+              const dateParts = dateValue.split('-')
+              if (dateParts.length === 3) {
+                const year = dateParts[0]
+                // Ensure year is exactly 4 digits and within valid range
+                if (year.length !== 4 || parseInt(year) < 1900 || parseInt(year) > 2100) {
+                  toast.error('Please enter a valid date with 4-digit year (1900-2100)')
+                  return
+                }
+              }
+            }
+            handleChange(e)
+          }}
+          onBlur={(e) => {
+            // Additional validation on blur
+            const dateValue = e.target.value
+            if (dateValue) {
+              const dateParts = dateValue.split('-')
+              if (dateParts.length === 3) {
+                const year = dateParts[0]
+                if (year.length !== 4) {
+                  toast.error('Year must be exactly 4 digits')
+                  e.target.value = ''
+                  handleChange({ target: { name, value: '', type: 'date' } })
+                }
+              }
+            }
+          }}
+          required={required}
+          placeholder={placeholder}
+          min="1900-01-01"
+          max="2100-12-31"
+          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+          {...props}
+        />
+      ) : normalizedType === 'text' || normalizedType === 'string' ? (
+        // Fallback: if type is text but didn't match isTextType (shouldn't happen, but safety check)
+        <input
+          type="text"
+          name={name}
+          value={value}
+          onChange={(e) => {
+            // Text type: only alphabets, spaces, and valid special characters (.,-&) - NO NUMBERS
+            const filteredValue = e.target.value.replace(/[^a-zA-Z\s.,\-&]/g, '')
+            handleChange({ ...e, target: { ...e.target, value: filteredValue } })
+          }}
+          onKeyDown={(e) => {
+            // Prevent typing numbers and invalid characters
+            const key = e.key
+            // Allow control keys and navigation keys
+            if (e.ctrlKey || e.metaKey || e.altKey || 
+                ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Tab', 'Enter', 'Home', 'End'].includes(key)) {
+              return
+            }
+            // Block numbers (0-9) and other invalid characters
+            if (/[0-9]/.test(key) || (!/[a-zA-Z\s.,\-&]/.test(key) && key.length === 1)) {
+              e.preventDefault()
+            }
+          }}
+          onPaste={(e) => {
+            e.preventDefault()
+            const pastedText = e.clipboardData.getData('text')
+            const filteredValue = pastedText.replace(/[^a-zA-Z\s.,\-&]/g, '')
             handleChange({ target: { name, value: filteredValue, type: 'text' } })
           }}
           required={required}
@@ -645,6 +787,30 @@ function UserManagement() {
       if (!sectionKey) return defaultValue
       const field = getFieldConfig(sectionKey, fieldName)
       return field?.required === true
+    },
+    [getSectionKey, getFieldConfig]
+  )
+
+  // Helper to get field type from CMS schema
+  const getFieldTypeById = useCallback(
+    (sectionId, fieldName, defaultValue = 'text') => {
+      const sectionKey = getSectionKey(sectionId)
+      if (!sectionKey) {
+        console.log('🔍 getFieldTypeById: No sectionKey for', { sectionId, fieldName, defaultValue })
+        return defaultValue
+      }
+      const field = getFieldConfig(sectionKey, fieldName)
+      const fieldType = field?.type || defaultValue
+      console.log('🔍 getFieldTypeById:', { sectionId, fieldName, sectionKey, fieldExists: !!field, fieldType, defaultValue })
+      // Normalize the type - handle case variations from schema
+      const normalized = String(fieldType).toLowerCase().trim()
+      // Map common variations to standard types
+      let result = normalized || defaultValue
+      if (normalized === 'text' || normalized === 'string') result = 'text'
+      if (normalized === 'number' || normalized === 'numeric') result = 'number'
+      if (normalized === 'alphanumeric' || normalized === 'alphanum') result = 'alphanumeric'
+      console.log('🔍 getFieldTypeById result:', { fieldName, fieldType, normalized, result })
+      return result
     },
     [getSectionKey, getFieldConfig]
   )
@@ -957,7 +1123,12 @@ function UserManagement() {
 
 
   const handleChange = (e) => {
-    const { name, value, type, checked } = e.target
+    const { name, value, type, checked } = e.target || {}
+
+    if (!name) {
+      console.error('handleChange: name is undefined', e)
+      return
+    }
 
     if (name.includes('.')) {
       const [parent, child] = name.split('.')
@@ -2818,6 +2989,7 @@ function UserManagement() {
                   <FormField
                     label={getFieldLabel('basic-info', 'firstName', 'First Name')}
                     name="firstName"
+                    type={getFieldTypeById(1, 'firstName', 'text')}
                     required={getFieldRequiredById(1, 'firstName', true)}
                     formData={formData}
                     handleChange={handleChange}
@@ -3382,7 +3554,33 @@ function UserManagement() {
                     <input
                       type="date"
                       value={member.dob ? new Date(member.dob).toISOString().split('T')[0] : ''}
-                      onChange={(e) => handleFamilyDetailChange(index, 'dob', e.target.value)}
+                      onChange={(e) => {
+                        const dateValue = e.target.value
+                        if (dateValue) {
+                          const dateParts = dateValue.split('-')
+                          if (dateParts.length === 3) {
+                            const year = dateParts[0]
+                            if (year.length !== 4 || parseInt(year) < 1900 || parseInt(year) > 2100) {
+                              toast.error('Please enter a valid date with 4-digit year (1900-2100)')
+                              return
+                            }
+                          }
+                        }
+                        handleFamilyDetailChange(index, 'dob', dateValue)
+                      }}
+                      onBlur={(e) => {
+                        const dateValue = e.target.value
+                        if (dateValue) {
+                          const dateParts = dateValue.split('-')
+                          if (dateParts.length === 3 && dateParts[0].length !== 4) {
+                            toast.error('Year must be exactly 4 digits')
+                            e.target.value = ''
+                            handleFamilyDetailChange(index, 'dob', '')
+                          }
+                        }
+                      }}
+                      min="1900-01-01"
+                      max="2100-12-31"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     />
                   </div>
@@ -4061,8 +4259,21 @@ function UserManagement() {
                           type="date"
                           value={exp.fromDate ? exp.fromDate.split('T')[0] : ''}
                           onChange={(e) => {
+                            const dateValue = e.target.value
+                            // Validate 4-digit year
+                            if (dateValue) {
+                              const dateParts = dateValue.split('-')
+                              if (dateParts.length === 3) {
+                                const year = dateParts[0]
+                                if (year.length !== 4 || parseInt(year) < 1900 || parseInt(year) > 2100) {
+                                  toast.error('Please enter a valid date with 4-digit year (1900-2100)')
+                                  return
+                                }
+                              }
+                            }
+                            
                             const newExperience = [...formData.experience]
-                            const fromDate = e.target.value
+                            const fromDate = dateValue
                             const today = new Date()
                             today.setHours(0, 0, 0, 0)
                             const selectedDate = new Date(fromDate)
@@ -4082,10 +4293,21 @@ function UserManagement() {
                             newExperience[index].fromDate = fromDate
                             setFormData({ ...formData, experience: newExperience })
                           }}
-                          max={(() => {
-                            const today = new Date()
-                            return today.toISOString().slice(0, 10)
-                          })()}
+                          onBlur={(e) => {
+                            const dateValue = e.target.value
+                            if (dateValue) {
+                              const dateParts = dateValue.split('-')
+                              if (dateParts.length === 3 && dateParts[0].length !== 4) {
+                                toast.error('Year must be exactly 4 digits')
+                                e.target.value = ''
+                                const newExperience = [...formData.experience]
+                                newExperience[index].fromDate = ''
+                                setFormData({ ...formData, experience: newExperience })
+                              }
+                            }
+                          }}
+                          min="1900-01-01"
+                          max="2100-12-31"
                           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                         />
                       </div>
@@ -4095,8 +4317,21 @@ function UserManagement() {
                           type="date"
                           value={exp.toDate ? exp.toDate.split('T')[0] : ''}
                           onChange={(e) => {
+                            const dateValue = e.target.value
+                            // Validate 4-digit year
+                            if (dateValue) {
+                              const dateParts = dateValue.split('-')
+                              if (dateParts.length === 3) {
+                                const year = dateParts[0]
+                                if (year.length !== 4 || parseInt(year) < 1900 || parseInt(year) > 2100) {
+                                  toast.error('Please enter a valid date with 4-digit year (1900-2100)')
+                                  return
+                                }
+                              }
+                            }
+                            
                             const newExperience = [...formData.experience]
-                            const toDate = e.target.value
+                            const toDate = dateValue
                             const today = new Date()
                             today.setHours(0, 0, 0, 0)
                             const selectedDate = new Date(toDate)
@@ -4116,11 +4351,21 @@ function UserManagement() {
                             newExperience[index].toDate = toDate
                             setFormData({ ...formData, experience: newExperience })
                           }}
-                          min={exp.fromDate || undefined}
-                          max={(() => {
-                            const today = new Date()
-                            return today.toISOString().slice(0, 10)
-                          })()}
+                          onBlur={(e) => {
+                            const dateValue = e.target.value
+                            if (dateValue) {
+                              const dateParts = dateValue.split('-')
+                              if (dateParts.length === 3 && dateParts[0].length !== 4) {
+                                toast.error('Year must be exactly 4 digits')
+                                e.target.value = ''
+                                const newExperience = [...formData.experience]
+                                newExperience[index].toDate = ''
+                                setFormData({ ...formData, experience: newExperience })
+                              }
+                            }
+                          }}
+                          min={exp.fromDate || '1900-01-01'}
+                          max="2100-12-31"
                           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                         />
                       </div>
