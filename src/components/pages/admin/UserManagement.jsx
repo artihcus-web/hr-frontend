@@ -56,34 +56,45 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
         {label} {required && <span className="text-red-500">*</span>}
       </label>
       {type === 'select' ? (
-        <>
-          <select
-            name={name}
-            value={value}
-            onChange={handleChange}
-            required={required}
-            className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors appearance-none"
-            {...props}
-          >
-            <option value="">Select {label}</option>
-            {options.map((opt, index) => (
-              <option key={index} value={opt}>
-                {opt}
-              </option>
-            ))}
-          </select>
-          {hasOtherOption && isOtherSelected && (
-            <input
-              type="text"
-              name={otherFieldName}
-              value={otherValue}
+        <div className="flex flex-col gap-1">
+          {hasOtherOption && isOtherSelected ? (
+            <>
+              <input
+                type="text"
+                name={otherFieldName}
+                value={otherValue}
+                onChange={handleChange}
+                placeholder={otherOptionLabel}
+                required={required}
+                className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                aria-label={otherOptionLabel}
+              />
+              <button
+                type="button"
+                onClick={() => handleChange({ target: { name, value: '', type: 'text' } })}
+                className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline text-left"
+              >
+                Choose from list
+              </button>
+            </>
+          ) : (
+            <select
+              name={name}
+              value={value}
               onChange={handleChange}
-              placeholder={otherOptionLabel}
-              className="mt-2 w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-              aria-label={otherOptionLabel}
-            />
+              required={required}
+              className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors appearance-none"
+              {...props}
+            >
+              <option value="">Select {label}</option>
+              {options.map((opt, index) => (
+                <option key={index} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
           )}
-        </>
+        </div>
       ) : type === 'checkbox' ? (
         <div className="flex items-center">
           <input
@@ -308,6 +319,18 @@ function UserManagement() {
       return isFieldVisible(sectionKey, fieldName)
     },
     [getSectionKey, isFieldVisible]
+  )
+
+  // Helper to get field options from CMS schema by sectionId and fieldName
+  const getFieldOptionsById = useCallback(
+    (sectionId, fieldName, fallback = []) => {
+      const sectionKey = getSectionKey(sectionId)
+      if (!sectionKey) return fallback
+      const field = getFieldConfig(sectionKey, fieldName)
+      const opts = field?.options
+      return Array.isArray(opts) && opts.length > 0 ? opts : fallback
+    },
+    [getSectionKey, getFieldConfig]
   )
 
   // Action menu (three dots) state; position for portal so dropdown isn't clipped by table overflow
@@ -2216,7 +2239,7 @@ function UserManagement() {
           <div className="space-y-4">
             {/* Basic Information (wired to CMS schema for title + key field labels) */}
             <FormSection
-              title={getSectionTitle('basic-info', 'Basic Information')}
+              title={getSectionTitleById(1, 'Basic Information')}
               sectionId={1}
               isOpen={expandedSections.includes(1)}
               onToggle={() => toggleSection(1)}
@@ -2277,10 +2300,10 @@ function UserManagement() {
 
               {/* Row 2: Gender & Blood Group */}
               {isFieldVisibleById(1, 'gender') && (
-                <FormField label={getFieldLabelById(1, 'gender', 'Gender')} name="gender" type="select" required options={genders} formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(1, 'gender', 'Gender')} name="gender" type="select" required options={getFieldOptionsById(1, 'gender', genders)} formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(1, 'bloodGroup') && (
-                <FormField label={getFieldLabelById(1, 'bloodGroup', 'Blood Group')} name="bloodGroup" type="select" options={['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']} formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(1, 'bloodGroup', 'Blood Group')} name="bloodGroup" type="select" options={getFieldOptionsById(1, 'bloodGroup', ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'])} formData={formData} handleChange={handleChange} />
               )}
 
               {/* Row 3: DOBs */}
@@ -2293,7 +2316,7 @@ function UserManagement() {
 
               {/* Row 4: Marital Status */}
               {isFieldVisibleById(1, 'maritalStatus') && (
-                <FormField label={getFieldLabelById(1, 'maritalStatus', 'Marital Status')} name="maritalStatus" type="select" options={maritalStatuses} formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(1, 'maritalStatus', 'Marital Status')} name="maritalStatus" type="select" options={getFieldOptionsById(1, 'maritalStatus', maritalStatuses)} formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(1, 'marriageDate') && (
                 <FormField label={getFieldLabelById(1, 'marriageDate', 'Marriage Date')} name="marriageDate" type="date" formData={formData} handleChange={handleChange} />
@@ -2722,8 +2745,9 @@ function UserManagement() {
                   <div className="col-span-4">
                     <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 md:hidden">{getFieldLabelById(13, 'relation', 'Relationship')}</label>
                     {(() => {
-                      const relationshipOptions = ['Father', 'Mother', 'Spouse']
-                      const isCustom = member.relation && (!relationshipOptions.includes(member.relation) || member.relation === 'Other')
+                      const relationshipOptions = getFieldOptionsById(13, 'relation', ['Father', 'Mother', 'Spouse'])
+                      const standardRels = relationshipOptions.filter(o => !String(o).toLowerCase().includes('other'))
+                      const isCustom = member.relation && (!standardRels.includes(member.relation) || member.relation === 'Other')
 
                       return (
                         <>
@@ -2742,7 +2766,6 @@ function UserManagement() {
                               onChange={(e) => {
                                 const val = e.target.value
                                 if (val === '__other__') {
-                                  // Switch to custom input mode, start with empty custom value
                                   handleFamilyDetailChange(index, 'relation', 'Other')
                                 } else {
                                   handleFamilyDetailChange(index, 'relation', val)
@@ -2751,7 +2774,7 @@ function UserManagement() {
                               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                             >
                               <option value="">{getFieldLabelById(13, 'selectRelationship', 'Select Relationship')}</option>
-                              {relationshipOptions.map(opt => (
+                              {standardRels.map(opt => (
                                 <option key={opt} value={opt}>{opt}</option>
                               ))}
                               <option value="__other__">Other (Specify)</option>
@@ -2853,16 +2876,16 @@ function UserManagement() {
               )}
 
               {isFieldVisibleById(2, 'businessUnitHR') && (
-                <FormField label={getFieldLabelById(2, 'businessUnitHR', 'Department/Business Unit')} name="businessUnitHR" type="select" options={['BU1', 'BU2', 'BU3']} formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(2, 'businessUnitHR', 'Department/Business Unit')} name="businessUnitHR" type="select" options={getFieldOptionsById(2, 'businessUnitHR', ['BU1', 'BU2', 'BU3'])} formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(2, 'designation') && (
                 <FormField label={getFieldLabelById(2, 'designation', 'Designation')} name="designation" formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(2, 'role') && (
-                <FormField label={getFieldLabelById(2, 'role', 'Role')} name="role" type="select" required options={roles} formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(2, 'role', 'Role')} name="role" type="select" required options={getFieldOptionsById(2, 'role', roles)} formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(2, 'employeeStatus') && (
-                <FormField label={getFieldLabelById(2, 'employeeStatus', 'Employee Status')} name="employeeStatus" type="select" required options={['Active', 'Inactive']} formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(2, 'employeeStatus', 'Employee Status')} name="employeeStatus" type="select" required options={getFieldOptionsById(2, 'employeeStatus', ['Active', 'Inactive'])} formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(2, 'joiningDate') && (
                 <FormField label={getFieldLabelById(2, 'joiningDate', 'Joining Date')} name="joiningDate" type="date" formData={formData} handleChange={handleChange} />
@@ -2963,7 +2986,8 @@ function UserManagement() {
                       <div>
                         <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(3, 'degree', 'Degree / Qualification')}</label>
                         {(() => {
-                          const standardDegrees = ['SSC/CBSE/ICSE', 'Intermediate', 'Diploma', 'UG', 'PG', 'PHD']
+                          const degreeOptions = getFieldOptionsById(3, 'degree', ['SSC/CBSE/ICSE', 'Intermediate', 'Diploma', 'UG', 'PG', 'PHD', 'Other'])
+                          const standardDegrees = degreeOptions.filter(o => !String(o).toLowerCase().includes('other'))
                           const isCustom = edu.degree && (!standardDegrees.includes(edu.degree) || edu.degree === 'Other')
 
                           if (isCustom) {
@@ -2990,7 +3014,6 @@ function UserManagement() {
                                 const val = e.target.value
                                 const newEducation = [...formData.education]
                                 if (val === '__other__') {
-                                  // switch to custom input mode
                                   newEducation[index].degree = 'Other'
                                 } else {
                                   newEducation[index].degree = val
@@ -3000,12 +3023,9 @@ function UserManagement() {
                               className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                             >
                               <option value="">{getFieldLabelById(3, 'selectDegree', 'Select Degree')}</option>
-                              <option value="SSC/CBSE/ICSE">SSC/CBSE/ICSE</option>
-                              <option value="Intermediate">Intermediate</option>
-                              <option value="Diploma">Diploma</option>
-                              <option value="UG">UG</option>
-                              <option value="PG">PG</option>
-                              <option value="PHD">PHD</option>
+                              {standardDegrees.map(opt => (
+                                <option key={opt} value={opt}>{opt}</option>
+                              ))}
                               <option value="__other__">Others (specify)</option>
                             </select>
                           )
@@ -3375,14 +3395,14 @@ function UserManagement() {
                 <FormField label={getFieldLabelById(4, 'ifscCode', 'IFSC Code')} name="ifscCode" formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(4, 'accountType') && (
-                <FormField label={getFieldLabelById(4, 'accountType', 'Account Type')} name="accountType" type="select" options={accountTypes} formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(4, 'accountType', 'Account Type')} name="accountType" type="select" options={getFieldOptionsById(4, 'accountType', accountTypes)} formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(4, 'branchName') && (
                 <FormField label={getFieldLabelById(4, 'branchName', 'Branch Name')} name="branchName" formData={formData} handleChange={handleChange} />
               )}
 
               {isFieldVisibleById(4, 'salaryPaymentMode') && (
-                <FormField label={getFieldLabelById(4, 'salaryPaymentMode', 'Salary Payment Mode')} name="salaryPaymentMode" type="select" options={paymentModes} formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(4, 'salaryPaymentMode', 'Salary Payment Mode')} name="salaryPaymentMode" type="select" options={getFieldOptionsById(4, 'salaryPaymentMode', paymentModes)} formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(4, 'nameAsPerBankRecords') && (
                 <FormField label={getFieldLabelById(4, 'nameAsPerBankRecords', 'Name as per Bank Records')} name="nameAsPerBankRecords" formData={formData} handleChange={handleChange} />
@@ -3426,23 +3446,55 @@ function UserManagement() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div>
                         <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(5, 'documentType', 'Document Type')} <span className="text-red-500">*</span></label>
-                        <select
-                          value={doc.documentType || ''}
-                          onChange={(e) => {
-                            const newDocs = [...formData.documents]
-                            newDocs[index].documentType = e.target.value
-                            setFormData({ ...formData, documents: newDocs })
-                          }}
-                          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                        >
-                          <option value="">{getFieldLabelById(5, 'documentType', 'Select Type')}</option>
-                          <option value="Aadhar Card">Aadhar Card</option>
-                          <option value="PAN Card">PAN Card</option>
-                          <option value="Passport">Passport</option>
-                          <option value="Driving License">Driving License</option>
-                          <option value="Voter ID">Voter ID</option>
-                          <option value="Other">Other</option>
-                        </select>
+                        {(() => {
+                          const docTypeOptions = getFieldOptionsById(5, 'documentType', ['Aadhar Card', 'PAN Card', 'Passport', 'Driving License', 'Voter ID', 'Other'])
+                          const isOtherDocType = doc.documentType && String(doc.documentType).toLowerCase().includes('other')
+                          if (isOtherDocType) {
+                            return (
+                              <div className="flex flex-col gap-1">
+                                <input
+                                  type="text"
+                                  value={doc.documentTypeOther || ''}
+                                  onChange={(e) => {
+                                    const newDocs = [...formData.documents]
+                                    newDocs[index].documentTypeOther = e.target.value
+                                    setFormData({ ...formData, documents: newDocs })
+                                  }}
+                                  placeholder={getFieldLabelById(5, 'documentTypeOther', 'Please specify')}
+                                  className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const newDocs = [...formData.documents]
+                                    newDocs[index].documentType = ''
+                                    newDocs[index].documentTypeOther = ''
+                                    setFormData({ ...formData, documents: newDocs })
+                                  }}
+                                  className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline text-left"
+                                >
+                                  Choose from list
+                                </button>
+                              </div>
+                            )
+                          }
+                          return (
+                            <select
+                              value={doc.documentType || ''}
+                              onChange={(e) => {
+                                const newDocs = [...formData.documents]
+                                newDocs[index].documentType = e.target.value
+                                setFormData({ ...formData, documents: newDocs })
+                              }}
+                              className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            >
+                              <option value="">{getFieldLabelById(5, 'documentType', 'Select Type')}</option>
+                              {docTypeOptions.map((opt, i) => (
+                                <option key={i} value={opt}>{opt}</option>
+                              ))}
+                            </select>
+                          )
+                        })()}
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(5, 'documentNumber', 'Document Number')} <span className="text-red-500">*</span></label>
@@ -3483,7 +3535,7 @@ function UserManagement() {
                 ))}
                 <button
                   type="button"
-                  onClick={() => setFormData({ ...formData, documents: [...(formData.documents || []), { documentType: '', documentNumber: '', fileName: '' }] })}
+                  onClick={() => setFormData({ ...formData, documents: [...(formData.documents || []), { documentType: '', documentNumber: '', fileName: '', documentTypeOther: '' }] })}
                   className="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium"
                 >
                   <FiPlus className="w-4 h-4" /> {getFieldLabelById(5, 'addDocument', 'Add Document')}
