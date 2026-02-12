@@ -93,23 +93,60 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
   const isYearOnlyField =
     (name && name.toLowerCase().includes('year')) ||
     (label && label.toLowerCase().includes('year'))
+  // Integer-only fields (no decimals allowed): UAN, PF Number, ESI Number, IDs, Periods, etc.
+  // EXCEPTION: employeeId should be alphanumeric, so exclude it
+  const isIntegerOnlyField = 
+    (name.includes('universalAccountNumber') ||
+    name.includes('pfNumber') ||
+    name.includes('esiNumber') ||
+    name.includes('aadharNumber') ||
+    name.includes('panNumber') ||
+    name.includes('passportNumber') ||
+    name.includes('drivingLicense') ||
+    name.includes('voterId') ||
+    name.includes('managerId') ||
+    name.includes('superManagerId') ||
+    name.includes('cid') ||
+    name.includes('noticePeriod') ||
+    name.includes('probationPeriod') ||
+    name.includes('employeeNumberSeries') ||
+    (name.endsWith('Number') && !name.includes('accountNumber')) || // Any field ending with "Number" except accountNumber
+    (name.endsWith('Id') && name !== 'employeeId') || // Any field ending with "Id" except employeeId
+    (name.endsWith('ID') && name !== 'employeeID') || // Any field ending with "ID" except employeeID
+    (name.endsWith('Period') && normalizedType === 'number') || // Period fields when type is number
+    (label && (
+      label.toLowerCase().includes('uan') ||
+      label.toLowerCase().includes('universal account') ||
+      label.toLowerCase().includes('pf number') ||
+      label.toLowerCase().includes('esi number') ||
+      label.toLowerCase().includes('aadhaar') ||
+      label.toLowerCase().includes('pan') ||
+      label.toLowerCase().includes('passport') ||
+      label.toLowerCase().includes('driving license') ||
+      label.toLowerCase().includes('voter id') ||
+      (label.toLowerCase().includes('number') && !label.toLowerCase().includes('account') && !label.toLowerCase().includes('phone')) ||
+      (label.toLowerCase().includes(' id') && !label.toLowerCase().includes('employee')) ||
+      (label.toLowerCase().includes('period') && normalizedType === 'number')
+    ))) && name !== 'employeeId' // Explicitly exclude employeeId
   const isPhoneType = normalizedType === 'phone'
   const isEmailType = normalizedType === 'email'
   
   // Schema-driven type validation
   // Text type: only alphabets, spaces, and valid special characters (no numbers)
   // Also check common text field names as fallback (firstName, lastName, middleName, etc.)
+  // IMPORTANT: Integer-only fields should NEVER be treated as text, even if schema type is 'text'
   const isCommonTextField = ['firstName', 'lastName', 'middleName', 'employeeName', 'name'].includes(name)
-  const isTextType = (normalizedType === 'text' || (isCommonTextField && normalizedType !== 'number' && normalizedType !== 'alphanumeric')) && !isCityField && !isPincodeField && !isCountryField && !isAccountNumberField && !isPercentageField
+  const isTextType = (normalizedType === 'text' || (isCommonTextField && normalizedType !== 'number' && normalizedType !== 'alphanumeric')) && !isCityField && !isPincodeField && !isCountryField && !isAccountNumberField && !isPercentageField && !isIntegerOnlyField
   // Alphanumeric type: allows both alphabets and numbers
-  const isAlphanumericType = normalizedType === 'alphanumeric' && !isCityField && !isPincodeField && !isCountryField && !isAccountNumberField && !isPercentageField
-  // Number type: only numeric digits
-  const isNumberType = normalizedType === 'number' && !isPercentageField
+  const isAlphanumericType = normalizedType === 'alphanumeric' && !isCityField && !isPincodeField && !isCountryField && !isAccountNumberField && !isPercentageField && !isIntegerOnlyField
+  // Number type: only numeric digits (includes integer-only fields)
+  const isNumberType = (normalizedType === 'number' || isIntegerOnlyField) && !isPercentageField
 
   // Debug logging for ALL fields rendered through FormField
   console.log('🧩 FormField Render:', {
     name,
     label,
+    isIntegerOnlyField,
     type,
     normalizedType,
     required: !!required,
@@ -233,24 +270,38 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
               console.log('🆔 Employee ID with number type - allowing alphanumeric')
               filteredValue = (e.target.value || '').replace(/[^a-zA-Z0-9]/g, '')
             } else {
-              // Filter out non-numeric characters (allow digits and decimal point)
-              filteredValue = (e.target.value || '').replace(/[^0-9.]/g, '')
-              // Prevent multiple decimal points
-              const parts = filteredValue.split('.')
-              filteredValue = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : filteredValue
-              // For year-only fields, enforce max 4 digits and no decimal
-              if (isYearOnlyField) {
-                filteredValue = filteredValue.replace(/\./g, '').slice(0, 4)
-              }
-              
-              // For percentage/CGPA fields, validate range
-              if (isPercentageField && filteredValue) {
-                const numValue = parseFloat(filteredValue)
+              // For percentage/CGPA fields, allow digits, decimal point, and % symbol
+              if (isPercentageField) {
+                filteredValue = (e.target.value || '').replace(/[^0-9.%]/g, '')
+                // Remove % if it's not at the end
+                const percentIndex = filteredValue.indexOf('%')
+                if (percentIndex !== -1 && percentIndex !== filteredValue.length - 1) {
+                  filteredValue = filteredValue.replace(/%/g, '') + '%'
+                }
+                // Prevent multiple decimal points
+                const parts = filteredValue.split('.')
+                filteredValue = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : filteredValue
+                // Validate range (remove % for validation)
+                const numValue = parseFloat(filteredValue.replace(/%/g, ''))
                 const isCGPA = label && label.toLowerCase().includes('cgpa')
                 const maxValue = isCGPA ? 10 : 100
                 if (!isNaN(numValue) && numValue > maxValue) {
-                  filteredValue = maxValue.toString()
+                  filteredValue = maxValue.toString() + (filteredValue.includes('%') ? '%' : '')
                   toast.error(isCGPA ? `CGPA must be between 0 and ${maxValue}` : `Percentage must be between 0 and ${maxValue}`)
+                }
+              } else if (isIntegerOnlyField) {
+                // Integer-only fields: only digits, no decimals, no letters
+                filteredValue = (e.target.value || '').replace(/[^0-9]/g, '')
+                console.log('🔢 Integer-only field filtered:', { name, filteredValue })
+              } else {
+                // Filter out non-numeric characters (allow digits and decimal point)
+                filteredValue = (e.target.value || '').replace(/[^0-9.]/g, '')
+                // Prevent multiple decimal points
+                const parts = filteredValue.split('.')
+                filteredValue = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : filteredValue
+                // For year-only fields, enforce max 4 digits and no decimal
+                if (isYearOnlyField) {
+                  filteredValue = filteredValue.replace(/\./g, '').slice(0, 4)
                 }
               }
             }
@@ -265,43 +316,80 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
             })
           }}
           onKeyPress={(e) => {
-            // Only allow digits, decimal point, and backspace/delete/arrow keys
             const char = String.fromCharCode(e.which)
-            if (!/[0-9.]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
-              e.preventDefault()
-            }
-            // Prevent multiple decimal points
-            if (!isYearOnlyField && char === '.' && e.target.value.includes('.')) {
-              e.preventDefault()
-            }
-            // Enforce 4 digits max for year-only fields
-            if (isYearOnlyField && e.target.value.length >= 4 && e.key !== 'Backspace' && e.key !== 'Delete') {
-              e.preventDefault()
+            // For percentage fields, allow digits, decimal point, and % symbol
+            if (isPercentageField) {
+              if (!/[0-9.%]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
+                e.preventDefault()
+              }
+              // Prevent multiple decimal points
+              if (char === '.' && e.target.value.includes('.')) {
+                e.preventDefault()
+              }
+              // Allow only one % at the end
+              if (char === '%' && e.target.value.includes('%')) {
+                e.preventDefault()
+              }
+            } else {
+              // Integer-only fields: only digits, no decimals
+              if (isIntegerOnlyField) {
+                if (!/[0-9]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
+                  e.preventDefault()
+                }
+              } else {
+                // Only allow digits, decimal point, and backspace/delete/arrow keys
+                if (!/[0-9.]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
+                  e.preventDefault()
+                }
+                // Prevent multiple decimal points
+                if (!isYearOnlyField && char === '.' && e.target.value.includes('.')) {
+                  e.preventDefault()
+                }
+                // Enforce 4 digits max for year-only fields
+                if (isYearOnlyField && e.target.value.length >= 4 && e.key !== 'Backspace' && e.key !== 'Delete') {
+                  e.preventDefault()
+                }
+              }
             }
           }}
           onPaste={(e) => {
             e.preventDefault()
             const pastedText = e.clipboardData.getData('text')
-            // Filter out non-numeric characters
-            let filteredValue = pastedText.replace(/[^0-9.]/g, '')
-            const parts = filteredValue.split('.')
-            filteredValue = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : filteredValue
-            if (isYearOnlyField) {
-              filteredValue = filteredValue.replace(/\./g, '').slice(0, 4)
-            }
             
-            // Validate range for percentage/CGPA
-            if (isPercentageField && filteredValue) {
-              const numValue = parseFloat(filteredValue)
+            // For percentage fields, allow digits, decimal point, and % symbol
+            if (isPercentageField) {
+              let filteredValue = (pastedText || '').replace(/[^0-9.%]/g, '')
+              // Remove % if it's not at the end
+              const percentIndex = filteredValue.indexOf('%')
+              if (percentIndex !== -1 && percentIndex !== filteredValue.length - 1) {
+                filteredValue = filteredValue.replace(/%/g, '') + '%'
+              }
+              const parts = filteredValue.split('.')
+              filteredValue = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : filteredValue
+              // Validate range (remove % for validation)
+              const numValue = parseFloat(filteredValue.replace(/%/g, ''))
               const isCGPA = label && label.toLowerCase().includes('cgpa')
               const maxValue = isCGPA ? 10 : 100
               if (!isNaN(numValue) && numValue > maxValue) {
-                filteredValue = maxValue.toString()
+                filteredValue = maxValue.toString() + (filteredValue.includes('%') ? '%' : '')
                 toast.error(isCGPA ? `CGPA must be between 0 and ${maxValue}` : `Percentage must be between 0 and ${maxValue}`)
               }
+              handleChange({ target: { name, value: filteredValue, type: 'text' } })
+            } else if (isIntegerOnlyField) {
+              // Integer-only fields: only digits, no decimals
+              const filteredValue = (pastedText || '').replace(/[^0-9]/g, '')
+              console.log('🔢 Integer-only field paste filtered:', { name, pastedText, filteredValue })
+              handleChange({ target: { name, value: filteredValue, type: 'text' } })
+            } else {
+              // Filter out non-numeric characters
+              let filteredValue = pastedText.replace(/[^0-9.]/g, '')
+              const parts = filteredValue.split('.')
+              filteredValue = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : filteredValue
+              if (isYearOnlyField) {
+                filteredValue = filteredValue.replace(/\./g, '').slice(0, 4)
+              }
+              handleChange({ target: { name, value: filteredValue, type: 'text' } })
             }
-            
-            handleChange({ target: { name, value: filteredValue, type: 'text' } })
           }}
           required={required}
           placeholder={placeholder || (isPercentageField ? (label && label.toLowerCase().includes('cgpa') ? '0-10' : '0-100') : '')}
@@ -653,13 +741,24 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           name={name}
           value={value}
           onChange={(e) => {
-            // Number type: only numeric digits (no decimals unless percentage)
-            let filteredValue = e.target.value.replace(/[^0-9]/g, '')
+            console.log('🔢 Number type (alternative) onChange:', { name, originalValue: e.target.value, isIntegerOnlyField, isYearOnlyField })
+            // Number type: only numeric digits
+            let filteredValue = (e.target.value || '').replace(/[^0-9]/g, '')
+            // For integer-only fields, no decimals allowed (already handled by regex above)
             // For year-only fields, enforce max 4 digits
             if (isYearOnlyField) {
               filteredValue = filteredValue.slice(0, 4)
             }
-            handleChange({ ...e, target: { ...e.target, value: filteredValue } })
+            console.log('🔢 Number type (alternative) filtered:', { name, filteredValue })
+            // Construct proper event object for handleChange
+            handleChange({
+              target: {
+                name,
+                value: filteredValue,
+                type: 'text',
+                checked: false
+              }
+            })
           }}
           onKeyPress={(e) => {
             const char = String.fromCharCode(e.which)
@@ -1447,7 +1546,7 @@ function UserManagement() {
           key={fieldName}
           label={getFieldLabelById(sectionId, field.name, field.label || field.name)}
           name={fieldName}
-          type={field.type || 'text'}
+          type={getFieldTypeById(sectionId, field.name, field.type || 'text')}
           required={field.required || false}
           formData={formData}
           handleChange={customHandleChange}
@@ -2186,6 +2285,75 @@ function UserManagement() {
     setAddFlowJustSaved(false)
   }
 
+  // Validate required fields for a section based on schema configuration
+  const validateSectionRequiredFields = (sectionId) => {
+    const sectionKey = getSectionKey(sectionId)
+    if (!sectionKey) return { isValid: true, missingFields: [] }
+    
+    const section = getSectionConfig(sectionKey)
+    if (!section?.fields) return { isValid: true, missingFields: [] }
+    
+    const missingFields = []
+    
+    // Check all fields in the section
+    for (const field of section.fields) {
+      // Skip inactive fields
+      if (field.isActive === false) continue
+      
+      // Skip if field is not visible
+      if (!isFieldVisibleById(sectionId, field.name)) continue
+      
+      // Check if field is required
+      const isRequired = getFieldRequiredById(sectionId, field.name, false)
+      if (!isRequired) continue
+      
+      // Get field value from formData
+      let fieldValue = null
+      
+      // Handle nested fields (e.g., presentAddress.line1, aadhaarAddress.district)
+      if (field.name.includes('.')) {
+        const parts = field.name.split('.')
+        let value = formData
+        for (const part of parts) {
+          if (value && typeof value === 'object') {
+            value = value[part]
+          } else {
+            value = null
+            break
+          }
+        }
+        fieldValue = value
+      } 
+      // Handle array fields (e.g., education[0].institute) - skip as they have their own validation
+      else if (field.name.includes('[')) {
+        // Array fields are handled separately in their specific validations (Education, Family, etc.)
+        continue
+      }
+      // Handle regular fields
+      else {
+        fieldValue = formData[field.name]
+      }
+      
+      // Check if value is empty
+      const isEmpty = fieldValue === null || 
+                     fieldValue === undefined || 
+                     fieldValue === '' ||
+                     (typeof fieldValue === 'string' && !fieldValue.trim()) ||
+                     (Array.isArray(fieldValue) && fieldValue.length === 0) ||
+                     (typeof fieldValue === 'object' && fieldValue !== null && Object.keys(fieldValue).length === 0)
+      
+      if (isEmpty) {
+        const fieldLabel = getFieldLabelById(sectionId, field.name, field.label || field.name)
+        missingFields.push(fieldLabel)
+      }
+    }
+    
+    return {
+      isValid: missingFields.length === 0,
+      missingFields
+    }
+  }
+
   const handleSubmit = async (e, sectionId = null) => {
     if (e) e.preventDefault()
     if (!token) {
@@ -2193,9 +2361,18 @@ function UserManagement() {
       return
     }
 
-    // When saving a specific section, allow partial save (no global required-field check)
     const isSectionSave = sectionId != null
-    if (!isSectionSave) {
+    
+    // Validate required fields based on schema configuration
+    if (isSectionSave) {
+      console.log('🔍 Validating required fields for section:', sectionId)
+      const validation = validateSectionRequiredFields(sectionId)
+      console.log('🔍 Validation result:', validation)
+      if (!validation.isValid) {
+        toast.error(`Please fill all required fields: ${validation.missingFields.join(', ')}`)
+        return
+      }
+    } else {
       // Full form submit: validate required fields for initial creation
       if (!editingEmployee) {
         const missingFields = []
@@ -2214,9 +2391,79 @@ function UserManagement() {
           return
         }
       }
+      
+      // Also validate all sections for full form submission
+      for (let sid = 1; sid <= 13; sid++) {
+        const validation = validateSectionRequiredFields(sid)
+        if (!validation.isValid) {
+          toast.error(`Section ${getSectionTitleById(sid, `Section ${sid}`)}: Please fill all required fields: ${validation.missingFields.join(', ')}`)
+          return
+        }
+      }
     }
 
-
+    // Validate duplicate phone numbers and email addresses in Contact section (Section 12)
+    if (sectionId === 12 || (!isSectionSave && formData.phone)) {
+      const phoneNumbers = []
+      const emails = []
+      
+      // Collect phone numbers (only if they have values)
+      if (formData.phone && String(formData.phone).trim()) {
+        phoneNumbers.push({ value: String(formData.phone).trim(), label: 'Phone Number' })
+      }
+      if (formData.secondaryContact && String(formData.secondaryContact).trim()) {
+        phoneNumbers.push({ value: String(formData.secondaryContact).trim(), label: 'Secondary Contact' })
+      }
+      if (formData.emergencyContact && String(formData.emergencyContact).trim()) {
+        phoneNumbers.push({ value: String(formData.emergencyContact).trim(), label: 'Emergency Contact Number' })
+      }
+      
+      // Check for duplicate phone numbers
+      const phoneValueCounts = {}
+      phoneNumbers.forEach(p => {
+        if (p.value) {
+          if (!phoneValueCounts[p.value]) {
+            phoneValueCounts[p.value] = []
+          }
+          phoneValueCounts[p.value].push(p.label)
+        }
+      })
+      
+      const duplicatePhoneEntries = Object.values(phoneValueCounts).filter(labels => labels.length > 1)
+      if (duplicatePhoneEntries.length > 0) {
+        const duplicateLabels = duplicatePhoneEntries.flat()
+        const uniqueLabels = [...new Set(duplicateLabels)]
+        toast.error(`Phone numbers must be unique. Same number found in: ${uniqueLabels.join(', ')}`)
+        return
+      }
+      
+      // Collect email addresses (only if they have values)
+      if (formData.email && String(formData.email).trim()) {
+        emails.push({ value: String(formData.email).trim().toLowerCase(), label: 'Personal Email ID' })
+      }
+      if (formData.alternativeEmail && String(formData.alternativeEmail).trim()) {
+        emails.push({ value: String(formData.alternativeEmail).trim().toLowerCase(), label: 'Alternative Email ID' })
+      }
+      
+      // Check for duplicate email addresses
+      const emailValueCounts = {}
+      emails.forEach(e => {
+        if (e.value) {
+          if (!emailValueCounts[e.value]) {
+            emailValueCounts[e.value] = []
+          }
+          emailValueCounts[e.value].push(e.label)
+        }
+      })
+      
+      const duplicateEmailEntries = Object.values(emailValueCounts).filter(labels => labels.length > 1)
+      if (duplicateEmailEntries.length > 0) {
+        const duplicateLabels = duplicateEmailEntries.flat()
+        const uniqueLabels = [...new Set(duplicateLabels)]
+        toast.error(`Email addresses must be unique. Same email found in: ${uniqueLabels.join(', ')}`)
+        return
+      }
+    }
 
     // Enforce permanent password for Account Setup section (Section 8) if it's a new entry
     if (sectionId === 8 && isNewEntry && !formData.password) {
@@ -2367,7 +2614,7 @@ function UserManagement() {
         return
       }
       // Validate Aadhaar format (12 digits)
-      const invalidAadhaar = documents.find(d => d.documentType === 'Aadhar Card' && d.documentNumber && d.documentNumber.length !== 12)
+      const invalidAadhaar = documents.find(d => d.documentType === 'Aadhar Card' && d.documentNumber && !/^\d{12}$/.test(d.documentNumber))
       if (invalidAadhaar) {
         toast.error('Aadhaar Number must be exactly 12 digits.')
         return
@@ -2376,6 +2623,18 @@ function UserManagement() {
       const invalidPAN = documents.find(d => d.documentType === 'PAN Card' && d.documentNumber && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(d.documentNumber))
       if (invalidPAN) {
         toast.error('PAN Number must be in format ABCDE1234F (5 alphabets + 4 digits + 1 alphabet).')
+        return
+      }
+      // Validate Passport format (1-2 letters + 6-7 digits)
+      const invalidPassport = documents.find(d => d.documentType === 'Passport' && d.documentNumber && !/^[A-Z]{1,2}[0-9]{6,7}$/.test(d.documentNumber))
+      if (invalidPassport) {
+        toast.error('Passport Number must be in format: 1-2 letters followed by 6-7 digits (e.g., A1234567 or AB1234567).')
+        return
+      }
+      // Validate Voter ID format (6-10 alphanumeric)
+      const invalidVoterId = documents.find(d => d.documentType === 'Voter ID' && d.documentNumber && !/^[A-Z0-9]{6,10}$/.test(d.documentNumber))
+      if (invalidVoterId) {
+        toast.error('Voter ID Number must be 6-10 alphanumeric characters.')
         return
       }
     }
@@ -3533,9 +3792,18 @@ function UserManagement() {
                       name="phone"
                       value={formData.phone || ''}
                       onChange={(e) => {
+                        console.log('📞 Phone onChange:', { name: 'phone', original: e.target.value })
                         // Only digits, max 10 characters
-                        const filteredValue = e.target.value.replace(/[^0-9]/g, '').slice(0, 10)
-                        handleChange({ ...e, target: { ...e.target, value: filteredValue } })
+                        const filteredValue = (e.target.value || '').replace(/[^0-9]/g, '').slice(0, 10)
+                        console.log('📞 Phone filtered:', { name: 'phone', filteredValue })
+                        handleChange({
+                          target: {
+                            name: 'phone',
+                            value: filteredValue,
+                            type: 'tel',
+                            checked: false
+                          }
+                        })
                       }}
                       onKeyPress={(e) => {
                         const char = String.fromCharCode(e.which)
@@ -3552,8 +3820,16 @@ function UserManagement() {
                       onPaste={(e) => {
                         e.preventDefault()
                         const pastedText = e.clipboardData.getData('text')
-                        const filteredValue = pastedText.replace(/[^0-9]/g, '').slice(0, 10)
-                        handleChange({ target: { name: 'phone', value: filteredValue, type: 'text' } })
+                        const filteredValue = (pastedText || '').replace(/[^0-9]/g, '').slice(0, 10)
+                        console.log('📞 Phone onPaste:', { name: 'phone', pastedText, filteredValue })
+                        handleChange({
+                          target: {
+                            name: 'phone',
+                            value: filteredValue,
+                            type: 'tel',
+                            checked: false
+                          }
+                        })
                       }}
                       maxLength={10}
                       required={getFieldRequiredById(12, 'phone', true)}
@@ -3590,8 +3866,17 @@ function UserManagement() {
                       name="secondaryContact"
                       value={formData.secondaryContact || ''}
                       onChange={(e) => {
-                        const filteredValue = e.target.value.replace(/[^0-9]/g, '').slice(0, 10)
-                        handleChange({ ...e, target: { ...e.target, value: filteredValue } })
+                        console.log('📞 Secondary Contact onChange:', { name: 'secondaryContact', original: e.target.value })
+                        const filteredValue = (e.target.value || '').replace(/[^0-9]/g, '').slice(0, 10)
+                        console.log('📞 Secondary Contact filtered:', { name: 'secondaryContact', filteredValue })
+                        handleChange({
+                          target: {
+                            name: 'secondaryContact',
+                            value: filteredValue,
+                            type: 'tel',
+                            checked: false
+                          }
+                        })
                       }}
                       onKeyPress={(e) => {
                         const char = String.fromCharCode(e.which)
@@ -3606,8 +3891,16 @@ function UserManagement() {
                       onPaste={(e) => {
                         e.preventDefault()
                         const pastedText = e.clipboardData.getData('text')
-                        const filteredValue = pastedText.replace(/[^0-9]/g, '').slice(0, 10)
-                        handleChange({ target: { name: 'secondaryContact', value: filteredValue, type: 'text' } })
+                        const filteredValue = (pastedText || '').replace(/[^0-9]/g, '').slice(0, 10)
+                        console.log('📞 Secondary Contact onPaste:', { name: 'secondaryContact', pastedText, filteredValue })
+                        handleChange({
+                          target: {
+                            name: 'secondaryContact',
+                            value: filteredValue,
+                            type: 'tel',
+                            checked: false
+                          }
+                        })
                       }}
                       maxLength={10}
                       className="w-44 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
@@ -3643,8 +3936,17 @@ function UserManagement() {
                       name="emergencyContact"
                       value={formData.emergencyContact || ''}
                       onChange={(e) => {
-                        const filteredValue = e.target.value.replace(/[^0-9]/g, '').slice(0, 10)
-                        handleChange({ ...e, target: { ...e.target, value: filteredValue } })
+                        console.log('📞 Emergency Contact onChange:', { name: 'emergencyContact', original: e.target.value })
+                        const filteredValue = (e.target.value || '').replace(/[^0-9]/g, '').slice(0, 10)
+                        console.log('📞 Emergency Contact filtered:', { name: 'emergencyContact', filteredValue })
+                        handleChange({
+                          target: {
+                            name: 'emergencyContact',
+                            value: filteredValue,
+                            type: 'tel',
+                            checked: false
+                          }
+                        })
                       }}
                       onKeyPress={(e) => {
                         const char = String.fromCharCode(e.which)
@@ -3659,8 +3961,16 @@ function UserManagement() {
                       onPaste={(e) => {
                         e.preventDefault()
                         const pastedText = e.clipboardData.getData('text')
-                        const filteredValue = pastedText.replace(/[^0-9]/g, '').slice(0, 10)
-                        handleChange({ target: { name: 'emergencyContact', value: filteredValue, type: 'text' } })
+                        const filteredValue = (pastedText || '').replace(/[^0-9]/g, '').slice(0, 10)
+                        console.log('📞 Emergency Contact onPaste:', { name: 'emergencyContact', pastedText, filteredValue })
+                        handleChange({
+                          target: {
+                            name: 'emergencyContact',
+                            value: filteredValue,
+                            type: 'tel',
+                            checked: false
+                          }
+                        })
                       }}
                       maxLength={10}
                       required={getFieldRequiredById(12, 'emergencyContact', true)}
@@ -4129,7 +4439,7 @@ function UserManagement() {
               {isFieldVisibleById(2, 'costCenter') && (
                 <FormField label={getFieldLabelById(2, 'costCenter', 'Cost Center')} name="costCenter" formData={formData} handleChange={handleChange} />
               )}
-              {renderSchemaExtraFields(2, ['businessUnitHR', 'designation', 'role', 'employeeStatus', 'joiningDate', 'probationPeriod', 'costCenter', 'department', 'cid', 'managerId', 'superManagerId', 'noticePeriod', 'division', 'grade', 'location', 'employeeNumberSeries'])}
+              {renderSchemaExtraFields(2, ['businessUnitHR', 'designation', 'role', 'employeeStatus', 'joiningDate', 'probationPeriod', 'costCenter', 'department', 'cid', 'managerId', 'superManagerId', 'noticePeriod', 'division', 'grade', 'location', 'employeeNumberSeries', 'employeeId', 'officialEmail', 'confirmDate'])}
 
             </FormSection>
 
@@ -4250,36 +4560,54 @@ function UserManagement() {
                         <input
                           type="text"
                           inputMode="numeric"
-                          pattern="[0-9.]*"
                           value={edu.percentage || ''}
                           onChange={(e) => {
-                            // Filter out non-numeric characters (allow digits and decimal point)
-                            const filteredValue = e.target.value.replace(/[^0-9.]/g, '')
+                            console.log('📊 Percentage/CGPA onChange:', { name: 'percentage', original: e.target.value })
+                            // Allow digits, decimal point, and % symbol
+                            let filteredValue = (e.target.value || '').replace(/[^0-9.%]/g, '')
+                            // Remove % if it's not at the end
+                            const percentIndex = filteredValue.indexOf('%')
+                            if (percentIndex !== -1 && percentIndex !== filteredValue.length - 1) {
+                              filteredValue = filteredValue.replace(/%/g, '') + '%'
+                            }
                             // Prevent multiple decimal points
                             const parts = filteredValue.split('.')
                             const finalValue = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : filteredValue
+                            console.log('📊 Percentage/CGPA filtered:', { name: 'percentage', filteredValue: finalValue })
                             const newEducation = [...formData.education]
                             newEducation[index].percentage = finalValue
                             setFormData({ ...formData, education: newEducation })
                           }}
                           onKeyPress={(e) => {
-                            // Only allow digits, decimal point, and backspace/delete/arrow keys
                             const char = String.fromCharCode(e.which)
-                            if (!/[0-9.]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
+                            console.log('📊 Percentage/CGPA onKeyPress:', { name: 'percentage', char })
+                            // Allow digits, decimal point, and % symbol
+                            if (!/[0-9.%]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
                               e.preventDefault()
                             }
                             // Prevent multiple decimal points
                             if (char === '.' && e.target.value.includes('.')) {
                               e.preventDefault()
                             }
+                            // Allow only one % at the end
+                            if (char === '%' && e.target.value.includes('%')) {
+                              e.preventDefault()
+                            }
                           }}
                           onPaste={(e) => {
                             e.preventDefault()
                             const pastedText = e.clipboardData.getData('text')
-                            // Filter out non-numeric characters
-                            const filteredValue = pastedText.replace(/[^0-9.]/g, '')
+                            console.log('📊 Percentage/CGPA onPaste:', { name: 'percentage', pastedText })
+                            // Allow digits, decimal point, and % symbol
+                            let filteredValue = (pastedText || '').replace(/[^0-9.%]/g, '')
+                            // Remove % if it's not at the end
+                            const percentIndex = filteredValue.indexOf('%')
+                            if (percentIndex !== -1 && percentIndex !== filteredValue.length - 1) {
+                              filteredValue = filteredValue.replace(/%/g, '') + '%'
+                            }
                             const parts = filteredValue.split('.')
                             const finalValue = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : filteredValue
+                            console.log('📊 Percentage/CGPA paste filtered:', { name: 'percentage', filteredValue: finalValue })
                             const newEducation = [...formData.education]
                             newEducation[index].percentage = finalValue
                             setFormData({ ...formData, education: newEducation })
@@ -4297,11 +4625,24 @@ function UserManagement() {
                             if (!edu.fromDate) return ''
                             const date = new Date(edu.fromDate)
                             if (isNaN(date.getTime())) return ''
-                            return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+                            const year = date.getFullYear()
+                            const month = String(date.getMonth() + 1).padStart(2, '0')
+                            console.log('📅 Education From Date value:', { fromDate: edu.fromDate, year, month, formatted: `${year}-${month}` })
+                            return `${year}-${month}`
                           })()}
                           onChange={(e) => {
+                            console.log('📅 Education From Date onChange:', { original: e.target.value })
                             const newEducation = [...formData.education]
                             const fromMonth = e.target.value
+                            
+                            // Validate year is exactly 4 digits
+                            if (fromMonth) {
+                              const yearPart = fromMonth.split('-')[0]
+                              if (yearPart && (yearPart.length !== 4 || parseInt(yearPart) < 1900 || parseInt(yearPart) > 2100)) {
+                                toast.error('Year must be exactly 4 digits (1900-2100)')
+                                return
+                              }
+                            }
                             
                             // Validate: From date should be before To date
                             if (fromMonth && edu.toDate) {
@@ -4316,16 +4657,31 @@ function UserManagement() {
                             }
                             
                             newEducation[index].fromDate = fromMonth ? `${fromMonth}-01` : '' // Store as YYYY-MM-01 for backend compatibility
+                            console.log('📅 Education From Date saved:', { fromDate: newEducation[index].fromDate })
                             setFormData({ ...formData, education: newEducation })
                           }}
+                          onBlur={(e) => {
+                            const monthValue = e.target.value
+                            if (monthValue) {
+                              const yearPart = monthValue.split('-')[0]
+                              if (yearPart && yearPart.length !== 4) {
+                                toast.error('Year must be exactly 4 digits')
+                                e.target.value = ''
+                                const newEducation = [...formData.education]
+                                newEducation[index].fromDate = ''
+                                setFormData({ ...formData, education: newEducation })
+                              }
+                            }
+                          }}
+                          min="1900-01"
                           max={edu.toDate ? (() => {
                             // Set max to To date if it exists
                             const toDate = new Date(edu.toDate)
                             if (!isNaN(toDate.getTime())) {
                               return `${toDate.getFullYear()}-${String(toDate.getMonth() + 1).padStart(2, '0')}`
                             }
-                            return ''
-                          })() : ''}
+                            return '2100-12'
+                          })() : '2100-12'}
                           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                         />
                       </div>
@@ -4338,11 +4694,24 @@ function UserManagement() {
                             if (!edu.toDate) return ''
                             const date = new Date(edu.toDate)
                             if (isNaN(date.getTime())) return ''
-                            return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+                            const year = date.getFullYear()
+                            const month = String(date.getMonth() + 1).padStart(2, '0')
+                            console.log('📅 Education To Date value:', { toDate: edu.toDate, year, month, formatted: `${year}-${month}` })
+                            return `${year}-${month}`
                           })()}
                           onChange={(e) => {
+                            console.log('📅 Education To Date onChange:', { original: e.target.value })
                             const newEducation = [...formData.education]
                             const toMonth = e.target.value
+                            
+                            // Validate year is exactly 4 digits
+                            if (toMonth) {
+                              const yearPart = toMonth.split('-')[0]
+                              if (yearPart && (yearPart.length !== 4 || parseInt(yearPart) < 1900 || parseInt(yearPart) > 2100)) {
+                                toast.error('Year must be exactly 4 digits (1900-2100)')
+                                return
+                              }
+                            }
                             
                             // Validate: To date should be after From date
                             if (toMonth && edu.fromDate) {
@@ -4357,7 +4726,21 @@ function UserManagement() {
                             }
                             
                             newEducation[index].toDate = toMonth ? `${toMonth}-01` : '' // Store as YYYY-MM-01 for backend compatibility
+                            console.log('📅 Education To Date saved:', { toDate: newEducation[index].toDate })
                             setFormData({ ...formData, education: newEducation })
+                          }}
+                          onBlur={(e) => {
+                            const monthValue = e.target.value
+                            if (monthValue) {
+                              const yearPart = monthValue.split('-')[0]
+                              if (yearPart && yearPart.length !== 4) {
+                                toast.error('Year must be exactly 4 digits')
+                                e.target.value = ''
+                                const newEducation = [...formData.education]
+                                newEducation[index].toDate = ''
+                                setFormData({ ...formData, education: newEducation })
+                              }
+                            }
                           }}
                           min={edu.fromDate ? (() => {
                             // Set min to From date if it exists
@@ -4365,8 +4748,9 @@ function UserManagement() {
                             if (!isNaN(fromDate.getTime())) {
                               return `${fromDate.getFullYear()}-${String(fromDate.getMonth() + 1).padStart(2, '0')}`
                             }
-                            return ''
-                          })() : ''}
+                            return '1900-01'
+                          })() : '1900-01'}
+                          max="2100-12"
                           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                         />
                       </div>
@@ -5026,7 +5410,13 @@ function UserManagement() {
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          {doc.documentType === 'Aadhar Card' ? 'Aadhaar Number' : getFieldLabelById(5, 'documentNumber', 'Document Number')} 
+                          {(() => {
+                            if (doc.documentType === 'Aadhar Card') return 'Aadhaar Number'
+                            if (doc.documentType === 'PAN Card') return 'PAN Number'
+                            if (doc.documentType === 'Passport') return 'Passport Number'
+                            if (doc.documentType === 'Voter ID') return 'Voter ID Number'
+                            return getFieldLabelById(5, 'documentNumber', 'Document Number')
+                          })()}
                           {getFieldRequiredById(5, 'documentNumber', true) && <span className="text-red-500">*</span>}
                         </label>
                         <input
@@ -5056,9 +5446,57 @@ function UserManagement() {
                                 value = first5 + next4 + last1
                               }
                             }
+                            // Passport: 1-2 letters followed by 6-7 digits (e.g., A1234567, AB1234567)
+                            else if (doc.documentType === 'Passport') {
+                              const passportValue = value.toUpperCase().replace(/[^A-Z0-9]/g, '')
+                              if (passportValue.length <= 2) {
+                                value = passportValue.replace(/[^A-Z]/g, '')
+                              } else {
+                                const firstPart = passportValue.slice(0, 2).replace(/[^A-Z]/g, '')
+                                const secondPart = passportValue.slice(2).replace(/[^0-9]/g, '').slice(0, 7)
+                                value = firstPart + secondPart
+                              }
+                            }
+                            // Voter ID: 6-10 alphanumeric characters
+                            else if (doc.documentType === 'Voter ID') {
+                              value = value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10)
+                            }
                             
                             newDocs[index].documentNumber = value
                             setFormData({ ...formData, documents: newDocs })
+                          }}
+                          onBlur={(e) => {
+                            const value = e.target.value.trim()
+                            if (!value) return
+                            
+                            // Validate Aadhaar: exactly 12 digits
+                            if (doc.documentType === 'Aadhar Card') {
+                              if (!/^\d{12}$/.test(value)) {
+                                toast.error('Aadhaar Number must be exactly 12 digits')
+                                e.target.focus()
+                              }
+                            }
+                            // Validate PAN: ABCDE1234F format
+                            else if (doc.documentType === 'PAN Card') {
+                              if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(value)) {
+                                toast.error('PAN Number must be in format ABCDE1234F (5 alphabets + 4 digits + 1 alphabet)')
+                                e.target.focus()
+                              }
+                            }
+                            // Validate Passport: 1-2 letters followed by 6-7 digits
+                            else if (doc.documentType === 'Passport') {
+                              if (!/^[A-Z]{1,2}[0-9]{6,7}$/.test(value)) {
+                                toast.error('Passport Number must be in format: 1-2 letters followed by 6-7 digits (e.g., A1234567 or AB1234567)')
+                                e.target.focus()
+                              }
+                            }
+                            // Validate Voter ID: 6-10 alphanumeric characters
+                            else if (doc.documentType === 'Voter ID') {
+                              if (!/^[A-Z0-9]{6,10}$/.test(value)) {
+                                toast.error('Voter ID Number must be 6-10 alphanumeric characters')
+                                e.target.focus()
+                              }
+                            }
                           }}
                           onKeyPress={(e) => {
                             if (doc.documentType === 'Aadhar Card') {
@@ -5090,12 +5528,43 @@ function UserManagement() {
                               } else if (e.key !== 'Backspace' && e.key !== 'Delete') {
                                 e.preventDefault()
                               }
+                            } else if (doc.documentType === 'Passport') {
+                              const char = String.fromCharCode(e.which).toUpperCase()
+                              const currentLength = e.target.value.length
+                              if (currentLength < 2) {
+                                // First 1-2: alphabets only
+                                if (!/[A-Z]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
+                                  e.preventDefault()
+                                }
+                              } else {
+                                // After 2: digits only
+                                if (!/[0-9]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
+                                  e.preventDefault()
+                                }
+                                if (currentLength >= 9 && e.key !== 'Backspace' && e.key !== 'Delete') {
+                                  e.preventDefault()
+                                }
+                              }
+                            } else if (doc.documentType === 'Voter ID') {
+                              const char = String.fromCharCode(e.which).toUpperCase()
+                              if (!/[A-Z0-9]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
+                                e.preventDefault()
+                              }
+                              if (e.target.value.length >= 10 && e.key !== 'Backspace' && e.key !== 'Delete') {
+                                e.preventDefault()
+                              }
                             }
                           }}
-                          maxLength={doc.documentType === 'Aadhar Card' ? 12 : doc.documentType === 'PAN Card' ? 10 : undefined}
+                          maxLength={doc.documentType === 'Aadhar Card' ? 12 : doc.documentType === 'PAN Card' ? 10 : doc.documentType === 'Passport' ? 9 : doc.documentType === 'Voter ID' ? 10 : undefined}
                           required={getFieldRequiredById(5, 'documentNumber', true)}
                           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                          placeholder={doc.documentType === 'Aadhar Card' ? '12-digit Aadhaar Number' : doc.documentType === 'PAN Card' ? 'ABCDE1234F' : getFieldLabelById(5, 'documentNumber', 'Enter Number')}
+                          placeholder={(() => {
+                            if (doc.documentType === 'Aadhar Card') return '12-digit Aadhaar Number'
+                            if (doc.documentType === 'PAN Card') return 'ABCDE1234F'
+                            if (doc.documentType === 'Passport') return 'A1234567 or AB1234567'
+                            if (doc.documentType === 'Voter ID') return '6-10 alphanumeric characters'
+                            return getFieldLabelById(5, 'documentNumber', 'Enter Number')
+                          })()}
                         />
                       </div>
                       <div>
@@ -5171,6 +5640,7 @@ function UserManagement() {
                 <FormField
                   label={getFieldLabelById(6, 'pfNumber', 'PF Number')}
                   name="pfNumber"
+                  type={getFieldTypeById(6, 'pfNumber', 'number')}
                   required={getFieldRequiredById(6, 'pfNumber', false)}
                   formData={formData}
                   handleChange={handleChange}
@@ -5239,6 +5709,7 @@ function UserManagement() {
                 <FormField
                   label={getFieldLabelById(6, 'universalAccountNumber', 'Universal Account Number')}
                   name="universalAccountNumber"
+                  type={getFieldTypeById(6, 'universalAccountNumber', 'number')}
                   required={getFieldRequiredById(6, 'universalAccountNumber', false)}
                   formData={formData}
                   handleChange={handleChange}
@@ -5273,6 +5744,7 @@ function UserManagement() {
                 <FormField
                   label={getFieldLabelById(7, 'esiNumber', 'ESI Number')}
                   name="esiNumber"
+                  type={getFieldTypeById(7, 'esiNumber', 'number')}
                   required={getFieldRequiredById(7, 'esiNumber', false)}
                   formData={formData}
                   handleChange={handleChange}
