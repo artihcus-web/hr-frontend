@@ -261,6 +261,11 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           name={name}
           value={value}
           onChange={(e) => {
+            // Prevent changes if disabled
+            if (props.disabled) {
+              e.preventDefault()
+              return
+            }
             const dateValue = e.target.value
             if (dateValue) {
               // Validate year is exactly 4 digits (YYYY-MM-DD format)
@@ -277,6 +282,9 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
             handleChange(e)
           }}
           onBlur={(e) => {
+            // Skip validation if disabled
+            if (props.disabled) return
+            
             // Additional validation on blur
             const dateValue = e.target.value
             if (dateValue) {
@@ -310,7 +318,11 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           }}
           required={required}
           placeholder={placeholder}
-          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+          className={`w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md transition-colors ${
+            props.disabled 
+              ? 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed' 
+              : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500'
+          }`}
           {...props}
         />
       ) : type === 'number' ? (
@@ -1408,22 +1420,56 @@ function UserManagement() {
   }, [editingEmployeeId, formData.profileImage])
 
   // Auto-calculate confirmation date from joining date + probation period
+  // For NEW employees (during add flow): Always auto-calculate and make read-only
+  // For EXISTING employees: Allow manual editing
   useEffect(() => {
+    // Check if we're in "add flow" (new employee being added)
+    const isAddFlow = !editingEmployee || addFlowJustSaved
+    
     if (formData.joiningDate && formData.probationPeriod) {
-      const joinDate = new Date(formData.joiningDate)
-      const probDays = parseInt(formData.probationPeriod) || 0
+      // Parse joining date - date inputs always return YYYY-MM-DD format
+      let joinDate
+      const joiningDateStr = String(formData.joiningDate).trim()
+      
+      // Date input fields always return YYYY-MM-DD format
+      if (joiningDateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        joinDate = new Date(joiningDateStr + 'T00:00:00')
+      } else {
+        // Fallback: try parsing as-is
+        joinDate = new Date(joiningDateStr)
+      }
+      
+      const probDays = parseInt(String(formData.probationPeriod).trim(), 10) || 0
+      
       if (!isNaN(joinDate.getTime()) && probDays > 0) {
         const confirmDate = new Date(joinDate)
         confirmDate.setDate(joinDate.getDate() + probDays)
         const confirmDateStr = confirmDate.toISOString().slice(0, 10)
-        // Only auto-set if confirmDate is empty or matches the calculated value (don't override manual edits)
-        if (!formData.confirmDate || formData.confirmDate === confirmDateStr) {
-          setFormData(prev => ({ ...prev, confirmDate: confirmDateStr }))
+        
+        if (isAddFlow) {
+          // Always update for new employees during add flow (auto-calculate)
+          setFormData(prev => {
+            // Always update for new employees, even if it's the same value (to ensure it's set)
+            return { ...prev, confirmDate: confirmDateStr }
+          })
+        } else {
+          // For existing employees (editing), only update if empty or matches calculated value (don't override manual edits)
+          if (!formData.confirmDate || formData.confirmDate === confirmDateStr) {
+            setFormData(prev => ({ ...prev, confirmDate: confirmDateStr }))
+          }
         }
       }
+    } else if (formData.joiningDate && !formData.probationPeriod) {
+      // If probation period is cleared, clear confirmation date for new employees
+      if (isAddFlow && formData.confirmDate) {
+        setFormData(prev => ({ ...prev, confirmDate: '' }))
+      }
+    } else if (!formData.joiningDate && isAddFlow && formData.confirmDate) {
+      // If joining date is cleared, clear confirmation date for new employees
+      setFormData(prev => ({ ...prev, confirmDate: '' }))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.joiningDate, formData.probationPeriod])
+  }, [formData.joiningDate, formData.probationPeriod, editingEmployee, addFlowJustSaved])
 
   // Family Details Handlers
   const addFamilyMember = () => {
@@ -1492,20 +1538,82 @@ function UserManagement() {
     // Global debug log for every field change (all 13 sections)
     console.log('🛠 handleChange:', { name, value, type, checked })
 
+    // Helper function to calculate confirmation date
+    const calculateConfirmDate = (joiningDate, probationPeriod, currentConfirmDate) => {
+      const isAddFlow = !editingEmployee || addFlowJustSaved
+      if (!isAddFlow) return currentConfirmDate // Don't auto-calculate for existing employees
+      
+      if (joiningDate && probationPeriod) {
+        const joinDateStr = String(joiningDate).trim()
+        let joinDate
+        
+        if (joinDateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          joinDate = new Date(joinDateStr + 'T00:00:00')
+        } else {
+          joinDate = new Date(joinDateStr)
+        }
+        
+        const probDays = parseInt(String(probationPeriod).trim(), 10) || 0
+        
+        if (!isNaN(joinDate.getTime()) && probDays > 0) {
+          const confirmDate = new Date(joinDate)
+          confirmDate.setDate(joinDate.getDate() + probDays)
+          return confirmDate.toISOString().slice(0, 10)
+        }
+      }
+      return currentConfirmDate
+    }
+
     if (name.includes('.')) {
       const [parent, child] = name.split('.')
-      setFormData(prev => ({
-        ...prev,
-        [parent]: {
-          ...prev[parent],
-          [child]: value
+      setFormData(prev => {
+        const updated = {
+          ...prev,
+          [parent]: {
+            ...prev[parent],
+            [child]: value
+          }
         }
-      }))
+        // Auto-calculate confirmation date if joining date or probation period changed
+        if (name === 'joiningDate' || name === 'probationPeriod') {
+          const newJoiningDate = name === 'joiningDate' ? value : prev.joiningDate
+          const newProbationPeriod = name === 'probationPeriod' ? value : prev.probationPeriod
+          // Only calculate if both values are present
+          if (newJoiningDate && newProbationPeriod) {
+            updated.confirmDate = calculateConfirmDate(newJoiningDate, newProbationPeriod, prev.confirmDate)
+          } else if (!newJoiningDate || !newProbationPeriod) {
+            // Clear confirmation date if either field is cleared (for new employees)
+            const isAddFlow = !editingEmployee || addFlowJustSaved
+            if (isAddFlow) {
+              updated.confirmDate = ''
+            }
+          }
+        }
+        return updated
+      })
     } else {
-      setFormData(prev => ({
-        ...prev,
-        [name]: type === 'checkbox' ? checked : value
-      }))
+      setFormData(prev => {
+        const updated = {
+          ...prev,
+          [name]: type === 'checkbox' ? checked : value
+        }
+        // Auto-calculate confirmation date if joining date or probation period changed
+        if (name === 'joiningDate' || name === 'probationPeriod') {
+          const newJoiningDate = name === 'joiningDate' ? value : prev.joiningDate
+          const newProbationPeriod = name === 'probationPeriod' ? value : prev.probationPeriod
+          // Only calculate if both values are present
+          if (newJoiningDate && newProbationPeriod) {
+            updated.confirmDate = calculateConfirmDate(newJoiningDate, newProbationPeriod, prev.confirmDate)
+          } else if (!newJoiningDate || !newProbationPeriod) {
+            // Clear confirmation date if either field is cleared (for new employees)
+            const isAddFlow = !editingEmployee || addFlowJustSaved
+            if (isAddFlow) {
+              updated.confirmDate = ''
+            }
+          }
+        }
+        return updated
+      })
     }
   }
 
@@ -1539,6 +1647,17 @@ function UserManagement() {
         }
       } : handleChange
       
+      // Special handling for confirmDate: make it read-only for new employees (during add flow), editable for existing employees
+      const isAddFlow = !editingEmployee || addFlowJustSaved // Check if we're in "add flow"
+      const isConfirmDateField = field.name === 'confirmDate' && arrayIndex === null
+      // Disable confirmDate only for new employees (during add flow) when joining date and probation period are set
+      const shouldDisableConfirmDate = isConfirmDateField && isAddFlow && formData.joiningDate && formData.probationPeriod
+      
+      // Add help text for disabled confirmDate field
+      const helpText = shouldDisableConfirmDate 
+        ? 'Automatically calculated from joining date + probation period. You can edit this after saving the employee.'
+        : field.helpText
+      
       return (
         <FormField
           key={fieldName}
@@ -1550,6 +1669,9 @@ function UserManagement() {
           handleChange={customHandleChange}
           placeholder={field.placeholder}
           options={field.options || []}
+          disabled={shouldDisableConfirmDate}
+          helpText={helpText}
+          title={shouldDisableConfirmDate ? 'Confirmation date is automatically calculated from joining date + probation period' : undefined}
         />
       )
     })
@@ -3027,7 +3149,11 @@ function UserManagement() {
               <div className="p-8 text-center text-gray-500">
                 <p className="mb-4">No employees found.</p>
                 <button
-                  onClick={() => setShowForm(true)}
+                  onClick={() => {
+                    resetForm()
+                    setIsNewEntry(true)
+                    setShowForm(true)
+                  }}
                   className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
                 >
                   Add First Employee
@@ -3077,7 +3203,11 @@ function UserManagement() {
                             </p>
                             {(!searchQuery && filterRole === 'all' && filterDepartment === 'all' && filterStatus === 'all') && (
                               <button
-                                onClick={() => setShowForm(true)}
+                                onClick={() => {
+                                  resetForm()
+                                  setIsNewEntry(true)
+                                  setShowForm(true)
+                                }}
                                 className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
                               >
                                 Add First Employee
