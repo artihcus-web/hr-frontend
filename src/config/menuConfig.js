@@ -1,4 +1,4 @@
-import { FiHome, FiUser,FiUserCheck, FiClock, FiCalendar, FiUsers, FiCheckCircle, FiDollarSign, FiFileText, FiPlus, FiPieChart, FiSettings, FiBriefcase, FiTrendingUp, FiFolder, FiAlertCircle, FiMonitor } from 'react-icons/fi'
+import { FiHome, FiUser,FiUserCheck, FiClock, FiCalendar, FiUsers, FiCheckCircle, FiDollarSign, FiFileText, FiPlus, FiPieChart, FiSettings, FiBriefcase, FiTrendingUp, FiFolder, FiAlertCircle, FiMonitor,FiVideo } from 'react-icons/fi'
 
 
 
@@ -138,6 +138,13 @@ export const menuItems = [
     icon: FiSettings,
     path: '/admin/controllers',
     roles: ['super_admin']
+  },
+  {
+    id: 'conference-hall',
+    label: 'Conference Hall',
+    icon: FiVideo,
+    path: '/conference-hall',
+    roles: ['employee', 'manager', 'hr_admin', 'team_lead', 'c_suite', 'super_manager', 'super_admin']
   },
   {
     id: 'admin-policies',

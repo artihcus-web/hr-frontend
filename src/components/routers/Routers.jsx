@@ -24,6 +24,8 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import KnowYourEmployee from '../pages/common/KnowYourEmployee'
 import AdminPolicies from '../pages/admin/Policies'
 import Policies from '../pages/common/Policies'
+import ConferenceHall from '../pages/ConferenceHall'
+
 function Routers() {
   return (
     <div>
@@ -43,7 +45,8 @@ function Routers() {
           <Route path='/grievance' element={<Grievance />} />
           <Route path='/know-your-employee' element={<KnowYourEmployee />} />
           <Route path='/policies' element={<Policies />} />
-        </Route>
+          <Route path='/conference-hall' element={<ConferenceHall />} />
+          </Route>
 
         {/* Manager/HR Protected Routes */}
         <Route element={<ProtectedRoute allowedRoles={['manager', 'hr', 'supermanager', 'admin', 'super_admin']} />}>

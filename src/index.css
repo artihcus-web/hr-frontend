@@ -28,3 +28,34 @@
 .dark ::-webkit-scrollbar-thumb {
   @apply bg-slate-800 rounded-full border-2 border-slate-950 hover:bg-slate-700;
 }
+
+/* Hide calendar icon for disabled/readonly date inputs */
+input[type="date"]:disabled::-webkit-calendar-picker-indicator,
+input[type="date"][readonly]::-webkit-calendar-picker-indicator,
+input[type="date"][name="confirmDate"]::-webkit-calendar-picker-indicator {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  cursor: not-allowed !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+}
+
+/* Additional styling for disabled date inputs */
+input[type="date"]:disabled,
+input[type="date"][readonly],
+input[type="date"][name="confirmDate"] {
+  background-image: none !important;
+  cursor: not-allowed !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+}
+
+/* Force disable confirmDate field */
+input[type="date"][name="confirmDate"] {
+  pointer-events: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+}

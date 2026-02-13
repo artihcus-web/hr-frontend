@@ -54,7 +54,59 @@ const countries = [
 // ]
 
 // FormField component - moved outside to prevent re-creation on every render
-const FormField = ({ label, name, type = 'text', required, formData, handleChange, options = [], placeholder, otherOptionLabel = 'Please specify', ...props }) => {
+const FormField = ({ label, name, type = 'text', required, formData, handleChange, options = [], placeholder, otherOptionLabel = 'Please specify', helpText, disabled, readOnly, ...props }) => {
+  // ALWAYS disable confirmDate field - it should NEVER be manually editable
+  // Check multiple possible field name variations
+  const normalizedName = name?.toLowerCase().replace(/\s+/g, '') || ''
+  const isConfirmDate = (
+    name === 'confirmDate' ||
+    name === 'confirm_date' ||
+    name === 'confirmationDate' ||
+    name === 'confirmation_date' ||
+    normalizedName === 'confirmdate' ||
+    name?.toLowerCase() === 'confirmdate' ||
+    (name && name.toLowerCase().includes('confirm') && name.toLowerCase().includes('date'))
+  )
+  
+  if (isConfirmDate) {
+    console.log('🔒 FormField: Detected confirmDate field', { name, normalizedName, disabled, readOnly })
+  }
+  
+  const forceDisabled = isConfirmDate ? true : (disabled || false)
+  const forceReadOnly = isConfirmDate ? true : (readOnly || disabled || false)
+  
+  // Use ref to directly manipulate DOM for confirmDate
+  const inputRef = React.useRef(null)
+  
+  // Filter out helpText (non-DOM prop) before spreading to DOM elements
+  // helpText is used for display purposes, not as a DOM attribute
+  const { helpText: _, ...domProps } = { helpText, ...props }
+  
+  // Override disabled/readOnly in domProps for confirmDate
+  if (isConfirmDate) {
+    domProps.disabled = true
+    domProps.readOnly = true
+    console.log('🔒 FormField: Force disabling confirmDate field', { name, forceDisabled, forceReadOnly })
+  }
+  
+  // Effect to ensure confirmDate is always disabled in DOM
+  React.useEffect(() => {
+    if (isConfirmDate && inputRef.current) {
+      const input = inputRef.current
+      input.disabled = true
+      input.readOnly = true
+      input.setAttribute('disabled', 'disabled')
+      input.setAttribute('readonly', 'readonly')
+      input.style.pointerEvents = 'none'
+      input.style.cursor = 'not-allowed'
+      input.style.backgroundColor = '#f3f4f6'
+      console.log('✅ DOM: confirmDate field forcefully disabled', {
+        disabled: input.disabled,
+        readOnly: input.readOnly,
+        pointerEvents: input.style.pointerEvents
+      })
+    }
+  }, [isConfirmDate, formData.confirmDate])
   // Helper to get nested value (supports dot notation and array indices)
   const getValue = (obj, path) => {
     if (!path || !obj) return ''
@@ -72,7 +124,30 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
     return obj[path] || ''
   }
 
-  const value = getValue(formData, name)
+  // Map "Confirmation Date" field name to "confirmDate" in formData
+  // The schema uses "Confirmation Date" but formData uses "confirmDate"
+  const getFormDataKey = (fieldName) => {
+    const normalized = fieldName?.toLowerCase().replace(/\s+/g, '') || ''
+    if (normalized === 'confirmationdate' || normalized === 'confirmdate' || 
+        (fieldName?.toLowerCase().includes('confirm') && fieldName?.toLowerCase().includes('date'))) {
+      return 'confirmDate'
+    }
+    return fieldName
+  }
+
+  const formDataKey = getFormDataKey(name)
+  const value = getValue(formData, formDataKey)
+  
+  // DEBUG: Log value retrieval for confirmDate
+  if (isConfirmDate) {
+    console.log('📊 FormField value retrieval:', {
+      fieldName: name,
+      formDataKey,
+      value,
+      formDataConfirmDate: formData.confirmDate,
+      formDataConfirmationDate: formData['Confirmation Date']
+    })
+  }
   const hasOtherOption = options.some(opt => opt && String(opt).toLowerCase().includes('other'))
   const isOtherSelected = value && String(value).toLowerCase().includes('other')
   const otherFieldName = `${name}Other`
@@ -201,7 +276,7 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
               onChange={handleChange}
               required={required}
               className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors appearance-none"
-              {...props}
+              {...domProps}
             >
               <option value="">Select {label}</option>
               {options.map((opt, index) => (
@@ -232,17 +307,36 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           placeholder={placeholder}
           rows={2}
           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-          {...props}
+          {...domProps}
         />
       ) : type === 'date' || normalizedType === 'date' ? (
         <input
+          ref={isConfirmDate ? inputRef : undefined}
           type="date"
           name={name}
           value={value}
+          disabled={forceDisabled}
+          readOnly={forceReadOnly}
           onChange={(e) => {
-            // Prevent changes if disabled
-            if (props.disabled) {
+            // ALWAYS prevent changes to confirmDate field
+            if (isConfirmDate) {
+              console.log('🚫 BLOCKED confirmDate onChange in FormField:', {
+                attemptedValue: e.target.value,
+                disabled: forceDisabled,
+                readOnly: forceReadOnly,
+                name
+              })
               e.preventDefault()
+              e.stopPropagation()
+              toast.error('Confirmation Date is auto-calculated and cannot be manually edited.')
+              return
+            }
+            
+            // Prevent changes if disabled or readOnly
+            if (forceDisabled || forceReadOnly) {
+              console.log('🚫 BLOCKED onChange - field disabled/readOnly:', { name, disabled: forceDisabled, readOnly: forceReadOnly })
+              e.preventDefault()
+              e.stopPropagation()
               return
             }
             const dateValue = e.target.value
@@ -261,8 +355,8 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
             handleChange(e)
           }}
           onBlur={(e) => {
-            // Skip validation if disabled
-            if (props.disabled) return
+            // Skip validation if disabled or readOnly
+            if (forceDisabled || forceReadOnly) return
             
             // Additional validation on blur
             const dateValue = e.target.value
@@ -295,14 +389,41 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
               }
             }
           }}
+          onClick={(e) => {
+            // ALWAYS prevent date picker for confirmDate
+            if (name === 'confirmDate') {
+              console.log('🚫 BLOCKED confirmDate onClick')
+              e.preventDefault()
+              e.stopPropagation()
+              toast.error('Confirmation Date is auto-calculated and cannot be manually edited.')
+              return
+            }
+            // Prevent date picker from opening if disabled or readOnly
+            if (forceDisabled || forceReadOnly) {
+              e.preventDefault()
+              e.stopPropagation()
+            }
+          }}
+          onFocus={(e) => {
+            // ALWAYS prevent focus for confirmDate
+            if (isConfirmDate) {
+              console.log('🚫 BLOCKED confirmDate onFocus')
+              e.target.blur()
+              return
+            }
+            // Prevent focus if disabled or readOnly
+            if (forceDisabled || forceReadOnly) {
+              e.target.blur()
+            }
+          }}
           required={required}
           placeholder={placeholder}
           className={`w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md transition-colors ${
-            props.disabled 
-              ? 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed' 
+            (forceDisabled || forceReadOnly)
+              ? 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed pointer-events-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:opacity-0' 
               : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500'
           }`}
-          {...props}
+          {...(forceDisabled || forceReadOnly ? { ...domProps, disabled: true, readOnly: true } : domProps)}
         />
       ) : type === 'number' ? (
         <input
@@ -439,7 +560,7 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           required={required}
           placeholder={placeholder || (isPercentageField ? (label && label.toLowerCase().includes('cgpa') ? '0-10' : '0-100') : '')}
           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-          {...props}
+          {...domProps}
         />
       ) : isCountryField ? (
         <select
@@ -448,7 +569,7 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           onChange={handleChange}
           required={required}
           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors appearance-none"
-          {...props}
+          {...domProps}
         >
           <option value="">Select Country</option>
           {countries.map((country, index) => (
@@ -500,7 +621,7 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           required={required}
           placeholder={placeholder}
           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-          {...props}
+          {...domProps}
         />
       ) : isPincodeField ? (
         <input
@@ -550,7 +671,7 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           required={required}
           placeholder={placeholder || '6-digit PIN code'}
           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-          {...props}
+          {...domProps}
         />
       ) : isAccountNumberField ? (
         <input
@@ -578,7 +699,7 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           required={required}
           placeholder={placeholder}
           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-          {...props}
+          {...domProps}
         />
       ) : isPhoneType ? (
         <input
@@ -619,7 +740,7 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           required={required}
           placeholder={placeholder || '10-digit phone number'}
           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-          {...props}
+          {...domProps}
         />
       ) : isEmailType ? (
         <input
@@ -656,7 +777,7 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           required={required}
           placeholder={placeholder || 'example@domain.com'}
           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-          {...props}
+          {...domProps}
         />
       ) : isTextType ? (
         <input
@@ -741,7 +862,7 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           required={required}
           placeholder={placeholder}
           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-          {...props}
+          {...domProps}
         />
       ) : isAlphanumericType ? (
         <input
@@ -777,7 +898,7 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           required={required}
           placeholder={placeholder}
           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-          {...props}
+          {...domProps}
         />
       ) : isNumberType && !isPercentageField ? (
         <input
@@ -826,7 +947,7 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           required={required}
           placeholder={placeholder}
           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-          {...props}
+          {...domProps}
         />
       ) : normalizedType === 'text' || normalizedType === 'string' ? (
         // Fallback: if type is text but didn't match isTextType (shouldn't happen, but safety check)
@@ -902,7 +1023,7 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           required={required}
           placeholder={placeholder}
           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-          {...props}
+          {...domProps}
         />
       ) : (
         <input
@@ -916,8 +1037,11 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           required={required}
           placeholder={placeholder}
           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-          {...props}
+          {...domProps}
         />
+      )}
+      {helpText && (
+        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{helpText}</p>
       )}
     </div>
   )
@@ -1400,12 +1524,8 @@ function UserManagement() {
   }, [editingEmployeeId, formData.profileImage])
 
   // Auto-calculate confirmation date from joining date + probation period
-  // For NEW employees (during add flow): Always auto-calculate and make read-only
-  // For EXISTING employees: Allow manual editing
+  // ALWAYS auto-calculate and make read-only (cannot be manually edited)
   useEffect(() => {
-    // Check if we're in "add flow" (new employee being added)
-    const isAddFlow = !editingEmployee || addFlowJustSaved
-    
     if (formData.joiningDate && formData.probationPeriod) {
       // Parse joining date - date inputs always return YYYY-MM-DD format
       let joinDate
@@ -1421,35 +1541,47 @@ function UserManagement() {
       
       const probDays = parseInt(String(formData.probationPeriod).trim(), 10) || 0
       
-      if (!isNaN(joinDate.getTime()) && probDays > 0) {
+      // Calculate confirmation date: if probation is 0, confirmation date = joining date (same day)
+      // If probation is 1 or more, add that many days to joining date
+      if (!isNaN(joinDate.getTime()) && probDays >= 0) {
         const confirmDate = new Date(joinDate)
-        confirmDate.setDate(joinDate.getDate() + probDays)
+        // If probation is 0, confirmation date = joining date (same day)
+        // If probation is 1+, add that many days
+        if (probDays > 0) {
+          confirmDate.setDate(joinDate.getDate() + probDays)
+        }
+        // If probDays is 0, confirmDate stays as joining date (same day)
         const confirmDateStr = confirmDate.toISOString().slice(0, 10)
         
-        if (isAddFlow) {
-          // Always update for new employees during add flow (auto-calculate)
-          setFormData(prev => {
-            // Always update for new employees, even if it's the same value (to ensure it's set)
-            return { ...prev, confirmDate: confirmDateStr }
-          })
-        } else {
-          // For existing employees (editing), only update if empty or matches calculated value (don't override manual edits)
-          if (!formData.confirmDate || formData.confirmDate === confirmDateStr) {
-            setFormData(prev => ({ ...prev, confirmDate: confirmDateStr }))
+        // Always auto-calculate and update confirmDate (for both new and existing employees)
+        // Also set "Confirmation Date" key for schema compatibility
+        // Only update if the value is different to prevent unnecessary re-renders
+        setFormData(prev => {
+          if (prev.confirmDate !== confirmDateStr) {
+            return { 
+              ...prev, 
+              confirmDate: confirmDateStr,
+              'Confirmation Date': confirmDateStr  // Also set with schema field name
+            }
           }
-        }
+          // Ensure both keys are set even if value hasn't changed
+          if (prev['Confirmation Date'] !== confirmDateStr) {
+            return { ...prev, 'Confirmation Date': confirmDateStr }
+          }
+          return prev
+        })
       }
     } else if (formData.joiningDate && !formData.probationPeriod) {
-      // If probation period is cleared, clear confirmation date for new employees
-      if (isAddFlow && formData.confirmDate) {
-        setFormData(prev => ({ ...prev, confirmDate: '' }))
+      // If probation period is cleared, clear confirmation date
+      if (formData.confirmDate) {
+        setFormData(prev => ({ ...prev, confirmDate: '', 'Confirmation Date': '' }))
       }
-    } else if (!formData.joiningDate && isAddFlow && formData.confirmDate) {
-      // If joining date is cleared, clear confirmation date for new employees
-      setFormData(prev => ({ ...prev, confirmDate: '' }))
+    } else if (!formData.joiningDate && formData.confirmDate) {
+      // If joining date is cleared, clear confirmation date
+      setFormData(prev => ({ ...prev, confirmDate: '', 'Confirmation Date': '' }))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.joiningDate, formData.probationPeriod, editingEmployee, addFlowJustSaved])
+  }, [formData.joiningDate, formData.probationPeriod])
 
   // Family Details Handlers
   const addFamilyMember = () => {
@@ -1518,11 +1650,8 @@ function UserManagement() {
     // Global debug log for every field change (all 13 sections)
     console.log('🛠 handleChange:', { name, value, type, checked })
 
-    // Helper function to calculate confirmation date
-    const calculateConfirmDate = (joiningDate, probationPeriod, currentConfirmDate) => {
-      const isAddFlow = !editingEmployee || addFlowJustSaved
-      if (!isAddFlow) return currentConfirmDate // Don't auto-calculate for existing employees
-      
+    // Helper function to calculate confirmation date (ALWAYS auto-calculate)
+    const calculateConfirmDate = (joiningDate, probationPeriod) => {
       if (joiningDate && probationPeriod) {
         const joinDateStr = String(joiningDate).trim()
         let joinDate
@@ -1535,13 +1664,20 @@ function UserManagement() {
         
         const probDays = parseInt(String(probationPeriod).trim(), 10) || 0
         
-        if (!isNaN(joinDate.getTime()) && probDays > 0) {
+        // Calculate confirmation date: if probation is 0, confirmation date = joining date (same day)
+        // If probation is 1 or more, add that many days to joining date
+        if (!isNaN(joinDate.getTime()) && probDays >= 0) {
           const confirmDate = new Date(joinDate)
-          confirmDate.setDate(joinDate.getDate() + probDays)
+          // If probation is 0, confirmation date = joining date (same day)
+          // If probation is 1+, add that many days
+          if (probDays > 0) {
+            confirmDate.setDate(joinDate.getDate() + probDays)
+          }
+          // If probDays is 0, confirmDate stays as joining date (same day)
           return confirmDate.toISOString().slice(0, 10)
         }
       }
-      return currentConfirmDate
+      return ''
     }
 
     if (name.includes('.')) {
@@ -1558,15 +1694,15 @@ function UserManagement() {
         if (name === 'joiningDate' || name === 'probationPeriod') {
           const newJoiningDate = name === 'joiningDate' ? value : prev.joiningDate
           const newProbationPeriod = name === 'probationPeriod' ? value : prev.probationPeriod
-          // Only calculate if both values are present
+          // Always auto-calculate if both values are present
           if (newJoiningDate && newProbationPeriod) {
-            updated.confirmDate = calculateConfirmDate(newJoiningDate, newProbationPeriod, prev.confirmDate)
-          } else if (!newJoiningDate || !newProbationPeriod) {
-            // Clear confirmation date if either field is cleared (for new employees)
-            const isAddFlow = !editingEmployee || addFlowJustSaved
-            if (isAddFlow) {
-              updated.confirmDate = ''
-            }
+            const calculatedDate = calculateConfirmDate(newJoiningDate, newProbationPeriod)
+            updated.confirmDate = calculatedDate
+            updated['Confirmation Date'] = calculatedDate  // Also set with schema field name
+          } else {
+            // Clear confirmation date if either field is cleared
+            updated.confirmDate = ''
+            updated['Confirmation Date'] = ''
           }
         }
         return updated
@@ -1581,15 +1717,55 @@ function UserManagement() {
         if (name === 'joiningDate' || name === 'probationPeriod') {
           const newJoiningDate = name === 'joiningDate' ? value : prev.joiningDate
           const newProbationPeriod = name === 'probationPeriod' ? value : prev.probationPeriod
-          // Only calculate if both values are present
+          // Always auto-calculate if both values are present
           if (newJoiningDate && newProbationPeriod) {
-            updated.confirmDate = calculateConfirmDate(newJoiningDate, newProbationPeriod, prev.confirmDate)
-          } else if (!newJoiningDate || !newProbationPeriod) {
-            // Clear confirmation date if either field is cleared (for new employees)
-            const isAddFlow = !editingEmployee || addFlowJustSaved
-            if (isAddFlow) {
+            const calculatedDate = calculateConfirmDate(newJoiningDate, newProbationPeriod)
+            updated.confirmDate = calculatedDate
+            updated['Confirmation Date'] = calculatedDate  // Also set with schema field name
+          } else {
+            // Clear confirmation date if either field is cleared
+            updated.confirmDate = ''
+            updated['Confirmation Date'] = ''
+          }
+        }
+        
+        // Prevent manual editing of confirmDate - it should only be set via auto-calculation
+        // Check for both "confirmDate" and "Confirmation Date" field names
+        const nameNormalized = name?.toLowerCase().replace(/\s+/g, '') || ''
+        const isConfirmDateField = (
+          name === 'confirmDate' ||
+          name === 'Confirmation Date' ||
+          name === 'confirmationDate' ||
+          nameNormalized === 'confirmdate' ||
+          nameNormalized === 'confirmationdate' ||
+          (name?.toLowerCase().includes('confirm') && name?.toLowerCase().includes('date'))
+        )
+        
+        if (isConfirmDateField) {
+          console.log('🚫 BLOCKED confirmDate change in handleChange:', {
+            attemptedValue: value,
+            fieldName: name,
+            currentConfirmDate: prev.confirmDate,
+            joiningDate: prev.joiningDate,
+            probationPeriod: prev.probationPeriod
+          })
+          // ALWAYS revert to calculated value if joining date and probation period are set
+          if (prev.joiningDate && prev.probationPeriod !== undefined && prev.probationPeriod !== null && String(prev.probationPeriod).trim() !== '') {
+            const calculatedDate = calculateConfirmDate(prev.joiningDate, prev.probationPeriod)
+            if (calculatedDate) {
+              console.log('✅ Reverting to calculated date:', calculatedDate)
+              updated.confirmDate = calculatedDate
+              updated['Confirmation Date'] = calculatedDate  // Also set with schema field name
+            } else {
+              // Clear if calculation fails
               updated.confirmDate = ''
+              updated['Confirmation Date'] = ''
             }
+          } else {
+            // Clear if conditions aren't met
+            console.log('⚠️ Clearing confirmDate - missing joiningDate or probationPeriod')
+            updated.confirmDate = ''
+            updated['Confirmation Date'] = ''
           }
         }
         return updated
@@ -1613,6 +1789,17 @@ function UserManagement() {
       // Construct field name: if inside array entry, use arrayName[index].fieldName format
       const fieldName = arrayIndex !== null && arrayName ? `${arrayName}.${arrayIndex}.${field.name}` : field.name
       
+      // DEBUG: Log ALL fields in section 2 to find confirmDate
+      if (sectionId === 2) {
+        console.log('📋 Section 2 Field:', {
+          fieldName,
+          fieldNameValue: field.name,
+          fieldType: field.type,
+          fieldLabel: field.label,
+          isActive: field.isActive
+        })
+      }
+      
       // Custom handleChange for array entries
       const customHandleChange = arrayIndex !== null && arrayName ? (e) => {
         const { name, value, type, checked } = e.target || {}
@@ -1625,18 +1812,176 @@ function UserManagement() {
           }
           setFormData({ ...formData, [arrayName]: newArray })
         }
-      } : handleChange
+      } : (e) => {
+        // Prevent manual editing of confirmDate - it should only be set via auto-calculation
+        // ALWAYS block confirmDate changes, regardless of conditions
+        // Check for both "confirmDate" and "Confirmation Date" field names
+        const fieldNameNormalized = e.target?.name?.toLowerCase().replace(/\s+/g, '') || ''
+        const isConfirmDateField = (
+          e.target?.name === 'confirmDate' ||
+          e.target?.name === 'Confirmation Date' ||
+          e.target?.name === 'confirmationDate' ||
+          fieldNameNormalized === 'confirmdate' ||
+          fieldNameNormalized === 'confirmationdate' ||
+          (e.target?.name?.toLowerCase().includes('confirm') && e.target?.name?.toLowerCase().includes('date'))
+        )
+        
+        if (isConfirmDateField) {
+          console.log('🚫 BLOCKED confirmDate change attempt:', {
+            attemptedValue: e.target.value,
+            fieldName: e.target?.name,
+            currentConfirmDate: formData.confirmDate,
+            joiningDate: formData.joiningDate,
+            probationPeriod: formData.probationPeriod
+          })
+          
+          const hasJoiningDate = formData.joiningDate && String(formData.joiningDate).trim() !== ''
+          const hasProbationPeriod = formData.probationPeriod !== undefined && formData.probationPeriod !== null && String(formData.probationPeriod).trim() !== ''
+          
+          if (hasJoiningDate && hasProbationPeriod) {
+            // Calculate the correct date
+            const joinDate = new Date(formData.joiningDate)
+            const probDays = parseInt(String(formData.probationPeriod).trim(), 10) || 0
+            // Calculate confirmation date: if probation is 0, confirmation date = joining date (same day)
+            // If probation is 1 or more, add that many days to joining date
+            if (!isNaN(joinDate.getTime()) && probDays >= 0) {
+              const confirmDate = new Date(joinDate)
+              // If probation is 0, confirmation date = joining date (same day)
+              // If probation is 1+, add that many days
+              if (probDays > 0) {
+                confirmDate.setDate(joinDate.getDate() + probDays)
+              }
+              // If probDays is 0, confirmDate stays as joining date (same day)
+              const calculatedDateStr = confirmDate.toISOString().slice(0, 10)
+              // Revert to calculated value
+              toast.error('Confirmation Date is auto-calculated and cannot be manually edited.')
+              setFormData(prev => ({ 
+                ...prev, 
+                confirmDate: calculatedDateStr,
+                'Confirmation Date': calculatedDateStr  // Also set with schema field name
+              }))
+              return
+            }
+          }
+          // Even if conditions aren't met, still block the change
+          toast.error('Confirmation Date cannot be manually edited. Please set Joining Date and Probation Period first.')
+          e.preventDefault()
+          e.stopPropagation()
+          return
+        }
+        handleChange(e)
+      }
       
-      // Special handling for confirmDate: make it read-only for new employees (during add flow), editable for existing employees
-      const isAddFlow = !editingEmployee || addFlowJustSaved // Check if we're in "add flow"
-      const isConfirmDateField = field.name === 'confirmDate' && arrayIndex === null
-      // Disable confirmDate only for new employees (during add flow) when joining date and probation period are set
-      const shouldDisableConfirmDate = isConfirmDateField && isAddFlow && formData.joiningDate && formData.probationPeriod
+      // Special handling for confirmDate: make it ALWAYS read-only and auto-calculated
+      // Check multiple possible field name variations (including "Confirmation Date" with spaces)
+      const normalizedFieldName = field.name?.toLowerCase().replace(/\s+/g, '') || ''
+      const normalizedFieldNameVar = fieldName?.toLowerCase().replace(/\s+/g, '') || ''
+      const isConfirmDateField = (
+        field.name === 'confirmDate' ||
+        field.name === 'confirm_date' ||
+        field.name === 'confirmationDate' ||
+        field.name === 'confirmation_date' ||
+        field.name === 'Confirmation Date' ||
+        fieldName === 'confirmDate' ||
+        fieldName === 'confirm_date' ||
+        fieldName === 'confirmationDate' ||
+        fieldName === 'confirmation_date' ||
+        fieldName === 'Confirmation Date' ||
+        normalizedFieldName === 'confirmdate' ||
+        normalizedFieldName === 'confirmationdate' ||
+        normalizedFieldNameVar === 'confirmdate' ||
+        normalizedFieldNameVar === 'confirmationdate' ||
+        (field.name?.toLowerCase().includes('confirm') && field.name?.toLowerCase().includes('date')) ||
+        (fieldName?.toLowerCase().includes('confirm') && fieldName?.toLowerCase().includes('date'))
+      ) && arrayIndex === null
+      
+      // DEBUG: Log ALL fields being rendered to find confirmDate
+      if (field.name && (field.name.toLowerCase().includes('confirm') || fieldName.toLowerCase().includes('confirm'))) {
+        console.log('🔍 Found potential confirmDate field:', {
+          fieldName,
+          fieldNameLower: fieldName.toLowerCase(),
+          fieldNameValue: field.name,
+          arrayIndex,
+          sectionId,
+          isConfirmDateField,
+          field: field
+        })
+      }
+      
+      // ALWAYS disable confirmDate - it should NEVER be manually editable
+      // Check that both values are truthy and non-empty strings for auto-calculation
+      const hasJoiningDate = formData.joiningDate && String(formData.joiningDate).trim() !== ''
+      const hasProbationPeriod = formData.probationPeriod && String(formData.probationPeriod).trim() !== ''
+      // Always disable confirmDate field - it's auto-calculated
+      const shouldDisableConfirmDate = isConfirmDateField
+      
+      // DEBUG: Console logs for confirmDate field
+      if (isConfirmDateField) {
+        console.log('🔍 ConfirmDate Field Debug:', {
+          fieldName,
+          fieldNameValue: field.name,
+          isConfirmDateField,
+          hasJoiningDate,
+          hasProbationPeriod,
+          joiningDate: formData.joiningDate,
+          probationPeriod: formData.probationPeriod,
+          shouldDisableConfirmDate,
+          currentConfirmDate: formData.confirmDate,
+          fieldType: field.type,
+          fieldProps: { disabled: shouldDisableConfirmDate, readOnly: shouldDisableConfirmDate }
+        })
+      }
+      
+      // Calculate the expected confirm date for display/validation
+      let calculatedConfirmDate = null
+      if (isConfirmDateField && formData.joiningDate && formData.probationPeriod !== undefined && formData.probationPeriod !== null && formData.probationPeriod !== '') {
+        const joinDate = new Date(formData.joiningDate)
+        const probDays = parseInt(String(formData.probationPeriod).trim(), 10) || 0
+        // Calculate confirmation date: if probation is 0, confirmation date = joining date (same day)
+        // If probation is 1 or more, add that many days to joining date
+        if (!isNaN(joinDate.getTime()) && probDays >= 0) {
+          const confirmDate = new Date(joinDate)
+          // If probation is 0, confirmation date = joining date (same day)
+          // If probation is 1+, add that many days
+          if (probDays > 0) {
+            confirmDate.setDate(joinDate.getDate() + probDays)
+          }
+          // If probDays is 0, confirmDate stays as joining date (same day)
+          calculatedConfirmDate = confirmDate.toISOString().slice(0, 10)
+          console.log('📅 Calculated ConfirmDate:', {
+            joiningDate: formData.joiningDate,
+            probationPeriod: formData.probationPeriod,
+            probDays,
+            calculatedConfirmDate,
+            currentConfirmDate: formData.confirmDate,
+            note: probDays === 0 ? 'Same day (probation = 0)' : `After ${probDays} day(s)`
+          })
+        }
+      }
+      
+      // Note: confirmDate value is auto-calculated by useEffect hook
+      // The field will be disabled and show the calculated value
       
       // Add help text for disabled confirmDate field
+      const probDays = parseInt(String(formData.probationPeriod).trim(), 10) || 0
+      const dateDescription = probDays === 0 
+        ? 'same day as Joining Date (probation = 0 days)' 
+        : `Joining Date + ${probDays} day(s)`
       const helpText = shouldDisableConfirmDate 
-        ? 'Automatically calculated from joining date + probation period. You can edit this after saving the employee.'
+        ? `Automatically calculated: ${calculatedConfirmDate ? new Date(calculatedConfirmDate).toLocaleDateString() : 'N/A'} (${dateDescription}). This field cannot be manually edited.`
         : field.helpText
+      
+      // DEBUG: Log props being passed to FormField for confirmDate
+      if (isConfirmDateField) {
+        console.log('📤 Rendering ConfirmDate FormField with props:', {
+          disabled: shouldDisableConfirmDate,
+          readOnly: shouldDisableConfirmDate,
+          name: fieldName,
+          type: getFieldTypeById(sectionId, field.name, field.type || 'text'),
+          calculatedConfirmDate,
+          currentFormDataConfirmDate: formData.confirmDate
+        })
+      }
       
       return (
         <FormField
@@ -1650,8 +1995,9 @@ function UserManagement() {
           placeholder={field.placeholder}
           options={field.options || []}
           disabled={shouldDisableConfirmDate}
+          readOnly={shouldDisableConfirmDate}
           helpText={helpText}
-          title={shouldDisableConfirmDate ? 'Confirmation date is automatically calculated from joining date + probation period' : undefined}
+          title={shouldDisableConfirmDate ? `Confirmation date is automatically calculated: ${calculatedConfirmDate ? new Date(calculatedConfirmDate).toLocaleDateString() : 'N/A'} (${dateDescription})` : undefined}
         />
       )
     })
@@ -2839,27 +3185,41 @@ function UserManagement() {
       }
     }
 
-    // Confirm Date validation: must be after joining date and within probation period
-    if (sectionId === 2 && formData.confirmDate && formData.joiningDate && formData.probationPeriod) {
+    // Confirm Date validation: must exactly match calculated date (joining date + probation period)
+    if (sectionId === 2 && formData.joiningDate && formData.probationPeriod !== undefined && formData.probationPeriod !== null && String(formData.probationPeriod).trim() !== '') {
       const joiningDate = new Date(formData.joiningDate)
-      const confirmDate = new Date(formData.confirmDate)
-      const probDays = parseInt(formData.probationPeriod) || 0
+      const probDays = parseInt(String(formData.probationPeriod).trim(), 10) || 0
+      // Calculate confirmation date: if probation is 0, confirmation date = joining date (same day)
+      // If probation is 1 or more, add that many days to joining date
       const expectedConfirmDate = new Date(joiningDate)
-      expectedConfirmDate.setDate(joiningDate.getDate() + probDays)
+      if (probDays > 0) {
+        expectedConfirmDate.setDate(joiningDate.getDate() + probDays)
+      }
+      // If probDays is 0, expectedConfirmDate stays as joining date (same day)
+      const expectedConfirmDateStr = expectedConfirmDate.toISOString().slice(0, 10)
       
-      if (confirmDate < joiningDate) {
-        toast.error('Confirmation Date must be after Joining Date.')
+      // Verify confirmDate matches the calculated value exactly
+      if (formData.confirmDate && formData.confirmDate !== expectedConfirmDateStr) {
+        const dateDescription = probDays === 0 
+          ? 'same day as Joining Date (probation = 0 days)' 
+          : `Joining Date + ${probDays} day(s)`
+        toast.error(`Confirmation Date must be exactly ${expectedConfirmDate.toLocaleDateString()} (${dateDescription}). This field is auto-calculated and cannot be manually edited.`)
+        // Auto-correct to the calculated value
+        setFormData(prev => ({ 
+          ...prev, 
+          confirmDate: expectedConfirmDateStr,
+          'Confirmation Date': expectedConfirmDateStr  // Also set with schema field name
+        }))
         return
       }
-      // Allow some flexibility (±30 days) for confirmation date
-      const minDate = new Date(expectedConfirmDate)
-      minDate.setDate(minDate.getDate() - 30)
-      const maxDate = new Date(expectedConfirmDate)
-      maxDate.setDate(maxDate.getDate() + 30)
       
-      if (confirmDate < minDate || confirmDate > maxDate) {
-        toast.error(`Confirmation Date should be within probation completion timeline (around ${expectedConfirmDate.toLocaleDateString()}).`)
-        return
+      // Ensure confirmDate is set if it's missing
+      if (!formData.confirmDate) {
+        setFormData(prev => ({ 
+          ...prev, 
+          confirmDate: expectedConfirmDateStr,
+          'Confirmation Date': expectedConfirmDateStr  // Also set with schema field name
+        }))
       }
     }
 
