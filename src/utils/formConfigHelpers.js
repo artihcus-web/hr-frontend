@@ -39,6 +39,21 @@ export function getFieldConfig(formConfig, sectionKey, fieldName) {
 }
 
 /**
+ * Resolve field required flag from form config.
+ * Normalizes required: handles boolean, string 'true'/'false', number 1/0 from API/MongoDB.
+ */
+export function resolveFieldRequired(formConfig, sectionId, fieldName, defaultValue = false) {
+  const sectionKey = getSectionKey(sectionId)
+  if (!sectionKey) return Boolean(defaultValue)
+  const field = getFieldConfig(formConfig, sectionKey, fieldName)
+  if (!field) return Boolean(defaultValue)
+  const r = field.required
+  if (r === true || r === 'true' || r === 1) return true
+  if (r === false || r === 'false' || r === 0 || r === '') return false
+  return Boolean(defaultValue)
+}
+
+/**
  * Resolve field type from form config (normalized: text, number, alphanumeric, etc.)
  */
 export function resolveFieldType(formConfig, sectionId, fieldName, defaultValue = 'text') {

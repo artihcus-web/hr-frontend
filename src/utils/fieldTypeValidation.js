@@ -7,12 +7,12 @@
  * Filters input value based on schema type.
  * @param {string} schemaType - One of 'text', 'alphanumeric', 'number'
  * @param {string} value - Raw input value
- * @param {object} options - Optional: { allowDecimal, integerOnly, allowPercent }
+ * @param {object} options - Optional: { integerOnly, allowPercent }
  * @returns {string} Filtered value
  */
 export function filterValueByType(schemaType, value, options = {}) {
   const v = value ?? ''
-  const { allowDecimal = false, integerOnly = false, allowPercent = false } = options
+  const { integerOnly = false, allowPercent = false } = options
 
   switch (schemaType) {
     case 'text':
@@ -23,7 +23,7 @@ export function filterValueByType(schemaType, value, options = {}) {
       // Alphabets, numbers, spaces, dots, hyphens
       return v.replace(/[^a-zA-Z0-9\s.-]/g, '')
 
-    case 'number':
+    case 'number': {
       if (allowPercent) {
         let filtered = v.replace(/[^0-9.%]/g, '')
         const idx = filtered.indexOf('%')
@@ -38,6 +38,7 @@ export function filterValueByType(schemaType, value, options = {}) {
       const filtered = v.replace(/[^0-9.]/g, '')
       const parts = filtered.split('.')
       return parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : filtered
+    }
 
     default:
       return v

@@ -4,7 +4,8 @@ import {
   ALL_SECTION_IDS,
   getSectionKey,
   getFieldConfig,
-  resolveFieldType
+  resolveFieldType,
+  resolveFieldRequired
 } from './formConfigHelpers'
 
 /** Mock employee form config (subset matching real schema structure) */
@@ -84,6 +85,26 @@ describe('formConfigHelpers', () => {
     })
     it('returns defaultValue for unknown section', () => {
       expect(resolveFieldType(mockFormConfig, 99, 'any', 'alphanumeric')).toBe('alphanumeric')
+    })
+  })
+
+  describe('resolveFieldRequired', () => {
+    const configWithRequired = {
+      sections: [{ id: 'basic-info', fields: [{ name: 'firstName', required: true }, { name: 'middleName', required: false }] }]
+    }
+    it('returns true when schema has required: true', () => {
+      expect(resolveFieldRequired(configWithRequired, 1, 'firstName', false)).toBe(true)
+    })
+    it('returns false when schema has required: false', () => {
+      expect(resolveFieldRequired(configWithRequired, 1, 'middleName', false)).toBe(false)
+    })
+    it('normalizes string "true"', () => {
+      const cfg = { sections: [{ id: 'basic-info', fields: [{ name: 'f', required: 'true' }] }] }
+      expect(resolveFieldRequired(cfg, 1, 'f', false)).toBe(true)
+    })
+    it('returns defaultValue when field not found', () => {
+      expect(resolveFieldRequired(configWithRequired, 1, 'unknown', true)).toBe(true)
+      expect(resolveFieldRequired(configWithRequired, 1, 'unknown', false)).toBe(false)
     })
   })
 })

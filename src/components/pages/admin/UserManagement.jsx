@@ -1131,14 +1131,17 @@ function UserManagement() {
   )
 
   // Helper to get field required flag from CMS schema (so Schema Configuration drives required asterisk and validation)
+  // Normalizes required: handles boolean, string 'true'/'false', number 1/0 from API/MongoDB
   const getFieldRequiredById = useCallback(
     (sectionId, fieldName, defaultValue = false) => {
       const sectionKey = getSectionKey(sectionId)
-      if (!sectionKey) return defaultValue
+      if (!sectionKey) return Boolean(defaultValue)
       const field = getFieldConfig(sectionKey, fieldName)
-      if (!field) return defaultValue
-      if (typeof field.required === 'boolean') return field.required
-      return defaultValue
+      if (!field) return Boolean(defaultValue)
+      const r = field.required
+      if (r === true || r === 'true' || r === 1) return true
+      if (r === false || r === 'false' || r === 0 || r === '') return false
+      return Boolean(defaultValue)
     },
     [getSectionKey, getFieldConfig]
   )
@@ -1639,7 +1642,7 @@ function UserManagement() {
           label={getFieldLabelById(sectionId, field.name, field.label || field.name)}
           name={fieldName}
           type={getFieldTypeById(sectionId, field.name, field.type || 'text')}
-          required={field.required || false}
+          required={getFieldRequiredById(sectionId, field.name, field.required || false)}
           formData={formData}
           handleChange={customHandleChange}
           placeholder={field.placeholder}
@@ -4295,6 +4298,7 @@ function UserManagement() {
                         const filtered = filterValueByType(schemaType, e.target.value)
                         handleFamilyDetailChange(index, 'name', filtered)
                       }}
+                      required={getFieldRequiredById(13, 'name', false)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     />
                   </div>
@@ -4319,12 +4323,14 @@ function UserManagement() {
                                 const filtered = filterValueByType(schemaType, e.target.value)
                                 handleFamilyDetailChange(index, 'relation', filtered)
                               }}
+                              required={getFieldRequiredById(13, 'relation', false)}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                               autoFocus
                             />
                           ) : (
                             <select
                               value={member.relation || ''}
+                              required={getFieldRequiredById(13, 'relation', false)}
                               onChange={(e) => {
                                 const val = e.target.value
                                 if (val === '__other__') {
@@ -4351,6 +4357,7 @@ function UserManagement() {
                     <input
                       type="date"
                       value={member.dob ? new Date(member.dob).toISOString().split('T')[0] : ''}
+                      required={getFieldRequiredById(13, 'dob', false)}
                       onChange={(e) => {
                         const dateValue = e.target.value
                         if (dateValue) {
@@ -4582,6 +4589,7 @@ function UserManagement() {
                         <input
                           type="text"
                           value={edu.institute || ''}
+                          required={getFieldRequiredById(3, 'institute', false)}
                           onChange={(e) => {
                             // Only allow alphabets, spaces, and valid special characters (.,-&)
                             const filteredValue = e.target.value.replace(/[^a-zA-Z\s.,\-&]/g, '')
@@ -4619,6 +4627,7 @@ function UserManagement() {
                               <input
                                 type="text"
                                 value={edu.degree === 'Other' ? '' : (edu.degree || '')}
+                                required={getFieldRequiredById(3, 'degree', false)}
                                 onChange={(e) => {
                                   const newEducation = [...formData.education]
                                   newEducation[index].degree = e.target.value
@@ -4634,6 +4643,7 @@ function UserManagement() {
                           return (
                             <select
                               value={edu.degree || ''}
+                              required={getFieldRequiredById(3, 'degree', false)}
                               onChange={(e) => {
                                 const val = e.target.value
                                 const newEducation = [...formData.education]
@@ -4664,6 +4674,7 @@ function UserManagement() {
                           type="text"
                           inputMode="numeric"
                           value={edu.percentage || ''}
+                          required={getFieldRequiredById(3, 'percentage', false)}
                           onChange={(e) => {
                             console.log('📊 Percentage/CGPA onChange:', { name: 'percentage', original: e.target.value })
                             // Allow digits, decimal point, and % symbol
@@ -4723,6 +4734,7 @@ function UserManagement() {
                         <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(3, 'fromDate', 'From')}</label>
                         <input
                           type="month"
+                          required={getFieldRequiredById(3, 'fromDate', false)}
                           value={(() => {
                             // Convert date to month format (YYYY-MM) for month input
                             if (!edu.fromDate) return ''
@@ -4792,6 +4804,7 @@ function UserManagement() {
                         <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(3, 'toDate', 'To')}</label>
                         <input
                           type="month"
+                          required={getFieldRequiredById(3, 'toDate', false)}
                           value={(() => {
                             // Convert date to month format (YYYY-MM) for month input
                             if (!edu.toDate) return ''
@@ -4954,6 +4967,7 @@ function UserManagement() {
                           newLangs[index].name = e.target.value
                           setFormData({ ...formData, languages: newLangs })
                         }}
+                        required={getFieldRequiredById(14, 'name', false)}
                         className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                         placeholder={getFieldLabelById(14, 'name', 'Language (e.g. English)')}
                       />
