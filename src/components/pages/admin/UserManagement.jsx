@@ -8,6 +8,7 @@ import { countryCodes } from '../../../utils/countryCodes'
 import axiosInstance from '../../../utils/axiosInstance'
 import { getProfileImageUrl } from '../../../config/apiConfig'
 import LoadingSpinner from '../../common/LoadingSpinner'
+import { filterValueByType } from '../../../utils/fieldTypeValidation'
 
 const roles = ['admin', 'c-suite', 'hr', 'manager', 'supermanager', 'tl', 'employee', 'client']
 
@@ -137,32 +138,10 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
   // IMPORTANT: Date fields and integer-only fields should NEVER be treated as text, even if schema type is 'text'
   const isCommonTextField = ['firstName', 'lastName', 'middleName', 'employeeName', 'name'].includes(name)
   const isTextType = normalizedType !== 'date' && (normalizedType === 'text' || (isCommonTextField && normalizedType !== 'number' && normalizedType !== 'alphanumeric')) && !isCityField && !isPincodeField && !isCountryField && !isAccountNumberField && !isPercentageField && !isIntegerOnlyField
-  // Alphanumeric type: allows both alphabets and numbers
-  const isAlphanumericType = normalizedType !== 'date' && normalizedType === 'alphanumeric' && !isCityField && !isPincodeField && !isCountryField && !isAccountNumberField && !isPercentageField && !isIntegerOnlyField
-  // Number type: only numeric digits (includes integer-only fields)
-  const isNumberType = normalizedType !== 'date' && (normalizedType === 'number' || isIntegerOnlyField) && !isPercentageField
-
-  // Debug logging for ALL fields rendered through FormField
-  console.log('🧩 FormField Render:', {
-    name,
-    label,
-    isIntegerOnlyField,
-    type,
-    normalizedType,
-    required: !!required,
-    value: value ?? '',
-    isTextType,
-    isAlphanumericType,
-    isNumberType,
-    isCityField,
-    isPincodeField,
-    isCountryField,
-    isAccountNumberField,
-    isPercentageField,
-    isYearOnlyField,
-    isPhoneType,
-    isEmailType
-  })
+  // Alphanumeric type: allows both alphabets and numbers - schema type takes precedence, no name-based override
+  const isAlphanumericType = normalizedType === 'alphanumeric' && !isCityField && !isPincodeField && !isCountryField && !isPercentageField && !isIntegerOnlyField
+  // Number type: only numeric digits - schema type is source of truth
+  const isNumberType = normalizedType === 'number' && !isPercentageField
 
   return (
     <div className="flex flex-col">
@@ -333,11 +312,9 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
           name={name}
           value={value}
           onChange={(e) => {
-            console.log('🔢 Number type onChange:', { name, originalValue: e.target.value, isEmployeeId: name === 'employeeId' })
             // EXCEPTION: Employee ID should allow alphanumeric even if type is number
             let filteredValue
             if (name === 'employeeId') {
-              console.log('🆔 Employee ID with number type - allowing alphanumeric')
               filteredValue = (e.target.value || '').replace(/[^a-zA-Z0-9]/g, '')
             } else {
               // For percentage/CGPA fields, allow digits, decimal point, and % symbol
@@ -362,7 +339,6 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
               } else if (isIntegerOnlyField) {
                 // Integer-only fields: only digits, no decimals, no letters
                 filteredValue = (e.target.value || '').replace(/[^0-9]/g, '')
-                console.log('🔢 Integer-only field filtered:', { name, filteredValue })
               } else {
                 // Filter out non-numeric characters (allow digits and decimal point)
                 filteredValue = (e.target.value || '').replace(/[^0-9.]/g, '')
@@ -375,7 +351,6 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
                 }
               }
             }
-            console.log('🔢 Number type filtered:', { name, filteredValue })
             handleChange({
               target: {
                 name,
@@ -1140,10 +1115,17 @@ function UserManagement() {
   const getFieldOptionsById = useCallback(
     (sectionId, fieldName, fallback = []) => {
       const sectionKey = getSectionKey(sectionId)
-      if (!sectionKey) return fallback
+      if (!sectionKey) return Array.isArray(fallback) ? fallback : []
       const field = getFieldConfig(sectionKey, fieldName)
-      const opts = field?.options
-      return Array.isArray(opts) && opts.length > 0 ? opts : fallback
+      let opts = field?.options
+      // Normalize: backend may return array of strings or (legacy) comma-separated string
+      if (typeof opts === 'string') {
+        opts = opts.split(',').map((s) => s.trim()).filter(Boolean)
+      }
+      if (Array.isArray(opts) && opts.length > 0) {
+        return opts.filter(Boolean)
+      }
+      return Array.isArray(fallback) ? fallback : []
     },
     [getSectionKey, getFieldConfig]
   )
@@ -1165,21 +1147,14 @@ function UserManagement() {
   const getFieldTypeById = useCallback(
     (sectionId, fieldName, defaultValue = 'text') => {
       const sectionKey = getSectionKey(sectionId)
-      if (!sectionKey) {
-        console.log('🔍 getFieldTypeById: No sectionKey for', { sectionId, fieldName, defaultValue })
-        return defaultValue
-      }
+      if (!sectionKey) return defaultValue
       const field = getFieldConfig(sectionKey, fieldName)
       const fieldType = field?.type || defaultValue
-      console.log('🔍 getFieldTypeById:', { sectionId, fieldName, sectionKey, fieldExists: !!field, fieldType, defaultValue })
-      // Normalize the type - handle case variations from schema
       const normalized = String(fieldType).toLowerCase().trim()
-      // Map common variations to standard types
       let result = normalized || defaultValue
       if (normalized === 'text' || normalized === 'string') result = 'text'
       if (normalized === 'number' || normalized === 'numeric') result = 'number'
       if (normalized === 'alphanumeric' || normalized === 'alphanum') result = 'alphanumeric'
-      console.log('🔍 getFieldTypeById result:', { fieldName, fieldType, normalized, result })
       return result
     },
     [getSectionKey, getFieldConfig]
@@ -2405,6 +2380,15 @@ function UserManagement() {
     setAddFlowJustSaved(false)
   }
 
+  // Map section IDs to formData array keys for array/repeating sections
+  const ARRAY_SECTION_KEYS = {
+    3: 'education',      // education-details
+    5: 'documents',      // documents
+    10: 'experience',    // experience-details
+    13: 'familyDetails', // family-details
+    14: 'languages'      // languages
+  }
+
   // Validate required fields for a section based on schema configuration
   const validateSectionRequiredFields = (sectionId) => {
     const sectionKey = getSectionKey(sectionId)
@@ -2414,23 +2398,49 @@ function UserManagement() {
     if (!section?.fields) return { isValid: true, missingFields: [] }
     
     const missingFields = []
+    const arrayFormKey = ARRAY_SECTION_KEYS[sectionId]
     
-    // Check all fields in the section
-    for (const field of section.fields) {
-      // Skip inactive fields
-      if (field.isActive === false) continue
+    // Handle array sections (Family Details, Education/Qualifications, etc.)
+    if (arrayFormKey) {
+      const arr = formData[arrayFormKey] || []
+      const itemFields = section.fields.filter(f =>
+        f.isActive !== false &&
+        isFieldVisibleById(sectionId, f.name) &&
+        !['addMember', 'addQualification', 'addDocument', 'addExperience', 'addLanguage', 'headingQualifications', 'selectRelationship'].includes(f.name)
+      )
       
-      // Skip if field is not visible
+      for (let i = 0; i < arr.length; i++) {
+        const item = arr[i] || {}
+        for (const field of itemFields) {
+          const isRequired = field.required === true || getFieldRequiredById(sectionId, field.name, false)
+          if (!isRequired) continue
+          
+          const fieldValue = item[field.name]
+          const isEmpty = fieldValue === null ||
+            fieldValue === undefined ||
+            fieldValue === '' ||
+            (typeof fieldValue === 'string' && !String(fieldValue).trim()) ||
+            (typeof fieldValue === 'object' && fieldValue !== null && !Array.isArray(fieldValue) && Object.keys(fieldValue).length === 0)
+          
+          if (isEmpty) {
+            const fieldLabel = getFieldLabelById(sectionId, field.name, field.label || field.name)
+            missingFields.push(`${fieldLabel} (Row ${i + 1})`)
+          }
+        }
+      }
+      return { isValid: missingFields.length === 0, missingFields }
+    }
+    
+    // Regular (non-array) sections
+    for (const field of section.fields) {
+      if (field.isActive === false) continue
       if (!isFieldVisibleById(sectionId, field.name)) continue
       
-      // Check if field is required
-      const isRequired = getFieldRequiredById(sectionId, field.name, false)
+      const isRequired = field.required === true || getFieldRequiredById(sectionId, field.name, false)
       if (!isRequired) continue
       
-      // Get field value from formData
       let fieldValue = null
       
-      // Handle nested fields (e.g., presentAddress.line1, aadhaarAddress.district)
       if (field.name.includes('.')) {
         const parts = field.name.split('.')
         let value = formData
@@ -2443,24 +2453,18 @@ function UserManagement() {
           }
         }
         fieldValue = value
-      } 
-      // Handle array fields (e.g., education[0].institute) - skip as they have their own validation
-      else if (field.name.includes('[')) {
-        // Array fields are handled separately in their specific validations (Education, Family, etc.)
+      } else if (field.name.includes('[')) {
         continue
-      }
-      // Handle regular fields
-      else {
+      } else {
         fieldValue = formData[field.name]
       }
       
-      // Check if value is empty
-      const isEmpty = fieldValue === null || 
-                     fieldValue === undefined || 
-                     fieldValue === '' ||
-                     (typeof fieldValue === 'string' && !fieldValue.trim()) ||
-                     (Array.isArray(fieldValue) && fieldValue.length === 0) ||
-                     (typeof fieldValue === 'object' && fieldValue !== null && Object.keys(fieldValue).length === 0)
+      const isEmpty = fieldValue === null ||
+        fieldValue === undefined ||
+        fieldValue === '' ||
+        (typeof fieldValue === 'string' && !fieldValue.trim()) ||
+        (Array.isArray(fieldValue) && fieldValue.length === 0) ||
+        (typeof fieldValue === 'object' && fieldValue !== null && Object.keys(fieldValue).length === 0)
       
       if (isEmpty) {
         const fieldLabel = getFieldLabelById(sectionId, field.name, field.label || field.name)
@@ -2468,10 +2472,7 @@ function UserManagement() {
       }
     }
     
-    return {
-      isValid: missingFields.length === 0,
-      missingFields
-    }
+    return { isValid: missingFields.length === 0, missingFields }
   }
 
   const handleSubmit = async (e, sectionId = null) => {
@@ -2485,9 +2486,7 @@ function UserManagement() {
     
     // Validate required fields based on schema configuration
     if (isSectionSave) {
-      console.log('🔍 Validating required fields for section:', sectionId)
       const validation = validateSectionRequiredFields(sectionId)
-      console.log('🔍 Validation result:', validation)
       if (!validation.isValid) {
         toast.error(`Please fill all required fields: ${validation.missingFields.join(', ')}`)
         return
@@ -2674,48 +2673,6 @@ function UserManagement() {
           console.error(`Error checking uniqueness for schema field ${key}:`, error)
           // Continue if check fails
         }
-      }
-    }
-
-    // Education Details validation (Section 3): require at least one complete qualification
-    if (sectionId === 3) {
-      const education = formData.education || []
-      const nonEmptyRows = education.filter(e =>
-        e &&
-        (e.institute || e.degree || e.percentage || e.fromDate || e.toDate || e.fileName)
-      )
-
-      if (nonEmptyRows.length === 0) {
-        toast.error('Please add at least one qualification before saving Education Details.')
-        return
-      }
-
-      const hasIncomplete = nonEmptyRows.some(e =>
-        !String(e.institute || '').trim() ||
-        !String(e.degree || '').trim() ||
-        !String(e.percentage || '').trim() ||
-        !e.fromDate ||
-        !e.toDate
-      )
-
-      if (hasIncomplete) {
-        toast.error('Please fill Institute, Degree, Percentage, From and To dates for each qualification.')
-        return
-      }
-    }
-
-    // Family Details validation (Section 13): require all fields before saving
-    if (sectionId === 13) {
-      const family = formData.familyDetails || []
-      const hasIncomplete = family.some(m =>
-        !m ||
-        !String(m.name || '').trim() ||
-        !String(m.relation || '').trim() ||
-        !m.dob
-      )
-      if (hasIncomplete) {
-        toast.error('Please fill Name, Relationship, and DOB for all family members before saving.')
-        return
       }
     }
 
@@ -3697,6 +3654,7 @@ function UserManagement() {
                   <FormField
                     label={getFieldLabel('basic-info', 'middleName', 'Middle Name')}
                     name="middleName"
+                    type={getFieldTypeById(1, 'middleName', 'text')}
                     required={getFieldRequiredById(1, 'middleName', false)}
                     formData={formData}
                     handleChange={handleChange}
@@ -3707,6 +3665,7 @@ function UserManagement() {
                   <FormField
                     label={getFieldLabel('basic-info', 'lastName', 'Last Name')}
                     name="lastName"
+                    type={getFieldTypeById(1, 'lastName', 'text')}
                     required={getFieldRequiredById(1, 'lastName', true)}
                     formData={formData}
                     handleChange={handleChange}
@@ -4111,7 +4070,7 @@ function UserManagement() {
               </div>
 
               {isFieldVisibleById(12, 'emergencyContactName') && (
-                <FormField label={getFieldLabelById(12, 'emergencyContactName', 'Emergency Contact Name')} name="emergencyContactName" required={getFieldRequiredById(12, 'emergencyContactName', false)} formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(12, 'emergencyContactName', 'Emergency Contact Name')} name="emergencyContactName" type={getFieldTypeById(12, 'emergencyContactName', 'text')} required={getFieldRequiredById(12, 'emergencyContactName', false)} formData={formData} handleChange={handleChange} />
               )}
 
               {/* Emails */}
@@ -4119,7 +4078,7 @@ function UserManagement() {
                 <FormField
                   label={getFieldLabelById(12, 'email', 'Personal Email ID')}
                   name="email"
-                  type="email"
+                  type={getFieldTypeById(12, 'email', 'email')}
                   required={getFieldRequiredById(12, 'email', false)}
                   formData={formData}
                   handleChange={handleChange}
@@ -4129,7 +4088,7 @@ function UserManagement() {
                 <FormField
                   label={getFieldLabelById(12, 'alternativeEmail', 'Alternative Email ID')}
                   name="alternativeEmail"
-                  type="email"
+                  type={getFieldTypeById(12, 'alternativeEmail', 'email')}
                   required={getFieldRequiredById(12, 'alternativeEmail', false)}
                   formData={formData}
                   handleChange={handleChange}
@@ -4158,25 +4117,25 @@ function UserManagement() {
               </div>
               {isFieldVisibleById(16, 'presentAddress.line1') && (
                 <div className="col-span-full">
-                  <FormField label={getFieldLabelById(16, 'presentAddress.line1', 'Address Line 1')} name="presentAddress.line1" required={getFieldRequiredById(16, 'presentAddress.line1', false)} formData={formData} handleChange={handleChange} />
+                  <FormField label={getFieldLabelById(16, 'presentAddress.line1', 'Address Line 1')} name="presentAddress.line1" type={getFieldTypeById(16, 'presentAddress.line1', 'alphanumeric')} required={getFieldRequiredById(16, 'presentAddress.line1', false)} formData={formData} handleChange={handleChange} />
                 </div>
               )}
               {isFieldVisibleById(16, 'presentAddress.line2') && (
                 <div className="col-span-full">
-                  <FormField label={getFieldLabelById(16, 'presentAddress.line2', 'Address Line 2')} name="presentAddress.line2" formData={formData} handleChange={handleChange} />
+                  <FormField label={getFieldLabelById(16, 'presentAddress.line2', 'Address Line 2')} name="presentAddress.line2" type={getFieldTypeById(16, 'presentAddress.line2', 'alphanumeric')} formData={formData} handleChange={handleChange} />
                 </div>
               )}
               {isFieldVisibleById(16, 'presentAddress.district') && (
-                <FormField label={getFieldLabelById(16, 'presentAddress.district', 'City')} name="presentAddress.district" required={getFieldRequiredById(16, 'presentAddress.district', false)} formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(16, 'presentAddress.district', 'City')} name="presentAddress.district" type={getFieldTypeById(16, 'presentAddress.district', 'text')} required={getFieldRequiredById(16, 'presentAddress.district', false)} formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(16, 'presentAddress.state') && (
-                <FormField label={getFieldLabelById(16, 'presentAddress.state', 'State/Province/Region')} name="presentAddress.state" required={getFieldRequiredById(16, 'presentAddress.state', false)} formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(16, 'presentAddress.state', 'State/Province/Region')} name="presentAddress.state" type={getFieldTypeById(16, 'presentAddress.state', 'text')} required={getFieldRequiredById(16, 'presentAddress.state', false)} formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(16, 'presentAddress.pincode') && (
-                <FormField label={getFieldLabelById(16, 'presentAddress.pincode', 'ZIP/Postal Code')} name="presentAddress.pincode" required={getFieldRequiredById(16, 'presentAddress.pincode', false)} formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(16, 'presentAddress.pincode', 'ZIP/Postal Code')} name="presentAddress.pincode" type={getFieldTypeById(16, 'presentAddress.pincode', 'alphanumeric')} required={getFieldRequiredById(16, 'presentAddress.pincode', false)} formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(16, 'presentAddress.country') && (
-                <FormField label={getFieldLabelById(16, 'presentAddress.country', 'Country')} name="presentAddress.country" required={getFieldRequiredById(16, 'presentAddress.country', false)} formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(16, 'presentAddress.country', 'Country')} name="presentAddress.country" type={getFieldTypeById(16, 'presentAddress.country', 'text')} required={getFieldRequiredById(16, 'presentAddress.country', false)} formData={formData} handleChange={handleChange} />
               )}
 
               {/* Permanent Address */}
@@ -4195,25 +4154,25 @@ function UserManagement() {
               </div>
               {isFieldVisibleById(16, 'permanentAddress.line1') && (
                 <div className="col-span-full">
-                  <FormField label={getFieldLabelById(16, 'permanentAddress.line1', 'Address Line 1')} name="permanentAddress.line1" required={getFieldRequiredById(16, 'permanentAddress.line1', false)} formData={formData} handleChange={handleChange} />
+                  <FormField label={getFieldLabelById(16, 'permanentAddress.line1', 'Address Line 1')} name="permanentAddress.line1" type={getFieldTypeById(16, 'permanentAddress.line1', 'alphanumeric')} required={getFieldRequiredById(16, 'permanentAddress.line1', false)} formData={formData} handleChange={handleChange} />
                 </div>
               )}
               {isFieldVisibleById(16, 'permanentAddress.line2') && (
                 <div className="col-span-full">
-                  <FormField label={getFieldLabelById(16, 'permanentAddress.line2', 'Address Line 2')} name="permanentAddress.line2" formData={formData} handleChange={handleChange} />
+                  <FormField label={getFieldLabelById(16, 'permanentAddress.line2', 'Address Line 2')} name="permanentAddress.line2" type={getFieldTypeById(16, 'permanentAddress.line2', 'alphanumeric')} formData={formData} handleChange={handleChange} />
                 </div>
               )}
               {isFieldVisibleById(16, 'permanentAddress.district') && (
-                <FormField label={getFieldLabelById(16, 'permanentAddress.district', 'City')} name="permanentAddress.district" required={getFieldRequiredById(16, 'permanentAddress.district', false)} formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(16, 'permanentAddress.district', 'City')} name="permanentAddress.district" type={getFieldTypeById(16, 'permanentAddress.district', 'text')} required={getFieldRequiredById(16, 'permanentAddress.district', false)} formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(16, 'permanentAddress.state') && (
-                <FormField label={getFieldLabelById(16, 'permanentAddress.state', 'State/Province/Region')} name="permanentAddress.state" required={getFieldRequiredById(16, 'permanentAddress.state', false)} formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(16, 'permanentAddress.state', 'State/Province/Region')} name="permanentAddress.state" type={getFieldTypeById(16, 'permanentAddress.state', 'text')} required={getFieldRequiredById(16, 'permanentAddress.state', false)} formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(16, 'permanentAddress.pincode') && (
-                <FormField label={getFieldLabelById(16, 'permanentAddress.pincode', 'ZIP/Postal Code')} name="permanentAddress.pincode" required={getFieldRequiredById(16, 'permanentAddress.pincode', false)} formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(16, 'permanentAddress.pincode', 'ZIP/Postal Code')} name="permanentAddress.pincode" type={getFieldTypeById(16, 'permanentAddress.pincode', 'alphanumeric')} required={getFieldRequiredById(16, 'permanentAddress.pincode', false)} formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(16, 'permanentAddress.country') && (
-                <FormField label={getFieldLabelById(16, 'permanentAddress.country', 'Country')} name="permanentAddress.country" required={getFieldRequiredById(16, 'permanentAddress.country', false)} formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(16, 'permanentAddress.country', 'Country')} name="permanentAddress.country" type={getFieldTypeById(16, 'permanentAddress.country', 'text')} required={getFieldRequiredById(16, 'permanentAddress.country', false)} formData={formData} handleChange={handleChange} />
               )}
 
               {/* Address as per Aadhaar */}
@@ -4235,6 +4194,7 @@ function UserManagement() {
                   <FormField
                     label={getFieldLabelById(16, 'aadhaarAddress.line1', 'Address Line 1')}
                     name="aadhaarAddress.line1"
+                    type={getFieldTypeById(16, 'aadhaarAddress.line1', 'alphanumeric')}
                     required={getFieldRequiredById(16, 'aadhaarAddress.line1', false)}
                     formData={formData}
                     handleChange={handleChange}
@@ -4247,6 +4207,7 @@ function UserManagement() {
                   <FormField
                     label={getFieldLabelById(16, 'aadhaarAddress.line2', 'Address Line 2')}
                     name="aadhaarAddress.line2"
+                    type={getFieldTypeById(16, 'aadhaarAddress.line2', 'alphanumeric')}
                     formData={formData}
                     handleChange={handleChange}
                     disabled={formData.aadhaarAddressOption === 'present' || formData.aadhaarAddressOption === 'permanent'}
@@ -4257,6 +4218,7 @@ function UserManagement() {
                 <FormField
                   label={getFieldLabelById(16, 'aadhaarAddress.district', 'City')}
                   name="aadhaarAddress.district"
+                  type={getFieldTypeById(16, 'aadhaarAddress.district', 'text')}
                   required={getFieldRequiredById(16, 'aadhaarAddress.district', false)}
                   formData={formData}
                   handleChange={handleChange}
@@ -4267,6 +4229,7 @@ function UserManagement() {
                 <FormField
                   label={getFieldLabelById(16, 'aadhaarAddress.state', 'State/Province/Region')}
                   name="aadhaarAddress.state"
+                  type={getFieldTypeById(16, 'aadhaarAddress.state', 'text')}
                   required={getFieldRequiredById(16, 'aadhaarAddress.state', false)}
                   formData={formData}
                   handleChange={handleChange}
@@ -4277,6 +4240,7 @@ function UserManagement() {
                 <FormField
                   label={getFieldLabelById(16, 'aadhaarAddress.pincode', 'ZIP/Postal Code')}
                   name="aadhaarAddress.pincode"
+                  type={getFieldTypeById(16, 'aadhaarAddress.pincode', 'alphanumeric')}
                   required={getFieldRequiredById(16, 'aadhaarAddress.pincode', false)}
                   formData={formData}
                   handleChange={handleChange}
@@ -4287,6 +4251,7 @@ function UserManagement() {
                 <FormField
                   label={getFieldLabelById(16, 'aadhaarAddress.country', 'Country')}
                   name="aadhaarAddress.country"
+                  type={getFieldTypeById(16, 'aadhaarAddress.country', 'text')}
                   required={getFieldRequiredById(16, 'aadhaarAddress.country', false)}
                   formData={formData}
                   handleChange={handleChange}
@@ -4311,29 +4276,35 @@ function UserManagement() {
             >
               {/* Header */}
               <div className="col-span-full hidden md:grid md:grid-cols-12 gap-4 mb-2 font-semibold text-sm text-gray-700 dark:text-gray-300">
-                <div className="col-span-4">{getFieldLabelById(13, 'name', 'Name')}</div>
-                <div className="col-span-4">{getFieldLabelById(13, 'relation', 'Relationship')}</div>
-                <div className="col-span-3">{getFieldLabelById(13, 'dob', 'DOB')}</div>
+                <div className="col-span-4">{getFieldLabelById(13, 'name', 'Name')}{getFieldRequiredById(13, 'name', false) && <span className="text-red-500">*</span>}</div>
+                <div className="col-span-4">{getFieldLabelById(13, 'relation', 'Relationship')}{getFieldRequiredById(13, 'relation', false) && <span className="text-red-500">*</span>}</div>
+                <div className="col-span-3">{getFieldLabelById(13, 'dob', 'DOB')}{getFieldRequiredById(13, 'dob', false) && <span className="text-red-500">*</span>}</div>
                 <div className="col-span-1">Action</div>
               </div>
 
               {(formData.familyDetails || []).map((member, index) => (
                 <div key={index} className="col-span-full grid grid-cols-1 md:grid-cols-12 gap-4 mb-4 items-end border-b pb-4 md:border-0 md:pb-0">
                   <div className="col-span-4">
-                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 md:hidden">{getFieldLabelById(13, 'name', 'Name')}</label>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 md:hidden">{getFieldLabelById(13, 'name', 'Name')}{getFieldRequiredById(13, 'name', false) && <span className="text-red-500">*</span>}</label>
                     <input
                       type="text"
                       placeholder={getFieldLabelById(13, 'name', 'Name')}
                       value={member.name}
-                      onChange={(e) => handleFamilyDetailChange(index, 'name', e.target.value)}
+                      onChange={(e) => {
+                        const schemaType = getFieldTypeById(13, 'name', 'text')
+                        const filtered = filterValueByType(schemaType, e.target.value)
+                        handleFamilyDetailChange(index, 'name', filtered)
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     />
                   </div>
                   <div className="col-span-4">
                     <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 md:hidden">{getFieldLabelById(13, 'relation', 'Relationship')}</label>
                     {(() => {
-                      const relationshipOptions = getFieldOptionsById(13, 'relation', ['Father', 'Mother', 'Spouse'])
-                      const standardRels = relationshipOptions.filter(o => !String(o).toLowerCase().includes('other'))
+                      // Fetch from schema; fallback must include Mother and common options
+                      const relationshipOptions = getFieldOptionsById(13, 'relation', ['Father', 'Mother', 'Spouse', 'Other'])
+                      // Exclude only the literal "Other" option (do not use .includes('other') as it would remove "Mother")
+                      const standardRels = relationshipOptions.filter(o => o && String(o).trim().toLowerCase() !== 'other')
                       const isCustom = member.relation && (!standardRels.includes(member.relation) || member.relation === 'Other')
 
                       return (
@@ -4343,7 +4314,11 @@ function UserManagement() {
                               type="text"
                               placeholder={getFieldLabelById(13, 'relation', 'Specify Relationship')}
                               value={member.relation === 'Other' ? '' : (member.relation || '')}
-                              onChange={(e) => handleFamilyDetailChange(index, 'relation', e.target.value)}
+                              onChange={(e) => {
+                                const schemaType = getFieldTypeById(13, 'relation', 'text')
+                                const filtered = filterValueByType(schemaType, e.target.value)
+                                handleFamilyDetailChange(index, 'relation', filtered)
+                              }}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                               autoFocus
                             />
@@ -4484,7 +4459,7 @@ function UserManagement() {
                 <FormField label={getFieldLabelById(2, 'businessUnitHR', 'Department/Business Unit')} name="businessUnitHR" type="select" options={getFieldOptionsById(2, 'businessUnitHR', ['BU1', 'BU2', 'BU3'])} formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(2, 'designation') && (
-                <FormField label={getFieldLabelById(2, 'designation', 'Designation')} name="designation" formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(2, 'designation', 'Designation')} name="designation" type={getFieldTypeById(2, 'designation', 'text')} formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(2, 'role') && (
                 <FormField label={getFieldLabelById(2, 'role', 'Role')} name="role" type="select" required={getFieldRequiredById(2, 'role', true)} options={getFieldOptionsById(2, 'role', roles)} formData={formData} handleChange={handleChange} />
@@ -4565,7 +4540,7 @@ function UserManagement() {
               </div>
               )}
               {isFieldVisibleById(2, 'costCenter') && (
-                <FormField label={getFieldLabelById(2, 'costCenter', 'Cost Center')} name="costCenter" formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(2, 'costCenter', 'Cost Center')} name="costCenter" type={getFieldTypeById(2, 'costCenter', 'alphanumeric')} formData={formData} handleChange={handleChange} />
               )}
               {renderSchemaExtraFields(2, ['businessUnitHR', 'designation', 'role', 'employeeStatus', 'joiningDate', 'probationPeriod', 'costCenter', 'department', 'cid', 'managerId', 'superManagerId', 'noticePeriod', 'division', 'grade', 'location', 'employeeNumberSeries', 'employeeId', 'officialEmail', 'confirmDate'])}
 
@@ -5293,14 +5268,22 @@ function UserManagement() {
               <div className="flex flex-col">
                 <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                   {getFieldLabelById(4, 'accountNumber', 'Account Number')}
+                  {getFieldRequiredById(4, 'accountNumber', false) && <span className="text-red-500 ml-0.5">*</span>}
                 </label>
                 <input
                   type="text"
                   name="accountNumber"
                   value={isAccountNumberFocused ? formData.accountNumber : getMaskedAccountNumber(formData.accountNumber)}
-                  onChange={handleChange}
+                  onChange={(e) => {
+                    const schemaType = getFieldTypeById(4, 'accountNumber', 'alphanumeric')
+                    let val = e.target.value
+                    if (schemaType === 'number') val = val.replace(/[^0-9]/g, '')
+                    else if (schemaType === 'alphanumeric') val = val.replace(/[^a-zA-Z0-9]/g, '')
+                    handleChange({ target: { name: 'accountNumber', value: val } })
+                  }}
                   onFocus={() => setIsAccountNumberFocused(true)}
                   onBlur={() => setIsAccountNumberFocused(false)}
+                  required={getFieldRequiredById(4, 'accountNumber', false)}
                   className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
                   placeholder={getFieldLabelById(4, 'accountNumber', 'Enter Account Number')}
                 />
@@ -5309,13 +5292,21 @@ function UserManagement() {
               <div className="flex flex-col">
                 <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                   {getFieldLabelById(4, 'confirmAccountNumber', 'Confirm Account Number')}
+                  {getFieldRequiredById(4, 'confirmAccountNumber', false) && <span className="text-red-500 ml-0.5">*</span>}
                 </label>
                 <div className="relative">
                   <input
                     type="password"
                     name="confirmAccountNumber"
                     value={formData.confirmAccountNumber || ''}
-                    onChange={handleChange}
+                    onChange={(e) => {
+                      const schemaType = getFieldTypeById(4, 'confirmAccountNumber', 'alphanumeric')
+                      let val = e.target.value
+                      if (schemaType === 'number') val = val.replace(/[^0-9]/g, '')
+                      else if (schemaType === 'alphanumeric') val = val.replace(/[^a-zA-Z0-9]/g, '')
+                      handleChange({ target: { name: 'confirmAccountNumber', value: val } })
+                    }}
+                    required={getFieldRequiredById(4, 'confirmAccountNumber', false)}
                     className={`w-full px-2.5 py-1.5 text-sm border rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 transition-colors ${formData.confirmAccountNumber && formData.accountNumber
                       ? formData.accountNumber === formData.confirmAccountNumber
                         ? 'border-green-500 focus:ring-green-500 focus:border-green-500'
@@ -5341,6 +5332,7 @@ function UserManagement() {
                 <FormField
                   label={getFieldLabelById(4, 'bankName', 'Bank Name')}
                   name="bankName"
+                  type={getFieldTypeById(4, 'bankName', 'text')}
                   required={getFieldRequiredById(4, 'bankName', false)}
                   formData={formData}
                   handleChange={handleChange}
@@ -5348,7 +5340,7 @@ function UserManagement() {
               )}
               {isFieldVisibleById(4, 'ifscCode') && (
                 <div>
-                  <FormField label={getFieldLabelById(4, 'ifscCode', 'IFSC Code')} name="ifscCode" formData={formData} handleChange={(e) => {
+                  <FormField label={getFieldLabelById(4, 'ifscCode', 'IFSC Code')} name="ifscCode" type={getFieldTypeById(4, 'ifscCode', 'alphanumeric')} formData={formData} handleChange={(e) => {
                     handleChange(e)
                     // Validate IFSC matches bank name
                     if (formData.bankName && e.target.value) {
@@ -5390,6 +5382,7 @@ function UserManagement() {
                 <FormField
                   label={getFieldLabelById(4, 'branchName', 'Branch Name')}
                   name="branchName"
+                  type={getFieldTypeById(4, 'branchName', 'text')}
                   required={getFieldRequiredById(4, 'branchName', false)}
                   formData={formData}
                   handleChange={handleChange}
@@ -5411,6 +5404,7 @@ function UserManagement() {
                 <FormField
                   label={getFieldLabelById(4, 'nameAsPerBankRecords', 'Name as per Bank Records')}
                   name="nameAsPerBankRecords"
+                  type={getFieldTypeById(4, 'nameAsPerBankRecords', 'text')}
                   required={getFieldRequiredById(4, 'nameAsPerBankRecords', false)}
                   formData={formData}
                   handleChange={handleChange}
@@ -5420,6 +5414,7 @@ function UserManagement() {
                 <FormField
                   label={getFieldLabelById(4, 'iban', 'IBAN')}
                   name="iban"
+                  type={getFieldTypeById(4, 'iban', 'alphanumeric')}
                   required={getFieldRequiredById(4, 'iban', false)}
                   formData={formData}
                   handleChange={handleChange}
@@ -5429,6 +5424,7 @@ function UserManagement() {
                 <FormField
                   label={getFieldLabelById(4, 'swiftCode', 'Swift Code')}
                   name="swiftCode"
+                  type={getFieldTypeById(4, 'swiftCode', 'alphanumeric')}
                   required={getFieldRequiredById(4, 'swiftCode', false)}
                   formData={formData}
                   handleChange={handleChange}
@@ -5778,6 +5774,7 @@ function UserManagement() {
                 <FormField
                   label={getFieldLabelById(6, 'pfScheme', 'PF Scheme')}
                   name="pfScheme"
+                  type={getFieldTypeById(6, 'pfScheme', 'text')}
                   required={getFieldRequiredById(6, 'pfScheme', false)}
                   formData={formData}
                   handleChange={handleChange}
@@ -5827,7 +5824,7 @@ function UserManagement() {
                 <FormField
                   label={getFieldLabelById(6, 'salary', 'Salary')}
                   name="salary"
-                  type="number"
+                  type={getFieldTypeById(6, 'salary', 'number')}
                   required={getFieldRequiredById(6, 'salary', false)}
                   formData={formData}
                   handleChange={handleChange}
