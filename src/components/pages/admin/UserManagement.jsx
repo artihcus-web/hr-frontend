@@ -999,12 +999,14 @@ function UserManagement() {
   const [employeeFormConfig, setEmployeeFormConfig] = useState(null)
 
   // Load employee form configuration from backend (CMS)
+  // Reload when token changes OR when form is opened (to get latest schema changes)
   useEffect(() => {
     if (!token) return
 
     const fetchEmployeeFormConfig = async () => {
       try {
-        const res = await axiosInstance.get('/api/form-config/employee')
+        // Add cache-busting query parameter to ensure fresh data
+        const res = await axiosInstance.get(`/api/form-config/employee?t=${Date.now()}`)
         setEmployeeFormConfig(res.data?.config || null)
       } catch (error) {
         // 404 means no config yet – fall back to hard-coded labels
@@ -1015,7 +1017,7 @@ function UserManagement() {
     }
 
     fetchEmployeeFormConfig()
-  }, [token])
+  }, [token, showForm]) // Reload when form opens to get latest schema changes
 
   // Helpers to resolve section/field metadata from schema
   const getSectionConfig = useCallback(
@@ -2507,6 +2509,11 @@ function UserManagement() {
           toast.error(`Initial creation requires: ${missingFields.join(', ')}`)
           return
         }
+        // Validate phone number length (exactly 10 digits)
+        if (formData.phone && String(formData.phone).trim().length !== 10) {
+          toast.error('Phone Number must be exactly 10 digits')
+          return
+        }
       } else {
         if (!formData.employeeId) {
           toast.error('Employee ID is required')
@@ -2529,15 +2536,30 @@ function UserManagement() {
       const phoneNumbers = []
       const emails = []
       
-      // Collect phone numbers (only if they have values)
+      // Validate phone number length (exactly 10 digits)
       if (formData.phone && String(formData.phone).trim()) {
-        phoneNumbers.push({ value: String(formData.phone).trim(), label: 'Phone Number' })
+        const phoneValue = String(formData.phone).trim()
+        if (phoneValue.length !== 10) {
+          toast.error('Phone Number must be exactly 10 digits')
+          return
+        }
+        phoneNumbers.push({ value: phoneValue, label: 'Phone Number' })
       }
       if (formData.secondaryContact && String(formData.secondaryContact).trim()) {
-        phoneNumbers.push({ value: String(formData.secondaryContact).trim(), label: 'Secondary Contact' })
+        const secondaryValue = String(formData.secondaryContact).trim()
+        if (secondaryValue.length !== 10) {
+          toast.error('Secondary Contact must be exactly 10 digits')
+          return
+        }
+        phoneNumbers.push({ value: secondaryValue, label: 'Secondary Contact' })
       }
       if (formData.emergencyContact && String(formData.emergencyContact).trim()) {
-        phoneNumbers.push({ value: String(formData.emergencyContact).trim(), label: 'Emergency Contact Number' })
+        const emergencyValue = String(formData.emergencyContact).trim()
+        if (emergencyValue.length !== 10) {
+          toast.error('Emergency Contact Number must be exactly 10 digits')
+          return
+        }
+        phoneNumbers.push({ value: emergencyValue, label: 'Emergency Contact Number' })
       }
       
       // Check for duplicate phone numbers
@@ -2679,14 +2701,40 @@ function UserManagement() {
       }
     }
 
-    // Documents validation (Section 5): attachment mandatory, no duplicate types
+    // Documents validation (Section 5): attachment mandatory, no duplicate types (check form data and database)
     if (sectionId === 5) {
       const documents = formData.documents || []
       const documentTypes = documents.map(d => d.documentType).filter(Boolean)
+      
+      // Check for duplicates within the form data
       const duplicates = documentTypes.filter((type, index) => documentTypes.indexOf(type) !== index && type !== 'Other')
       if (duplicates.length > 0) {
         toast.error(`Duplicate document types found: ${[...new Set(duplicates)].join(', ')}. Please remove duplicates.`)
         return
+      }
+      
+      // Check for duplicates in database (if editing existing employee)
+      if (editingEmployee && documents.length > 0) {
+        try {
+          const existingEmployee = await axiosInstance.get(`/api/auth/users/${editingEmployee}`)
+          const existingDocs = existingEmployee.data.user?.documents || []
+          const existingDocTypes = existingDocs.map(d => d.documentType).filter(Boolean)
+          
+          // Check if any new document type already exists in database
+          for (const doc of documents) {
+            if (doc.documentType && doc.documentType !== 'Other' && existingDocTypes.includes(doc.documentType)) {
+              // Check if this document number is different (allowing updates)
+              const existingDoc = existingDocs.find(d => d.documentType === doc.documentType)
+              if (existingDoc && existingDoc.documentNumber !== doc.documentNumber) {
+                toast.error(`${doc.documentType} already exists for this employee. Please remove duplicate or update existing entry.`)
+                return
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error checking document duplicates in database:', error)
+          // Continue if check fails (don't block submission)
+        }
       }
       const missingAttachment = documents.some(d => d.documentType && !d.fileName)
       if (missingAttachment) {
@@ -2716,6 +2764,32 @@ function UserManagement() {
       if (invalidVoterId) {
         toast.error('Voter ID Number must be 6-10 alphanumeric characters.')
         return
+      }
+    }
+
+    // Education Details validation (Section 3): percentage/CGPA range validation
+    if (sectionId === 3) {
+      const education = formData.education || []
+      for (const edu of education) {
+        if (edu.percentage) {
+          const valueStr = String(edu.percentage).trim()
+          const hasPercent = valueStr.endsWith('%')
+          const numValue = parseFloat(valueStr.replace(/%/g, ''))
+          
+          if (!isNaN(numValue)) {
+            // Detect if it's CGPA or Percentage:
+            // - If value ends with %, it's percentage
+            // - If value is <= 10 and no %, it's likely CGPA
+            // - If value > 10 and no %, it's likely percentage
+            const isCGPA = !hasPercent && numValue <= 10
+            const maxValue = isCGPA ? 10 : 100
+            
+            if (numValue < 0 || numValue > maxValue) {
+              toast.error(isCGPA ? `CGPA must be between 0 and ${maxValue}` : `Percentage must be between 0 and ${maxValue}`)
+              return
+            }
+          }
+        }
       }
     }
 
@@ -2789,26 +2863,49 @@ function UserManagement() {
       }
     }
 
-    // Bank Name & IFSC matching validation
-    if (sectionId === 4 && formData.bankName && formData.ifscCode) {
-      const bankName = String(formData.bankName).toLowerCase()
-      const ifscCode = String(formData.ifscCode).toUpperCase()
-      const bankCodes = {
-        'canara': 'CNRB', 'canara bank': 'CNRB',
-        'icici': 'ICIC', 'icici bank': 'ICIC',
-        'hdfc': 'HDFC', 'hdfc bank': 'HDFC',
-        'sbi': 'SBIN', 'state bank': 'SBIN',
-        'axis': 'UTIB', 'axis bank': 'UTIB',
-        'pnb': 'PUNB', 'punjab national bank': 'PUNB',
-        'bob': 'BARB', 'bank of baroda': 'BARB',
-        'boi': 'BKID', 'bank of india': 'BKID',
-        'union': 'UBIN', 'union bank': 'UBIN',
-        'iob': 'IOBA', 'indian overseas bank': 'IOBA'
+    // Bank Details validation (Section 4): IFSC format and matching
+    if (sectionId === 4) {
+      // Validate IFSC Code format: 4 letters + 1 zero + 6 characters = 11 total
+      if (formData.ifscCode) {
+        const ifscCode = String(formData.ifscCode).trim().toUpperCase()
+        const ifscPattern = /^[A-Z]{4}0[A-Z0-9]{6}$/
+        if (!ifscPattern.test(ifscCode)) {
+          toast.error('IFSC Code must be in format: 4 letters + 1 zero + 6 characters (e.g., SBIN0001234)')
+          return
+        }
+        
+        // Validate IFSC matches bank name (if bank name is provided)
+        if (formData.bankName) {
+          const bankName = String(formData.bankName).toLowerCase()
+          const bankCodes = {
+            'canara': 'CNRB', 'canara bank': 'CNRB',
+            'icici': 'ICIC', 'icici bank': 'ICIC',
+            'hdfc': 'HDFC', 'hdfc bank': 'HDFC',
+            'sbi': 'SBIN', 'state bank': 'SBIN',
+            'axis': 'UTIB', 'axis bank': 'UTIB',
+            'pnb': 'PUNB', 'punjab national bank': 'PUNB',
+            'bob': 'BARB', 'bank of baroda': 'BARB',
+            'boi': 'BKID', 'bank of india': 'BKID',
+            'union': 'UBIN', 'union bank': 'UBIN',
+            'iob': 'IOBA', 'indian overseas bank': 'IOBA'
+          }
+          const expectedCode = Object.keys(bankCodes).find(key => bankName.includes(key))
+          if (expectedCode && !ifscCode.startsWith(bankCodes[expectedCode])) {
+            toast.error('Bank Name and IFSC Code do not match. Please enter valid details.')
+            return
+          }
+        }
       }
-      const expectedCode = Object.keys(bankCodes).find(key => bankName.includes(key))
-      if (expectedCode && !ifscCode.startsWith(bankCodes[expectedCode])) {
-        toast.error('Bank Name and IFSC Code do not match. Please enter valid details.')
-        return
+    }
+
+    // PF Details validation (Section 6): Universal Account Number must be exactly 12 digits
+    if (sectionId === 6) {
+      if (formData.universalAccountNumber) {
+        const uan = String(formData.universalAccountNumber).trim()
+        if (!/^\d{12}$/.test(uan)) {
+          toast.error('Universal Account Number must be exactly 12 digits')
+          return
+        }
       }
     }
 
@@ -3682,7 +3779,7 @@ function UserManagement() {
                 <FormField label={getFieldLabelById(1, 'gender', 'Gender')} name="gender" type="select" required={getFieldRequiredById(1, 'gender', false)} options={getFieldOptionsById(1, 'gender', genders)} formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(1, 'bloodGroup') && (
-                <FormField label={getFieldLabelById(1, 'bloodGroup', 'Blood Group')} name="bloodGroup" type="select" options={getFieldOptionsById(1, 'bloodGroup', ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'])} formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(1, 'bloodGroup', 'Blood Group')} name="bloodGroup" type="select" required={getFieldRequiredById(1, 'bloodGroup', false)} options={getFieldOptionsById(1, 'bloodGroup', ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'])} formData={formData} handleChange={handleChange} />
               )}
 
               {/* Row 3: DOBs - both must be at least 18 years ago (no future, 18+ only) */}
@@ -3695,6 +3792,7 @@ function UserManagement() {
                     label={getFieldLabelById(1, 'birthdayDate', 'DOB as per Aadhaar')}
                     name="birthdayDate"
                     type="date"
+                    required={getFieldRequiredById(1, 'birthdayDate', false)}
                     formData={formData}
                     handleChange={handleChange}
                     min="1900-01-01"
@@ -3721,7 +3819,7 @@ function UserManagement() {
 
               {/* Row 4: Marital Status; Marriage Date only when not Single */}
               {isFieldVisibleById(1, 'maritalStatus') && (
-                <FormField label={getFieldLabelById(1, 'maritalStatus', 'Marital Status')} name="maritalStatus" type="select" options={getFieldOptionsById(1, 'maritalStatus', maritalStatuses)} formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(1, 'maritalStatus', 'Marital Status')} name="maritalStatus" type="select" required={getFieldRequiredById(1, 'maritalStatus', false)} options={getFieldOptionsById(1, 'maritalStatus', maritalStatuses)} formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(1, 'marriageDate') && String(formData.maritalStatus || '').trim().toLowerCase() !== 'single' && (() => {
                 const today = new Date()
@@ -3923,6 +4021,13 @@ function UserManagement() {
                       }}
                       maxLength={10}
                       required={getFieldRequiredById(12, 'phone', true)}
+                      onBlur={(e) => {
+                        const value = e.target.value.trim()
+                        if (value && value.length !== 10) {
+                          toast.error('Phone number must be exactly 10 digits')
+                          e.target.focus()
+                        }
+                      }}
                       className="w-44 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
                       placeholder={getFieldLabelById(12, 'phone', 'Primary contact number')}
                     />
@@ -3993,6 +4098,13 @@ function UserManagement() {
                         })
                       }}
                       maxLength={10}
+                      onBlur={(e) => {
+                        const value = e.target.value.trim()
+                        if (value && value.length !== 10) {
+                          toast.error('Secondary contact number must be exactly 10 digits')
+                          e.target.focus()
+                        }
+                      }}
                       className="w-44 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
                       placeholder={getFieldLabelById(12, 'secondaryContact', 'Secondary contact number')}
                     />
@@ -4064,6 +4176,13 @@ function UserManagement() {
                       }}
                       maxLength={10}
                       required={getFieldRequiredById(12, 'emergencyContact', true)}
+                      onBlur={(e) => {
+                        const value = e.target.value.trim()
+                        if (value && value.length !== 10) {
+                          toast.error('Emergency contact number must be exactly 10 digits')
+                          e.target.focus()
+                        }
+                      }}
                       className="w-44 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
                       placeholder={getFieldLabelById(12, 'emergencyContactNumber', 'Emergency contact number')}
                     />
@@ -4125,7 +4244,7 @@ function UserManagement() {
               )}
               {isFieldVisibleById(16, 'presentAddress.line2') && (
                 <div className="col-span-full">
-                  <FormField label={getFieldLabelById(16, 'presentAddress.line2', 'Address Line 2')} name="presentAddress.line2" type={getFieldTypeById(16, 'presentAddress.line2', 'alphanumeric')} formData={formData} handleChange={handleChange} />
+                  <FormField label={getFieldLabelById(16, 'presentAddress.line2', 'Address Line 2')} name="presentAddress.line2" type={getFieldTypeById(16, 'presentAddress.line2', 'alphanumeric')} required={getFieldRequiredById(16, 'presentAddress.line2', false)} formData={formData} handleChange={handleChange} />
                 </div>
               )}
               {isFieldVisibleById(16, 'presentAddress.district') && (
@@ -4162,7 +4281,7 @@ function UserManagement() {
               )}
               {isFieldVisibleById(16, 'permanentAddress.line2') && (
                 <div className="col-span-full">
-                  <FormField label={getFieldLabelById(16, 'permanentAddress.line2', 'Address Line 2')} name="permanentAddress.line2" type={getFieldTypeById(16, 'permanentAddress.line2', 'alphanumeric')} formData={formData} handleChange={handleChange} />
+                  <FormField label={getFieldLabelById(16, 'permanentAddress.line2', 'Address Line 2')} name="permanentAddress.line2" type={getFieldTypeById(16, 'permanentAddress.line2', 'alphanumeric')} required={getFieldRequiredById(16, 'permanentAddress.line2', false)} formData={formData} handleChange={handleChange} />
                 </div>
               )}
               {isFieldVisibleById(16, 'permanentAddress.district') && (
@@ -4463,10 +4582,10 @@ function UserManagement() {
               )}
 
               {isFieldVisibleById(2, 'businessUnitHR') && (
-                <FormField label={getFieldLabelById(2, 'businessUnitHR', 'Department/Business Unit')} name="businessUnitHR" type="select" options={getFieldOptionsById(2, 'businessUnitHR', ['BU1', 'BU2', 'BU3'])} formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(2, 'businessUnitHR', 'Department/Business Unit')} name="businessUnitHR" type="select" required={getFieldRequiredById(2, 'businessUnitHR', false)} options={getFieldOptionsById(2, 'businessUnitHR', ['BU1', 'BU2', 'BU3'])} formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(2, 'designation') && (
-                <FormField label={getFieldLabelById(2, 'designation', 'Designation')} name="designation" type={getFieldTypeById(2, 'designation', 'text')} formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(2, 'designation', 'Designation')} name="designation" type={getFieldTypeById(2, 'designation', 'text')} required={getFieldRequiredById(2, 'designation', false)} formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(2, 'role') && (
                 <FormField label={getFieldLabelById(2, 'role', 'Role')} name="role" type="select" required={getFieldRequiredById(2, 'role', true)} options={getFieldOptionsById(2, 'role', roles)} formData={formData} handleChange={handleChange} />
@@ -4547,7 +4666,7 @@ function UserManagement() {
               </div>
               )}
               {isFieldVisibleById(2, 'costCenter') && (
-                <FormField label={getFieldLabelById(2, 'costCenter', 'Cost Center')} name="costCenter" type={getFieldTypeById(2, 'costCenter', 'alphanumeric')} formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(2, 'costCenter', 'Cost Center')} name="costCenter" type={getFieldTypeById(2, 'costCenter', 'alphanumeric')} required={getFieldRequiredById(2, 'costCenter', false)} formData={formData} handleChange={handleChange} />
               )}
               {renderSchemaExtraFields(2, ['businessUnitHR', 'designation', 'role', 'employeeStatus', 'joiningDate', 'probationPeriod', 'costCenter', 'department', 'cid', 'managerId', 'superManagerId', 'noticePeriod', 'division', 'grade', 'location', 'employeeNumberSeries', 'employeeId', 'officialEmail', 'confirmDate'])}
 
@@ -4618,8 +4737,9 @@ function UserManagement() {
                       <div>
                         <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(3, 'degree', 'Degree / Qualification')}</label>
                         {(() => {
-                          const degreeOptions = getFieldOptionsById(3, 'degree', ['SSC/CBSE/ICSE', 'Intermediate', 'Diploma', 'UG', 'PG', 'PHD', 'Other'])
-                          const standardDegrees = degreeOptions.filter(o => !String(o).toLowerCase().includes('other'))
+                          // Schema-driven: options from Form Schema Config (Education section, field "degree" type select). Fallback only when schema has no options.
+                          const degreeOptions = getFieldOptionsById(3, 'degree', ['Other'])
+                          const standardDegrees = degreeOptions.filter(o => o && String(o).trim())
                           const isCustom = edu.degree && (!standardDegrees.includes(edu.degree) || edu.degree === 'Other')
 
                           if (isCustom) {
@@ -4687,10 +4807,47 @@ function UserManagement() {
                             // Prevent multiple decimal points
                             const parts = filteredValue.split('.')
                             const finalValue = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : filteredValue
+                            
+                            // Don't validate during typing - allow user to type freely
+                            // Validation will happen on blur
+                            
                             console.log('📊 Percentage/CGPA filtered:', { name: 'percentage', filteredValue: finalValue })
                             const newEducation = [...formData.education]
                             newEducation[index].percentage = finalValue
                             setFormData({ ...formData, education: newEducation })
+                          }}
+                          onBlur={(e) => {
+                            const value = e.target.value.trim()
+                            if (!value) return
+                            
+                            // Detect if it's CGPA or Percentage:
+                            // - If value ends with %, it's percentage
+                            // - If value is <= 10 and no %, it's likely CGPA
+                            // - If value > 10 and no %, it's likely percentage
+                            const hasPercent = value.endsWith('%')
+                            const numValue = parseFloat(value.replace(/%/g, ''))
+                            
+                            if (isNaN(numValue)) {
+                              toast.error('Please enter a valid number')
+                              e.target.focus()
+                              return
+                            }
+                            
+                            // Determine if CGPA based on value range and % symbol
+                            const isCGPA = !hasPercent && numValue <= 10
+                            const maxValue = isCGPA ? 10 : 100
+                            
+                            if (numValue < 0) {
+                              toast.error('Value cannot be negative')
+                              e.target.focus()
+                              return
+                            }
+                            
+                            if (numValue > maxValue) {
+                              toast.error(isCGPA ? `CGPA must be between 0 and ${maxValue}` : `Percentage must be between 0 and ${maxValue}`)
+                              e.target.focus()
+                              return
+                            }
                           }}
                           onKeyPress={(e) => {
                             const char = String.fromCharCode(e.which)
@@ -5183,7 +5340,10 @@ function UserManagement() {
                             }
                           }}
                           min="1900-01-01"
-                          max="2100-12-31"
+                          max={(() => {
+                            const today = new Date()
+                            return today.toISOString().split('T')[0]
+                          })()}
                           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                         />
                       </div>
@@ -5241,7 +5401,10 @@ function UserManagement() {
                             }
                           }}
                           min={exp.fromDate || '1900-01-01'}
-                          max="2100-12-31"
+                          max={(() => {
+                            const today = new Date()
+                            return today.toISOString().split('T')[0]
+                          })()}
                           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                         />
                       </div>
@@ -5354,31 +5517,88 @@ function UserManagement() {
               )}
               {isFieldVisibleById(4, 'ifscCode') && (
                 <div>
-                  <FormField label={getFieldLabelById(4, 'ifscCode', 'IFSC Code')} name="ifscCode" type={getFieldTypeById(4, 'ifscCode', 'alphanumeric')} formData={formData} handleChange={(e) => {
-                    handleChange(e)
-                    // Validate IFSC matches bank name
-                    if (formData.bankName && e.target.value) {
-                      const bankName = String(formData.bankName).toLowerCase()
-                      const ifscCode = String(e.target.value).toUpperCase()
-                      // Basic IFSC validation: first 4 characters should match bank name
-                      const bankCodes = {
-                        'canara': 'CNRB', 'canara bank': 'CNRB',
-                        'icici': 'ICIC', 'icici bank': 'ICIC',
-                        'hdfc': 'HDFC', 'hdfc bank': 'HDFC',
-                        'sbi': 'SBIN', 'state bank': 'SBIN',
-                        'axis': 'UTIB', 'axis bank': 'UTIB',
-                        'pnb': 'PUNB', 'punjab national bank': 'PUNB',
-                        'bob': 'BARB', 'bank of baroda': 'BARB',
-                        'boi': 'BKID', 'bank of india': 'BKID',
-                        'union': 'UBIN', 'union bank': 'UBIN',
-                        'iob': 'IOBA', 'indian overseas bank': 'IOBA'
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {getFieldLabelById(4, 'ifscCode', 'IFSC Code')}
+                    {getFieldRequiredById(4, 'ifscCode', false) && <span className="text-red-500">*</span>}
+                  </label>
+                  <input
+                    type="text"
+                    name="ifscCode"
+                    value={formData.ifscCode || ''}
+                    onChange={(e) => {
+                      let value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '')
+                      const currentLength = value.length
+                      
+                      // IFSC Format: 4 letters + 1 zero + 6 characters = 11 total
+                      // Enforce format during typing
+                      if (currentLength <= 4) {
+                        // First 4: letters only
+                        value = value.replace(/[^A-Z]/g, '')
+                      } else if (currentLength === 5) {
+                        // 5th character: must be zero
+                        const first4 = value.slice(0, 4).replace(/[^A-Z]/g, '')
+                        const fifth = value.slice(4, 5)
+                        value = first4 + (fifth === '0' ? '0' : '')
+                      } else if (currentLength <= 11) {
+                        // 6th-11th: alphanumeric (6 characters)
+                        const first5 = value.slice(0, 5)
+                        const first4 = first5.slice(0, 4).replace(/[^A-Z]/g, '')
+                        const fifth = first5.slice(4, 5) === '0' ? '0' : ''
+                        const rest = value.slice(5).replace(/[^A-Z0-9]/g, '').slice(0, 6)
+                        value = first4 + fifth + rest
+                      } else {
+                        // Max 11 characters
+                        value = value.slice(0, 11)
                       }
-                      const expectedCode = Object.keys(bankCodes).find(key => bankName.includes(key))
-                      if (expectedCode && !ifscCode.startsWith(bankCodes[expectedCode])) {
-                        toast.error('Bank Name and IFSC Code do not match. Please enter valid details.')
+                      
+                      handleChange({
+                        target: {
+                          name: 'ifscCode',
+                          value: value,
+                          type: 'text',
+                          checked: false
+                        }
+                      })
+                    }}
+                    onBlur={(e) => {
+                      const value = e.target.value.trim()
+                      if (!value) return
+                      
+                      // Validate IFSC format: 4 letters + 1 zero + 6 alphanumeric = 11 total
+                      const ifscPattern = /^[A-Z]{4}0[A-Z0-9]{6}$/
+                      if (!ifscPattern.test(value)) {
+                        toast.error('IFSC Code must be in format: 4 letters + 1 zero + 6 characters (e.g., SBIN0001234)')
+                        e.target.focus()
+                        return
                       }
-                    }
-                  }} />
+                      
+                      // Validate IFSC matches bank name (if bank name is provided)
+                      if (formData.bankName && value) {
+                        const bankName = String(formData.bankName).toLowerCase()
+                        const ifscCode = value
+                        const bankCodes = {
+                          'canara': 'CNRB', 'canara bank': 'CNRB',
+                          'icici': 'ICIC', 'icici bank': 'ICIC',
+                          'hdfc': 'HDFC', 'hdfc bank': 'HDFC',
+                          'sbi': 'SBIN', 'state bank': 'SBIN',
+                          'axis': 'UTIB', 'axis bank': 'UTIB',
+                          'pnb': 'PUNB', 'punjab national bank': 'PUNB',
+                          'bob': 'BARB', 'bank of baroda': 'BARB',
+                          'boi': 'BKID', 'bank of india': 'BKID',
+                          'union': 'UBIN', 'union bank': 'UBIN',
+                          'iob': 'IOBA', 'indian overseas bank': 'IOBA'
+                        }
+                        const expectedCode = Object.keys(bankCodes).find(key => bankName.includes(key))
+                        if (expectedCode && !ifscCode.startsWith(bankCodes[expectedCode])) {
+                          toast.error('Bank Name and IFSC Code do not match. Please enter valid details.')
+                        }
+                      }
+                    }}
+                    maxLength={11}
+                    required={getFieldRequiredById(4, 'ifscCode', false)}
+                    className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    placeholder={getFieldLabelById(4, 'ifscCode', 'e.g., SBIN0001234')}
+                  />
                 </div>
               )}
               {isFieldVisibleById(4, 'accountType') && (
@@ -5478,6 +5698,7 @@ function UserManagement() {
                       <div>
                         <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(5, 'documentType', 'Document Type')} {getFieldRequiredById(5, 'documentType', true) && <span className="text-red-500">*</span>}</label>
                         {(() => {
+                          // Schema-driven: document types from Form Schema Config (Documents section, field "documentType" type select)
                           const docTypeOptions = getFieldOptionsById(5, 'documentType', ['Aadhar Card', 'PAN Card', 'Passport', 'Driving License', 'Voter ID', 'Other'])
                           const isOtherDocType = doc.documentType && String(doc.documentType).toLowerCase().includes('other')
                           if (isOtherDocType) {
@@ -5549,10 +5770,14 @@ function UserManagement() {
                       <div>
                         <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                           {(() => {
-                            if (doc.documentType === 'Aadhar Card') return 'Aadhaar Number'
-                            if (doc.documentType === 'PAN Card') return 'PAN Number'
-                            if (doc.documentType === 'Passport') return 'Passport Number'
-                            if (doc.documentType === 'Voter ID') return 'Voter ID Number'
+                            // Dynamic label from selected document type; schema default for unknown/empty
+                            const docType = doc.documentType
+                            if (docType === 'Aadhar Card') return 'Aadhaar Number'
+                            if (docType === 'PAN Card') return 'PAN Number'
+                            if (docType === 'Passport') return 'Passport Number'
+                            if (docType === 'Voter ID') return 'Voter ID Number'
+                            if (docType === 'Driving License') return 'Driving License Number'
+                            if (docType) return `${docType} Number`
                             return getFieldLabelById(5, 'documentNumber', 'Document Number')
                           })()}
                           {getFieldRequiredById(5, 'documentNumber', true) && <span className="text-red-500">*</span>}
@@ -5697,10 +5922,13 @@ function UserManagement() {
                           required={getFieldRequiredById(5, 'documentNumber', true)}
                           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                           placeholder={(() => {
-                            if (doc.documentType === 'Aadhar Card') return '12-digit Aadhaar Number'
-                            if (doc.documentType === 'PAN Card') return 'ABCDE1234F'
-                            if (doc.documentType === 'Passport') return 'A1234567 or AB1234567'
-                            if (doc.documentType === 'Voter ID') return '6-10 alphanumeric characters'
+                            const docType = doc.documentType
+                            if (docType === 'Aadhar Card') return '12-digit Aadhaar Number'
+                            if (docType === 'PAN Card') return 'ABCDE1234F'
+                            if (docType === 'Passport') return 'A1234567 or AB1234567'
+                            if (docType === 'Voter ID') return '6-10 alphanumeric characters'
+                            if (docType === 'Driving License') return 'Driving License Number'
+                            if (docType) return `Enter ${docType} Number`
                             return getFieldLabelById(5, 'documentNumber', 'Enter Number')
                           })()}
                         />
@@ -5845,14 +6073,41 @@ function UserManagement() {
                 />
               )}
               {isFieldVisibleById(6, 'universalAccountNumber') && (
-                <FormField
-                  label={getFieldLabelById(6, 'universalAccountNumber', 'Universal Account Number')}
-                  name="universalAccountNumber"
-                  type={getFieldTypeById(6, 'universalAccountNumber', 'number')}
-                  required={getFieldRequiredById(6, 'universalAccountNumber', false)}
-                  formData={formData}
-                  handleChange={handleChange}
-                />
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {getFieldLabelById(6, 'universalAccountNumber', 'Universal Account Number')}
+                    {getFieldRequiredById(6, 'universalAccountNumber', false) && <span className="text-red-500">*</span>}
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    name="universalAccountNumber"
+                    value={formData.universalAccountNumber || ''}
+                    onChange={(e) => {
+                      // Only digits, max 12 characters
+                      const filteredValue = (e.target.value || '').replace(/[^0-9]/g, '').slice(0, 12)
+                      handleChange({
+                        target: {
+                          name: 'universalAccountNumber',
+                          value: filteredValue,
+                          type: 'text',
+                          checked: false
+                        }
+                      })
+                    }}
+                    onBlur={(e) => {
+                      const value = e.target.value.trim()
+                      if (value && value.length !== 12) {
+                        toast.error('Universal Account Number must be exactly 12 digits')
+                        e.target.focus()
+                      }
+                    }}
+                    maxLength={12}
+                    required={getFieldRequiredById(6, 'universalAccountNumber', false)}
+                    className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    placeholder={getFieldLabelById(6, 'universalAccountNumber', 'Enter 12-digit UAN')}
+                  />
+                </div>
               )}
               {renderSchemaExtraFields(6, ['isEligibleForPF', 'pfNumber', 'pfScheme', 'pfJoiningDate', 'eligibleForExcessEPFContribution', 'isEligibleForExcessEPSContribution', 'isExistingMemberOfPF', 'salary', 'universalAccountNumber'])}
             </FormSection>
