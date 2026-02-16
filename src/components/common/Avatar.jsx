@@ -33,7 +33,7 @@ function Avatar({
     return name.substring(0, 2).toUpperCase()
   }
 
-  const profileImageUrl = user?.profileImage ? getProfileImageUrl(user.profileImage) : null
+  const profileImageUrl = user?.profileImage ? getProfileImageUrl(user.profileImage, user._id || user.id) : null
   const initials = getInitials(user)
 
   return (

@@ -25,7 +25,7 @@ function Header() {
     .join('')
     .toUpperCase()
 
-  const profileImageUrl = user?.profileImage ? getProfileImageUrl(user.profileImage) : null
+  const profileImageUrl = user?.profileImage ? getProfileImageUrl(user.profileImage, user._id || user.id) : null
 
   const { theme, toggleTheme } = useTheme()
 

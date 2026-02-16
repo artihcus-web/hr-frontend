@@ -12,19 +12,34 @@ export function getApiBaseUrl() {
 
 /**
  * Build full URL for profile/avatar images so they work after deploy.
- * When API base is still localhost but the app is opened from another origin (e.g. production),
- * use current origin so /uploads/... resolves to the same host (assumes API is served from same origin).
+ * Handles multiple formats:
+ * - GridFS endpoint: /api/auth/users/:id/avatar
+ * - Legacy file path: /uploads/profiles/xxx.jpg
+ * - GridFS ObjectId: converts to endpoint using user ID
+ * - Full URLs: returns as-is
  */
-export function getProfileImageUrl(url) {
+export function getProfileImageUrl(url, userId = null) {
   if (!url) return ''
-  if (url.startsWith('http') || url.startsWith('data:') || url.startsWith('blob:')) return url
-  const path = url.startsWith('/') ? url : `/${url}`
-  let base = getApiBaseUrl()
-  const isLocalhostBase = /^https?:\/\/localhost(:\d+)?$/i.test(base)
-  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : ''
-  const isDeployed = currentOrigin && !/^https?:\/\/localhost(:\d+)?$/i.test(currentOrigin)
-  if (isDeployed && isLocalhostBase) {
-    base = currentOrigin
+  
+  // Already a full URL (http/https/data/blob)
+  if (url.startsWith('http') || url.startsWith('data:') || url.startsWith('blob:')) {
+    return url
   }
+  
+  // If it's already an API endpoint path, just prepend base URL
+  if (url.startsWith('/api/auth/users/') && url.includes('/avatar')) {
+    const base = getApiBaseUrl()
+    return `${base}${url}`
+  }
+  
+  // If it's a GridFS ObjectId (24 char hex string) and we have userId, convert to endpoint
+  if (userId && /^[0-9a-fA-F]{24}$/.test(url)) {
+    const base = getApiBaseUrl()
+    return `${base}/api/auth/users/${userId}/avatar`
+  }
+  
+  // Legacy file path format (/uploads/profiles/xxx.jpg)
+  const path = url.startsWith('/') ? url : `/${url}`
+  const base = getApiBaseUrl()
   return `${base}${path}`
 }

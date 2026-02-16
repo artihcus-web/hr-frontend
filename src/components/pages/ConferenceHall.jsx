@@ -117,16 +117,16 @@ const ConferenceHall = () => {
   //   )
   // }
 
-  const generateTimeSlots = () => {
-    const slots = []
-    for (let hour = 9; hour <= 18; hour++) {
-      for (let minute = 0; minute < 60; minute += 30) {
-        const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
-        slots.push(timeStr)
-      }
-    }
-    return slots
-  }
+  // const generateTimeSlots = () => {
+  //   const slots = []
+  //   for (let hour = 9; hour <= 18; hour++) {
+  //     for (let minute = 0; minute < 60; minute += 30) {
+  //       const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
+  //       slots.push(timeStr)
+  //     }
+  //   }
+  //   return slots
+  // }
 
   // const timeSlots = generateTimeSlots()
 
