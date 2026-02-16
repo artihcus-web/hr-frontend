@@ -12,6 +12,16 @@ import { filterValueByType } from '../../../utils/fieldTypeValidation'
 
 const roles = ['admin', 'c-suite', 'hr', 'manager', 'supermanager', 'tl', 'employee', 'client']
 
+// Form debug: set to true to enable detailed console logs for testing (schema, required, visibility, etc.)
+const FORM_DEBUG = true
+const formLog = (tag, data) => {
+  if (FORM_DEBUG && typeof console !== 'undefined') {
+    console.log(`📋 [Form:${tag}]`, data)
+  }
+}
+// Log tags: SchemaLoaded, RequiredFieldsMap, SchemaExtraField, ConfirmDateField, ConfirmDateRender, ConfirmDateCalc, FormFieldConfirmDate
+// Log tags: Submit, FormState, SubmitValidation, SubmitError, SchemaLoadError
+
 const genders = ['Male', 'Female', 'Other']
 const maritalStatuses = ['Single', 'Married', 'Divorced', 'Widowed']
 const accountTypes = ['Savings', 'Current']
@@ -68,12 +78,11 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
     (name && name.toLowerCase().includes('confirm') && name.toLowerCase().includes('date'))
   )
   
-  if (isConfirmDate) {
-    console.log('🔒 FormField: Detected confirmDate field', { name, normalizedName, disabled, readOnly })
-  }
-  
   const forceDisabled = isConfirmDate ? true : (disabled || false)
   const forceReadOnly = isConfirmDate ? true : (readOnly || disabled || false)
+  if (FORM_DEBUG && isConfirmDate) {
+    formLog('FormFieldConfirmDate', { name, disabled: forceDisabled, readOnly: forceReadOnly })
+  }
   
   // Use ref to directly manipulate DOM for confirmDate
   const inputRef = React.useRef(null)
@@ -1129,19 +1138,43 @@ function UserManagement() {
 
     const fetchEmployeeFormConfig = async () => {
       try {
-        // Add cache-busting query parameter to ensure fresh data
         const res = await axiosInstance.get(`/api/form-config/employee?t=${Date.now()}`)
-        setEmployeeFormConfig(res.data?.config || null)
+        const config = res.data?.config || null
+        setEmployeeFormConfig(config)
+        formLog('SchemaLoaded', {
+          hasConfig: !!config,
+          sections: config?.sections?.map(s => ({
+            id: s.id,
+            title: s.title,
+            fieldCount: s.fields?.length || 0,
+            fields: s.fields?.map(f => ({ name: f.name, label: f.label, required: f.required, type: f.type, isActive: f.isActive }))
+          })) || []
+        })
       } catch (error) {
-        // 404 means no config yet – fall back to hard-coded labels
         if (error.response?.status !== 404) {
           console.error('Error loading employee form configuration:', error)
         }
+        formLog('SchemaLoadError', { status: error.response?.status, message: error.message })
       }
     }
 
     fetchEmployeeFormConfig()
   }, [token, showForm]) // Reload when form opens to get latest schema changes
+
+  // Log required-field map when schema changes (for testing/debugging)
+  useEffect(() => {
+    if (!FORM_DEBUG || !employeeFormConfig?.sections) return
+    const sectionIdMap = { 1: 'basic-info', 12: 'contact-info', 16: 'address-info', 13: 'family-details', 2: 'employment-info', 3: 'education-details', 14: 'languages', 10: 'experience-details', 4: 'bank-details', 5: 'documents', 6: 'pf-details', 7: 'esi-details', 8: 'other-info' }
+    const requiredMap = {}
+    employeeFormConfig.sections.forEach(sec => {
+      const sectionId = Object.entries(sectionIdMap).find(([, k]) => k === sec.id)?.[0] || sec.id
+      const requiredFields = (sec.fields || []).filter(f => f.required === true || f.required === 'true' || f.required === 1).map(f => f.name)
+      if (requiredFields.length > 0) {
+        requiredMap[`${sec.id} (sectionId ${sectionId})`] = requiredFields
+      }
+    })
+    formLog('RequiredFieldsMap', { bySection: requiredMap, note: 'Fields marked required in schema - asterisk (*) should show on these' })
+  }, [employeeFormConfig])
 
   // Helpers to resolve section/field metadata from schema
   const getSectionConfig = useCallback(
@@ -1523,6 +1556,15 @@ function UserManagement() {
     setHeaderProfileImageError(false)
   }, [editingEmployeeId, formData.profileImage])
 
+  // Helper: format Date to YYYY-MM-DD in local timezone (matches HTML date input behavior)
+  const toLocalDateString = (date) => {
+    if (!date || !(date instanceof Date) || isNaN(date.getTime())) return ''
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0')
+    const d = String(date.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  }
+
   // Auto-calculate confirmation date from joining date + probation period
   // ALWAYS auto-calculate and make read-only (cannot be manually edited)
   useEffect(() => {
@@ -1531,11 +1573,10 @@ function UserManagement() {
       let joinDate
       const joiningDateStr = String(formData.joiningDate).trim()
       
-      // Date input fields always return YYYY-MM-DD format
+      // Date input fields always return YYYY-MM-DD format - use T12:00:00 to avoid timezone shifts
       if (joiningDateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        joinDate = new Date(joiningDateStr + 'T00:00:00')
+        joinDate = new Date(joiningDateStr + 'T12:00:00')
       } else {
-        // Fallback: try parsing as-is
         joinDate = new Date(joiningDateStr)
       }
       
@@ -1550,8 +1591,8 @@ function UserManagement() {
         if (probDays > 0) {
           confirmDate.setDate(joinDate.getDate() + probDays)
         }
-        // If probDays is 0, confirmDate stays as joining date (same day)
-        const confirmDateStr = confirmDate.toISOString().slice(0, 10)
+        // Use local date string to match HTML date input (avoids timezone mismatch)
+        const confirmDateStr = toLocalDateString(confirmDate)
         
         // Always auto-calculate and update confirmDate (for both new and existing employees)
         // Also set "Confirmation Date" key for schema compatibility
@@ -1657,7 +1698,7 @@ function UserManagement() {
         let joinDate
         
         if (joinDateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
-          joinDate = new Date(joinDateStr + 'T00:00:00')
+          joinDate = new Date(joinDateStr + 'T12:00:00')
         } else {
           joinDate = new Date(joinDateStr)
         }
@@ -1668,13 +1709,13 @@ function UserManagement() {
         // If probation is 1 or more, add that many days to joining date
         if (!isNaN(joinDate.getTime()) && probDays >= 0) {
           const confirmDate = new Date(joinDate)
-          // If probation is 0, confirmation date = joining date (same day)
-          // If probation is 1+, add that many days
           if (probDays > 0) {
             confirmDate.setDate(joinDate.getDate() + probDays)
           }
-          // If probDays is 0, confirmDate stays as joining date (same day)
-          return confirmDate.toISOString().slice(0, 10)
+          const y = confirmDate.getFullYear()
+          const m = String(confirmDate.getMonth() + 1).padStart(2, '0')
+          const d = String(confirmDate.getDate()).padStart(2, '0')
+          return `${y}-${m}-${d}`
         }
       }
       return ''
@@ -1789,15 +1830,9 @@ function UserManagement() {
       // Construct field name: if inside array entry, use arrayName[index].fieldName format
       const fieldName = arrayIndex !== null && arrayName ? `${arrayName}.${arrayIndex}.${field.name}` : field.name
       
-      // DEBUG: Log ALL fields in section 2 to find confirmDate
-      if (sectionId === 2) {
-        console.log('📋 Section 2 Field:', {
-          fieldName,
-          fieldNameValue: field.name,
-          fieldType: field.type,
-          fieldLabel: field.label,
-          isActive: field.isActive
-        })
+      const computedRequired = getFieldRequiredById(sectionId, field.name, field.required || false)
+      if (FORM_DEBUG) {
+        formLog('SchemaExtraField', { sectionId, fieldName: field.name, schemaRequired: field.required, computedRequired, type: field.type })
       }
       
       // Custom handleChange for array entries
@@ -1839,20 +1874,15 @@ function UserManagement() {
           const hasProbationPeriod = formData.probationPeriod !== undefined && formData.probationPeriod !== null && String(formData.probationPeriod).trim() !== ''
           
           if (hasJoiningDate && hasProbationPeriod) {
-            // Calculate the correct date
-            const joinDate = new Date(formData.joiningDate)
+            const joinStr = String(formData.joiningDate).trim()
+            const joinDate = joinStr.match(/^\d{4}-\d{2}-\d{2}$/) ? new Date(joinStr + 'T12:00:00') : new Date(joinStr)
             const probDays = parseInt(String(formData.probationPeriod).trim(), 10) || 0
-            // Calculate confirmation date: if probation is 0, confirmation date = joining date (same day)
-            // If probation is 1 or more, add that many days to joining date
             if (!isNaN(joinDate.getTime()) && probDays >= 0) {
               const confirmDate = new Date(joinDate)
-              // If probation is 0, confirmation date = joining date (same day)
-              // If probation is 1+, add that many days
               if (probDays > 0) {
                 confirmDate.setDate(joinDate.getDate() + probDays)
               }
-              // If probDays is 0, confirmDate stays as joining date (same day)
-              const calculatedDateStr = confirmDate.toISOString().slice(0, 10)
+              const calculatedDateStr = toLocalDateString(confirmDate)
               // Revert to calculated value
               toast.error('Confirmation Date is auto-calculated and cannot be manually edited.')
               setFormData(prev => ({ 
@@ -1895,67 +1925,34 @@ function UserManagement() {
         (fieldName?.toLowerCase().includes('confirm') && fieldName?.toLowerCase().includes('date'))
       ) && arrayIndex === null
       
-      // DEBUG: Log ALL fields being rendered to find confirmDate
-      if (field.name && (field.name.toLowerCase().includes('confirm') || fieldName.toLowerCase().includes('confirm'))) {
-        console.log('🔍 Found potential confirmDate field:', {
-          fieldName,
-          fieldNameLower: fieldName.toLowerCase(),
-          fieldNameValue: field.name,
-          arrayIndex,
-          sectionId,
-          isConfirmDateField,
-          field: field
-        })
+      if (FORM_DEBUG && (field.name?.toLowerCase().includes('confirm') || fieldName?.toLowerCase().includes('confirm'))) {
+        formLog('ConfirmDateField', { fieldName: field.name, sectionId, isConfirmDateField })
       }
       
       // ALWAYS disable confirmDate - it should NEVER be manually editable
       // Check that both values are truthy and non-empty strings for auto-calculation
-      const hasJoiningDate = formData.joiningDate && String(formData.joiningDate).trim() !== ''
-      const hasProbationPeriod = formData.probationPeriod && String(formData.probationPeriod).trim() !== ''
+      // const hasJoiningDate = formData.joiningDate && String(formData.joiningDate).trim() !== ''
+      // const hasProbationPeriod = formData.probationPeriod && String(formData.probationPeriod).trim() !== ''
       // Always disable confirmDate field - it's auto-calculated
       const shouldDisableConfirmDate = isConfirmDateField
       
-      // DEBUG: Console logs for confirmDate field
-      if (isConfirmDateField) {
-        console.log('🔍 ConfirmDate Field Debug:', {
-          fieldName,
-          fieldNameValue: field.name,
-          isConfirmDateField,
-          hasJoiningDate,
-          hasProbationPeriod,
-          joiningDate: formData.joiningDate,
-          probationPeriod: formData.probationPeriod,
-          shouldDisableConfirmDate,
-          currentConfirmDate: formData.confirmDate,
-          fieldType: field.type,
-          fieldProps: { disabled: shouldDisableConfirmDate, readOnly: shouldDisableConfirmDate }
-        })
+      if (FORM_DEBUG && isConfirmDateField) {
+        formLog('ConfirmDateRender', { fieldName: field.name, disabled: shouldDisableConfirmDate, currentValue: formData.confirmDate })
       }
       
       // Calculate the expected confirm date for display/validation
       let calculatedConfirmDate = null
       if (isConfirmDateField && formData.joiningDate && formData.probationPeriod !== undefined && formData.probationPeriod !== null && formData.probationPeriod !== '') {
-        const joinDate = new Date(formData.joiningDate)
+        const joinStr = String(formData.joiningDate).trim()
+        const joinDate = joinStr.match(/^\d{4}-\d{2}-\d{2}$/) ? new Date(joinStr + 'T12:00:00') : new Date(joinStr)
         const probDays = parseInt(String(formData.probationPeriod).trim(), 10) || 0
-        // Calculate confirmation date: if probation is 0, confirmation date = joining date (same day)
-        // If probation is 1 or more, add that many days to joining date
         if (!isNaN(joinDate.getTime()) && probDays >= 0) {
           const confirmDate = new Date(joinDate)
-          // If probation is 0, confirmation date = joining date (same day)
-          // If probation is 1+, add that many days
           if (probDays > 0) {
             confirmDate.setDate(joinDate.getDate() + probDays)
           }
-          // If probDays is 0, confirmDate stays as joining date (same day)
-          calculatedConfirmDate = confirmDate.toISOString().slice(0, 10)
-          console.log('📅 Calculated ConfirmDate:', {
-            joiningDate: formData.joiningDate,
-            probationPeriod: formData.probationPeriod,
-            probDays,
-            calculatedConfirmDate,
-            currentConfirmDate: formData.confirmDate,
-            note: probDays === 0 ? 'Same day (probation = 0)' : `After ${probDays} day(s)`
-          })
+          calculatedConfirmDate = toLocalDateString(confirmDate)
+          formLog('ConfirmDateCalc', { joiningDate: formData.joiningDate, probationPeriod: formData.probationPeriod, probDays, calculatedConfirmDate })
         }
       }
       
@@ -1971,17 +1968,6 @@ function UserManagement() {
         ? `Automatically calculated: ${calculatedConfirmDate ? new Date(calculatedConfirmDate).toLocaleDateString() : 'N/A'} (${dateDescription}). This field cannot be manually edited.`
         : field.helpText
       
-      // DEBUG: Log props being passed to FormField for confirmDate
-      if (isConfirmDateField) {
-        console.log('📤 Rendering ConfirmDate FormField with props:', {
-          disabled: shouldDisableConfirmDate,
-          readOnly: shouldDisableConfirmDate,
-          name: fieldName,
-          type: getFieldTypeById(sectionId, field.name, field.type || 'text'),
-          calculatedConfirmDate,
-          currentFormDataConfirmDate: formData.confirmDate
-        })
-      }
       
       return (
         <FormField
@@ -1989,7 +1975,7 @@ function UserManagement() {
           label={getFieldLabelById(sectionId, field.name, field.label || field.name)}
           name={fieldName}
           type={getFieldTypeById(sectionId, field.name, field.type || 'text')}
-          required={getFieldRequiredById(sectionId, field.name, field.required || false)}
+          required={computedRequired}
           formData={formData}
           handleChange={customHandleChange}
           placeholder={field.placeholder}
@@ -2118,7 +2104,14 @@ function UserManagement() {
           fileUrl: edu.fileUrl || ''
         })) : [],
         languages: Array.isArray(emp.languages) ? emp.languages : [],
-        experience: Array.isArray(emp.experience) ? emp.experience : [],
+        experience: Array.isArray(emp.experience) ? emp.experience.map((ex) => {
+          const attachments = Array.isArray(ex.attachments) ? ex.attachments : []
+          if (attachments.length === 0 && (ex.experienceDetailsFile || ex.payslipsFile)) {
+            if (ex.experienceDetailsFile) attachments.push({ name: 'Experience Details', fileName: ex.experienceDetailsFile, fileUrl: ex.experienceDetailsFileUrl || '' })
+            if (ex.payslipsFile) attachments.push({ name: 'Payslips', fileName: ex.payslipsFile, fileUrl: ex.payslipsFileUrl || '' })
+          }
+          return { ...ex, attachments }
+        }) : [],
         salary: emp.salary || '',
         accountNumber: emp.accountNumber || '',
         confirmAccountNumber: emp.accountNumber || '',
@@ -2828,6 +2821,24 @@ function UserManagement() {
 
   const handleSubmit = async (e, sectionId = null) => {
     if (e) e.preventDefault()
+    formLog('Submit', { sectionId, isAddFlow, editingEmployee: !!editingEmployee })
+    // Full form state log for testing - sanitize formData (exclude profile image blob/base64)
+    const sanitized = { ...formData }
+    if (sanitized.profileImage && (typeof sanitized.profileImage === 'string' && sanitized.profileImage.startsWith('data:'))) {
+      sanitized.profileImage = '[base64 omitted]'
+    } else if (sanitized.profileImage instanceof Blob) {
+      sanitized.profileImage = '[Blob omitted]'
+    }
+    const sectionValidations = {}
+    for (let sid = 1; sid <= 16; sid++) {
+      const v = validateSectionRequiredFields(sid)
+      sectionValidations[sid] = { isValid: v.isValid, missingFields: v.missingFields }
+    }
+    formLog('FormState', {
+      formData: sanitized,
+      sectionValidations,
+      note: 'Full form state at submit - check sectionValidations for required field validation'
+    })
     if (!token) {
       toast.error('Not authenticated')
       return
@@ -2838,6 +2849,7 @@ function UserManagement() {
     // Validate required fields based on schema configuration
     if (isSectionSave) {
       const validation = validateSectionRequiredFields(sectionId)
+      formLog('SubmitValidation', { sectionId, isValid: validation.isValid, missingFields: validation.missingFields })
       if (!validation.isValid) {
         toast.error(`Please fill all required fields: ${validation.missingFields.join(', ')}`)
         return
@@ -3187,19 +3199,22 @@ function UserManagement() {
 
     // Confirm Date validation: must exactly match calculated date (joining date + probation period)
     if (sectionId === 2 && formData.joiningDate && formData.probationPeriod !== undefined && formData.probationPeriod !== null && String(formData.probationPeriod).trim() !== '') {
-      const joiningDate = new Date(formData.joiningDate)
+      const joiningDateStr = String(formData.joiningDate).trim()
+      const joinDate = joiningDateStr.match(/^\d{4}-\d{2}-\d{2}$/)
+        ? new Date(joiningDateStr + 'T12:00:00')
+        : new Date(joiningDateStr)
       const probDays = parseInt(String(formData.probationPeriod).trim(), 10) || 0
-      // Calculate confirmation date: if probation is 0, confirmation date = joining date (same day)
-      // If probation is 1 or more, add that many days to joining date
-      const expectedConfirmDate = new Date(joiningDate)
+      const expectedConfirmDate = new Date(joinDate)
       if (probDays > 0) {
-        expectedConfirmDate.setDate(joiningDate.getDate() + probDays)
+        expectedConfirmDate.setDate(joinDate.getDate() + probDays)
       }
-      // If probDays is 0, expectedConfirmDate stays as joining date (same day)
-      const expectedConfirmDateStr = expectedConfirmDate.toISOString().slice(0, 10)
+      const expectedConfirmDateStr = toLocalDateString(expectedConfirmDate)
+      
+      // Normalize form confirmDate for comparison (handle YYYY-MM-DD or stored format)
+      const currentConfirmStr = String(formData.confirmDate || formData['Confirmation Date'] || '').trim()
       
       // Verify confirmDate matches the calculated value exactly
-      if (formData.confirmDate && formData.confirmDate !== expectedConfirmDateStr) {
+      if (currentConfirmStr && currentConfirmStr !== expectedConfirmDateStr) {
         const dateDescription = probDays === 0 
           ? 'same day as Joining Date (probation = 0 days)' 
           : `Joining Date + ${probDays} day(s)`
@@ -3208,13 +3223,13 @@ function UserManagement() {
         setFormData(prev => ({ 
           ...prev, 
           confirmDate: expectedConfirmDateStr,
-          'Confirmation Date': expectedConfirmDateStr  // Also set with schema field name
+          'Confirmation Date': expectedConfirmDateStr
         }))
         return
       }
       
       // Ensure confirmDate is set if it's missing
-      if (!formData.confirmDate) {
+      if (!currentConfirmStr) {
         setFormData(prev => ({ 
           ...prev, 
           confirmDate: expectedConfirmDateStr,
@@ -3362,10 +3377,13 @@ function UserManagement() {
 
     } catch (error) {
       console.error('Submit error:', error)
+      const apiMsg = error.response?.data?.message || error.message
+      formLog('SubmitError', { status: error.response?.status, message: apiMsg })
       if (error.response && error.response.status < 500) {
-        toast.error(error.response.data.message || `Failed to ${editingEmployee ? 'update' : 'create'} employee`)
+        toast.error(apiMsg || `Failed to ${editingEmployee ? 'update' : 'create'} employee`)
+      } else {
+        toast.error(apiMsg || 'Server error. Please try again.')
       }
-      // 5xx handled globally
     } finally {
       setSubmittingSection(null)
     }
@@ -4958,6 +4976,7 @@ function UserManagement() {
                   label={getFieldLabelById(2, 'joiningDate', 'Joining Date')} 
                   name="joiningDate" 
                   type="date" 
+                  required={getFieldRequiredById(2, 'joiningDate', false)}
                   formData={formData} 
                   handleChange={handleChange}
                   min="1900-01-01"
@@ -4975,7 +4994,8 @@ function UserManagement() {
                 <FormField 
                   label={getFieldLabelById(2, 'probationPeriod', 'Probation Period (days)')} 
                   name="probationPeriod" 
-                  type="number" 
+                  type="number"
+                  required={getFieldRequiredById(2, 'probationPeriod', false)}
                   formData={formData} 
                   handleChange={(e) => {
                     // Only allow positive integers
@@ -5418,28 +5438,44 @@ function UserManagement() {
                           className="text-sm text-gray-500 file:mr-4 file:py-1.5 file:px-2.5 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
                         />
                         {edu.fileName && (
-                          <>
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-xs text-gray-500 truncate max-w-[120px]">{edu.fileName}</span>
                             {edu.fileUrl && (
-                              <div className="flex items-center gap-1">
+                              <>
                                 <a
-                                  href={edu.fileUrl}
+                                  href={edu.fileUrl.startsWith('http') || edu.fileUrl.startsWith('blob:') || edu.fileUrl.startsWith('/') ? (edu.fileUrl.startsWith('/') ? getProfileImageUrl(edu.fileUrl) : edu.fileUrl) : getProfileImageUrl(edu.fileUrl)}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="text-indigo-600 hover:text-indigo-800 text-xs underline"
+                                  className="text-indigo-600 hover:text-indigo-800 text-xs flex items-center gap-0.5"
                                 >
-                                  View
+                                  <FiEye className="w-3.5 h-3.5" /> View
                                 </a>
                                 <a
-                                  href={edu.fileUrl}
+                                  href={edu.fileUrl.startsWith('http') || edu.fileUrl.startsWith('blob:') || edu.fileUrl.startsWith('/') ? (edu.fileUrl.startsWith('/') ? getProfileImageUrl(edu.fileUrl) : edu.fileUrl) : edu.fileUrl}
                                   download={edu.fileName}
-                                  className="text-indigo-600 hover:text-indigo-800 text-xs underline"
+                                  className="text-indigo-600 hover:text-indigo-800 text-xs flex items-center gap-0.5"
                                 >
-                                  Download
+                                  <FiDownload className="w-3.5 h-3.5" /> Download
                                 </a>
-                              </div>
+                              </>
                             )}
-                          </>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newEducation = [...formData.education]
+                                if (newEducation[index].fileUrl?.startsWith?.('blob:')) {
+                                  try { URL.revokeObjectURL(newEducation[index].fileUrl) } catch { /* noop */ }
+                                }
+                                newEducation[index].fileName = ''
+                                newEducation[index].fileUrl = ''
+                                setFormData({ ...formData, education: newEducation })
+                                toast.success('Attachment removed')
+                              }}
+                              className="text-red-600 hover:text-red-800 text-xs flex items-center gap-0.5"
+                            >
+                              <FiTrash2 className="w-3.5 h-3.5" /> Delete
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -5769,6 +5805,94 @@ function UserManagement() {
                         />
                       </div>
                     </div>
+
+                    {/* Attachments: name + file, Add button for multiple docs */}
+                    <div className="col-span-full mt-4 border-t border-gray-200 dark:border-gray-600 pt-4">
+                      <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Attachments</div>
+                      {(exp.attachments || []).map((att, attIndex) => (
+                        <div key={attIndex} className="flex flex-wrap items-center gap-2 mb-3 p-2 rounded-md bg-gray-100 dark:bg-gray-800/50">
+                          <input
+                            type="text"
+                            value={att.name || ''}
+                            onChange={(e) => {
+                              const newExp = [...formData.experience]
+                              if (!newExp[index].attachments) newExp[index].attachments = []
+                              newExp[index].attachments[attIndex] = { ...att, name: e.target.value }
+                              setFormData({ ...formData, experience: newExp })
+                            }}
+                            placeholder="e.g. Experience letter, Payslips"
+                            className="w-36 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                          />
+                          <input
+                            type="file"
+                            accept=".pdf,application/pdf"
+                            onChange={(e) => {
+                              const file = e.target.files[0]
+                              if (file) {
+                                if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+                                  toast.error('Only PDF files are allowed')
+                                  e.target.value = ''
+                                  return
+                                }
+                                const newExp = [...formData.experience]
+                                if (!newExp[index].attachments) newExp[index].attachments = []
+                                if (newExp[index].attachments[attIndex].fileUrl?.startsWith?.('blob:')) {
+                                  try { URL.revokeObjectURL(newExp[index].attachments[attIndex].fileUrl) } catch { /* noop */ }
+                                }
+                                newExp[index].attachments[attIndex] = { ...newExp[index].attachments[attIndex], fileName: file.name, fileUrl: URL.createObjectURL(file) }
+                                setFormData({ ...formData, experience: newExp })
+                                toast.success(`Selected: ${file.name}`)
+                              }
+                              e.target.value = ''
+                            }}
+                            className="text-sm text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-medium file:bg-indigo-50 file:text-indigo-700"
+                          />
+                          {att.fileName && (
+                            <>
+                              <span className="text-xs text-gray-500 truncate max-w-[100px]">{att.fileName}</span>
+                              {att.fileUrl && (
+                                <>
+                                  <a href={att.fileUrl.startsWith('http') || att.fileUrl.startsWith('blob:') || att.fileUrl.startsWith('/') ? (att.fileUrl.startsWith('/') ? getProfileImageUrl(att.fileUrl) : att.fileUrl) : getProfileImageUrl(att.fileUrl)} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-800 text-xs flex items-center gap-0.5">
+                                    <FiEye className="w-3.5 h-3.5" /> View
+                                  </a>
+                                  <a href={att.fileUrl.startsWith('http') || att.fileUrl.startsWith('blob:') || att.fileUrl.startsWith('/') ? (att.fileUrl.startsWith('/') ? getProfileImageUrl(att.fileUrl) : att.fileUrl) : att.fileUrl} download={att.fileName} className="text-indigo-600 hover:text-indigo-800 text-xs flex items-center gap-0.5">
+                                    <FiDownload className="w-3.5 h-3.5" /> Download
+                                  </a>
+                                </>
+                              )}
+                            </>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newExp = [...formData.experience]
+                              if (newExp[index].attachments?.[attIndex]?.fileUrl?.startsWith?.('blob:')) {
+                                try { URL.revokeObjectURL(newExp[index].attachments[attIndex].fileUrl) } catch { /* noop */ }
+                              }
+                              newExp[index].attachments = (newExp[index].attachments || []).filter((_, i) => i !== attIndex)
+                              setFormData({ ...formData, experience: newExp })
+                              toast.success('Attachment removed')
+                            }}
+                            className="text-red-600 hover:text-red-800 p-1"
+                            title="Remove attachment"
+                          >
+                            <FiTrash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newExp = [...formData.experience]
+                          if (!newExp[index].attachments) newExp[index].attachments = []
+                          newExp[index].attachments.push({ name: '', fileName: '', fileUrl: '' })
+                          setFormData({ ...formData, experience: newExp })
+                        }}
+                        className="flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-800 font-medium mt-1"
+                      >
+                        <FiPlus className="w-4 h-4" /> Add attachment
+                      </button>
+                    </div>
                     
                     {/* Render schema extra fields inside each experience entry */}
                     <div className="col-span-full mt-4">
@@ -5778,7 +5902,7 @@ function UserManagement() {
                 ))}
                 <button
                   type="button"
-                  onClick={() => setFormData({ ...formData, experience: [...(formData.experience || []), { organization: '', designation: '', fromDate: '', toDate: '' }] })}
+                  onClick={() => setFormData({ ...formData, experience: [...(formData.experience || []), { organization: '', designation: '', fromDate: '', toDate: '', attachments: [] }] })}
                   className="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium"
                 >
                   <FiPlus className="w-4 h-4" /> {getFieldLabelById(10, 'addExperience', 'Add Experience')}
@@ -6297,29 +6421,90 @@ function UserManagement() {
                         <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                           {getFieldLabelById(5, 'attachment', 'Attachment')} {getFieldRequiredById(5, 'attachment', true) && <span className="text-red-500">*</span>}
                         </label>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="file"
-                            accept=".pdf,application/pdf"
-                            onChange={(e) => {
-                              const file = e.target.files[0]
-                              if (file) {
-                                // Validate PDF only
-                                if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
-                                  toast.error('Only PDF files are allowed')
-                                  e.target.value = ''
-                                  return
+                        <div className="flex flex-col gap-1.5">
+                          {!doc.fileName && (
+                            <input
+                              type="file"
+                              accept=".pdf,application/pdf"
+                              onChange={(e) => {
+                                const file = e.target.files[0]
+                                if (file) {
+                                  if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+                                    toast.error('Only PDF files are allowed')
+                                    e.target.value = ''
+                                    return
+                                  }
+                                  const newDocs = [...formData.documents]
+                                  if (newDocs[index].fileUrl?.startsWith?.('blob:')) {
+                                    try { URL.revokeObjectURL(newDocs[index].fileUrl) } catch { /* noop */ }
+                                  }
+                                  newDocs[index].fileName = file.name
+                                  newDocs[index].fileUrl = URL.createObjectURL(file)
+                                  setFormData({ ...formData, documents: newDocs })
+                                  toast.success(`Selected: ${file.name}`)
                                 }
-                                const newDocs = [...formData.documents]
-                                newDocs[index].fileName = file.name
-                                setFormData({ ...formData, documents: newDocs })
-                                toast.success(`Selected: ${file.name}`)
-                              }
-                            }}
-                            required={getFieldRequiredById(5, 'attachment', true) && !doc.fileName}
-                            className="text-sm text-gray-500 file:mr-4 file:py-1.5 file:px-2.5 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-                          />
-                          {doc.fileName && <span className="text-xs text-gray-500 truncate max-w-[100px]">{doc.fileName}</span>}
+                                e.target.value = ''
+                              }}
+                              required={getFieldRequiredById(5, 'attachment', true)}
+                              className="text-sm text-gray-500 file:mr-4 file:py-1.5 file:px-2.5 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                            />
+                          )}
+                          {doc.fileName && (
+                            <>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs text-gray-500 truncate max-w-[140px]">{doc.fileName}</span>
+                                {doc.fileUrl && (
+                                  <>
+                                    <a href={doc.fileUrl.startsWith('http') || doc.fileUrl.startsWith('blob:') || doc.fileUrl.startsWith('/') ? (doc.fileUrl.startsWith('/') ? getProfileImageUrl(doc.fileUrl) : doc.fileUrl) : getProfileImageUrl(doc.fileUrl)} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-800 text-xs flex items-center gap-0.5">
+                                      <FiEye className="w-3.5 h-3.5" /> View
+                                    </a>
+                                    <a href={doc.fileUrl.startsWith('http') || doc.fileUrl.startsWith('blob:') || doc.fileUrl.startsWith('/') ? (doc.fileUrl.startsWith('/') ? getProfileImageUrl(doc.fileUrl) : doc.fileUrl) : doc.fileUrl} download={doc.fileName} className="text-indigo-600 hover:text-indigo-800 text-xs flex items-center gap-0.5">
+                                      <FiDownload className="w-3.5 h-3.5" /> Download
+                                    </a>
+                                  </>
+                                )}
+                                <button type="button" onClick={() => {
+                                  const newDocs = [...formData.documents]
+                                  if (newDocs[index].fileUrl?.startsWith?.('blob:')) {
+                                    try { URL.revokeObjectURL(newDocs[index].fileUrl) } catch { /* noop */ }
+                                  }
+                                  newDocs[index].fileName = ''
+                                  newDocs[index].fileUrl = ''
+                                  setFormData({ ...formData, documents: newDocs })
+                                  toast.success('Attachment removed')
+                                }} className="text-red-600 hover:text-red-800 text-xs flex items-center gap-0.5">
+                                  <FiTrash2 className="w-3.5 h-3.5" /> Delete
+                                </button>
+                              </div>
+                              <label className="text-xs text-gray-500 flex items-center gap-1">
+                                Replace:
+                                <input
+                                  type="file"
+                                  accept=".pdf,application/pdf"
+                                  onChange={(e) => {
+                                    const file = e.target.files[0]
+                                    if (file) {
+                                      if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+                                        toast.error('Only PDF files are allowed')
+                                        e.target.value = ''
+                                        return
+                                      }
+                                      const newDocs = [...formData.documents]
+                                      if (newDocs[index].fileUrl?.startsWith?.('blob:')) {
+                                        try { URL.revokeObjectURL(newDocs[index].fileUrl) } catch { /* noop */ }
+                                      }
+                                      newDocs[index].fileName = file.name
+                                      newDocs[index].fileUrl = URL.createObjectURL(file)
+                                      setFormData({ ...formData, documents: newDocs })
+                                      toast.success(`Selected: ${file.name}`)
+                                    }
+                                    e.target.value = ''
+                                  }}
+                                  className="text-xs file:py-0.5 file:px-1.5 file:rounded file:border-0 file:text-xs file:bg-gray-100 file:text-indigo-700"
+                                />
+                              </label>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -6332,7 +6517,7 @@ function UserManagement() {
                 ))}
                 <button
                   type="button"
-                  onClick={() => setFormData({ ...formData, documents: [...(formData.documents || []), { documentType: '', documentNumber: '', fileName: '', documentTypeOther: '' }] })}
+                  onClick={() => setFormData({ ...formData, documents: [...(formData.documents || []), { documentType: '', documentNumber: '', fileName: '', fileUrl: '', documentTypeOther: '' }] })}
                   className="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium"
                 >
                   <FiPlus className="w-4 h-4" /> {getFieldLabelById(5, 'addDocument', 'Add Document')}

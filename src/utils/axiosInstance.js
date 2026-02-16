@@ -34,9 +34,10 @@ axiosInstance.interceptors.response.use(
             return Promise.reject(error)
         }
 
-        // Check for 5xx Server Errors
+        // Check for 5xx Server Errors - show actual API message when available
         if (error.response.status >= 500) {
-            toast.error('Server Error: Something went wrong on our end')
+            const msg = error.response?.data?.message
+            toast.error(msg || 'Server Error: Something went wrong on our end')
         }
 
         // Check for 401 Unauthorized globally

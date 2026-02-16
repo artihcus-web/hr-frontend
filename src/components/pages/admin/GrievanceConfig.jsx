@@ -3,6 +3,7 @@ import { FiPlus, FiUsers, FiCheck, FiX, FiBriefcase, FiEdit2, FiTrash2 } from 'r
 import axiosInstance from '../../../utils/axiosInstance'
 import { toast } from 'react-hot-toast'
 import LoadingSpinner from '../../common/LoadingSpinner'
+import { getProfileImageUrl } from '../../../config/apiConfig'
 
 
 const GrievanceConfig = () => {
@@ -361,9 +362,28 @@ const GrievanceConfig = () => {
                                             }`}
                                     >
                                         <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-full bg-indigo-200 dark:bg-indigo-700 flex items-center justify-center text-indigo-700 dark:text-indigo-200 text-xs font-bold">
-                                                {hr.fullName ? hr.fullName.charAt(0) : '?'}
-                                            </div>
+                                            {hr.profileImage ? (
+                                                <img
+                                                    src={getProfileImageUrl(hr.profileImage)}
+                                                    alt={hr.fullName || 'HR User'}
+                                                    className="w-8 h-8 rounded-full object-cover border border-gray-200 dark:border-gray-700"
+                                                    onError={(e) => {
+                                                        e.target.style.display = 'none'
+                                                        const parent = e.target.parentElement
+                                                        if (parent && !parent.querySelector('.avatar-fallback')) {
+                                                            const fallback = document.createElement('div')
+                                                            fallback.className = 'avatar-fallback w-8 h-8 rounded-full bg-indigo-200 dark:bg-indigo-700 flex items-center justify-center text-indigo-700 dark:text-indigo-200 text-xs font-bold'
+                                                            fallback.textContent = hr.fullName ? hr.fullName.charAt(0) : '?'
+                                                            parent.appendChild(fallback)
+                                                        }
+                                                    }}
+                                                />
+                                            ) : null}
+                                            {(!hr.profileImage || !getProfileImageUrl(hr.profileImage)) && (
+                                                <div className="w-8 h-8 rounded-full bg-indigo-200 dark:bg-indigo-700 flex items-center justify-center text-indigo-700 dark:text-indigo-200 text-xs font-bold avatar-fallback">
+                                                    {hr.fullName ? hr.fullName.charAt(0) : '?'}
+                                                </div>
+                                            )}
                                             <div>
                                                 <p className="text-sm font-semibold text-gray-900 dark:text-white">{hr.fullName || 'Unknown User'}</p>
                                                 <p className="text-xs text-gray-500">{hr.role}</p>

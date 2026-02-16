@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useAuth } from '../../../context/AuthContext'
 import { FiUsers, FiFolder, FiCheckCircle, FiClock, FiAlertCircle, FiX } from 'react-icons/fi'
 import toast from 'react-hot-toast'
+import { getProfileImageUrl } from '../../../config/apiConfig'
 
 function ProjectView() {
     const { token } = useAuth()
@@ -130,9 +131,28 @@ function ProjectView() {
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-2">
                                 {benchProject.employees.map(emp => (
                                     <div key={emp._id || emp.id} className="flex items-center gap-2 p-1.5 rounded border border-gray-200 bg-white hover:border-orange-300 hover:bg-orange-50 transition-colors h-9">
-                                        <div className={`h-6 w-6 rounded-full flex-shrink-0 ${getRandomColor(emp.fullName || emp.username)} flex items-center justify-center text-white text-[9px] font-bold`}>
-                                            {getInitials(emp.fullName || emp.username)}
-                                        </div>
+                                        {emp.profileImage ? (
+                                            <img
+                                                src={getProfileImageUrl(emp.profileImage)}
+                                                alt={emp.fullName || emp.username || 'User'}
+                                                className="h-6 w-6 rounded-full flex-shrink-0 object-cover border border-gray-200"
+                                                onError={(e) => {
+                                                    e.target.style.display = 'none'
+                                                    const parent = e.target.parentElement
+                                                    if (parent && !parent.querySelector('.avatar-fallback')) {
+                                                        const fallback = document.createElement('div')
+                                                        fallback.className = `avatar-fallback h-6 w-6 rounded-full flex-shrink-0 ${getRandomColor(emp.fullName || emp.username)} flex items-center justify-center text-white text-[9px] font-bold`
+                                                        fallback.textContent = getInitials(emp.fullName || emp.username)
+                                                        parent.appendChild(fallback)
+                                                    }
+                                                }}
+                                            />
+                                        ) : null}
+                                        {(!emp.profileImage || !getProfileImageUrl(emp.profileImage)) && (
+                                            <div className={`h-6 w-6 rounded-full flex-shrink-0 ${getRandomColor(emp.fullName || emp.username)} flex items-center justify-center text-white text-[9px] font-bold avatar-fallback`}>
+                                                {getInitials(emp.fullName || emp.username)}
+                                            </div>
+                                        )}
                                         <div className="min-w-0 flex-1 leading-tight">
                                             <p className="text-[11px] font-semibold text-gray-900 truncate" title={emp.fullName || emp.username}>
                                                 {emp.fullName || emp.username}
@@ -181,9 +201,28 @@ function ProjectView() {
 
                                 <div className="flex -space-x-1.5 overflow-hidden py-1">
                                     {project.employees?.slice(0, 6).map(emp => (
-                                        <div key={emp._id || emp.id} className={`h-5 w-5 rounded-full ring-1 ring-white ${getRandomColor(emp.fullName || emp.username)} flex items-center justify-center text-white text-[8px] font-bold`}>
-                                            {getInitials(emp.fullName || emp.username)}
-                                        </div>
+                                        emp.profileImage ? (
+                                            <img
+                                                key={emp._id || emp.id}
+                                                src={getProfileImageUrl(emp.profileImage)}
+                                                alt={emp.fullName || emp.username || 'User'}
+                                                className="h-5 w-5 rounded-full ring-1 ring-white object-cover"
+                                                onError={(e) => {
+                                                    e.target.style.display = 'none'
+                                                    const parent = e.target.parentElement
+                                                    if (parent && !parent.querySelector(`.avatar-fallback-${emp._id || emp.id}`)) {
+                                                        const fallback = document.createElement('div')
+                                                        fallback.className = `avatar-fallback-${emp._id || emp.id} h-5 w-5 rounded-full ring-1 ring-white ${getRandomColor(emp.fullName || emp.username)} flex items-center justify-center text-white text-[8px] font-bold`
+                                                        fallback.textContent = getInitials(emp.fullName || emp.username)
+                                                        parent.appendChild(fallback)
+                                                    }
+                                                }}
+                                            />
+                                        ) : (
+                                            <div key={emp._id || emp.id} className={`h-5 w-5 rounded-full ring-1 ring-white ${getRandomColor(emp.fullName || emp.username)} flex items-center justify-center text-white text-[8px] font-bold avatar-fallback-${emp._id || emp.id}`}>
+                                                {getInitials(emp.fullName || emp.username)}
+                                            </div>
+                                        )
                                     ))}
                                     {project.employees?.length > 6 && (
                                         <div className="h-5 w-5 rounded-full ring-1 ring-white bg-gray-100 flex items-center justify-center text-gray-500 text-[8px] font-bold border border-gray-200">
@@ -228,9 +267,28 @@ function ProjectView() {
                                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                                             {selectedProject.projectManagers.map(mgr => (
                                                 <div key={mgr._id || mgr.id} className="flex items-center gap-2 p-2 bg-indigo-50/50 border border-indigo-100 rounded">
-                                                    <div className={`h-8 w-8 rounded-full ${getRandomColor(mgr.fullName || mgr.username)} flex items-center justify-center text-white text-[10px] font-bold`}>
-                                                        {getInitials(mgr.fullName || mgr.username)}
-                                                    </div>
+                                                    {mgr.profileImage ? (
+                                                        <img
+                                                            src={getProfileImageUrl(mgr.profileImage)}
+                                                            alt={mgr.fullName || mgr.username || 'User'}
+                                                            className="h-8 w-8 rounded-full object-cover border border-indigo-200"
+                                                            onError={(e) => {
+                                                                e.target.style.display = 'none'
+                                                                const parent = e.target.parentElement
+                                                                if (parent && !parent.querySelector('.avatar-fallback')) {
+                                                                    const fallback = document.createElement('div')
+                                                                    fallback.className = `avatar-fallback h-8 w-8 rounded-full ${getRandomColor(mgr.fullName || mgr.username)} flex items-center justify-center text-white text-[10px] font-bold`
+                                                                    fallback.textContent = getInitials(mgr.fullName || mgr.username)
+                                                                    parent.appendChild(fallback)
+                                                                }
+                                                            }}
+                                                        />
+                                                    ) : null}
+                                                    {(!mgr.profileImage || !getProfileImageUrl(mgr.profileImage)) && (
+                                                        <div className={`h-8 w-8 rounded-full ${getRandomColor(mgr.fullName || mgr.username)} flex items-center justify-center text-white text-[10px] font-bold avatar-fallback`}>
+                                                            {getInitials(mgr.fullName || mgr.username)}
+                                                        </div>
+                                                    )}
                                                     <div className="min-w-0">
                                                         <div className="text-xs font-semibold text-gray-900 truncate">{mgr.fullName || mgr.username}</div>
                                                         <div className="text-[10px] text-indigo-600 truncate">{mgr.email}</div>
@@ -253,9 +311,28 @@ function ProjectView() {
                                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
                                             {selectedProject.employees.map(emp => (
                                                 <div key={emp._id || emp.id} className="flex items-center gap-2 p-1.5 border border-gray-100 rounded hover:border-gray-300 transition-colors bg-white">
-                                                    <div className={`h-7 w-7 rounded-full flex-shrink-0 ${getRandomColor(emp.fullName || emp.username)} flex items-center justify-center text-white text-[9px] font-bold`}>
-                                                        {getInitials(emp.fullName || emp.username)}
-                                                    </div>
+                                                    {emp.profileImage ? (
+                                                        <img
+                                                            src={getProfileImageUrl(emp.profileImage)}
+                                                            alt={emp.fullName || emp.username || 'User'}
+                                                            className="h-7 w-7 rounded-full flex-shrink-0 object-cover border border-gray-200"
+                                                            onError={(e) => {
+                                                                e.target.style.display = 'none'
+                                                                const parent = e.target.parentElement
+                                                                if (parent && !parent.querySelector('.avatar-fallback')) {
+                                                                    const fallback = document.createElement('div')
+                                                                    fallback.className = `avatar-fallback h-7 w-7 rounded-full flex-shrink-0 ${getRandomColor(emp.fullName || emp.username)} flex items-center justify-center text-white text-[9px] font-bold`
+                                                                    fallback.textContent = getInitials(emp.fullName || emp.username)
+                                                                    parent.appendChild(fallback)
+                                                                }
+                                                            }}
+                                                        />
+                                                    ) : null}
+                                                    {(!emp.profileImage || !getProfileImageUrl(emp.profileImage)) && (
+                                                        <div className={`h-7 w-7 rounded-full flex-shrink-0 ${getRandomColor(emp.fullName || emp.username)} flex items-center justify-center text-white text-[9px] font-bold avatar-fallback`}>
+                                                            {getInitials(emp.fullName || emp.username)}
+                                                        </div>
+                                                    )}
                                                     <div className="min-w-0 flex-1">
                                                         <div className="text-xs font-medium text-gray-900 truncate" title={emp.fullName}>{emp.fullName || emp.username}</div>
                                                         <div className="text-[9px] text-gray-400 truncate -mt-0.5" title={emp.email}>{emp.email}</div>

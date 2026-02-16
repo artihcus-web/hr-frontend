@@ -25,6 +25,7 @@ import KnowYourEmployee from '../pages/common/KnowYourEmployee'
 import AdminPolicies from '../pages/admin/Policies'
 import Policies from '../pages/common/Policies'
 import ConferenceHall from '../pages/ConferenceHall'
+import MyInfo from '../pages/common/MyInfo'
 
 function Routers() {
   return (
@@ -46,6 +47,7 @@ function Routers() {
           <Route path='/know-your-employee' element={<KnowYourEmployee />} />
           <Route path='/policies' element={<Policies />} />
           <Route path='/conference-hall' element={<ConferenceHall />} />
+          <Route path='/my-info' element={<MyInfo />} />
           </Route>
 
         {/* Manager/HR Protected Routes */}

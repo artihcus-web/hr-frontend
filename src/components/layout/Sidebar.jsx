@@ -246,25 +246,31 @@ function Sidebar() {
         `}
       >
         <div className="h-full flex flex-col">
-          <div className={`flex items-center ${isCollapsed ? 'justify-center relative h-16' : 'justify-between px-5 h-16'} border-b border-gray-50 dark:border-gray-800 transition-all duration-300`}>
-            <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-2'}`}>
-              {/* Show smaller/contained logo when collapsed */}
-              <img
-                src={Logo}
-                alt="Logo"
-                className={`transition-all duration-300 ${isCollapsed ? 'h-8 w-8 object-cover object-left' : 'h-10 w-auto'}`}
-              />
-            </div>
+          <div className={`flex items-center ${isCollapsed ? 'justify-center px-2 relative h-16 gap-2' : 'justify-between px-5 h-16'} border-b border-gray-50 dark:border-gray-800 transition-all duration-300`}>
+            {/* Show smaller/contained logo when collapsed */}
+            <img
+              src={Logo}
+              alt="Logo"
+              className={`transition-all duration-300 ${isCollapsed ? 'h-8 w-8 object-cover object-left' : 'h-10 w-auto'}`}
+            />
 
-            <button
-              onClick={() => setIsCollapsed(!isCollapsed)}
-              className={`
-                p-1.5 rounded-lg text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300 transition-colors
-                ${isCollapsed ? 'absolute left-1/2 ml-5 z-20 bg-white dark:bg-gray-900 shadow-sm border border-gray-100 dark:border-gray-800' : 'ml-auto'}
-              `}
-            >
-              {isCollapsed ? <FiChevronRight className="h-3 w-3" /> : <FiChevronLeft className="h-5 w-5" />}
-            </button>
+            {!isCollapsed ? (
+              <button
+                onClick={() => setIsCollapsed(!isCollapsed)}
+                className="ml-auto p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                aria-label="Collapse sidebar"
+              >
+                <FiChevronLeft className="h-6 w-6" />
+              </button>
+            ) : (
+              <button
+                onClick={() => setIsCollapsed(!isCollapsed)}
+                className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                aria-label="Expand sidebar"
+              >
+                <FiChevronRight className="h-6 w-6" />
+              </button>
+            )}
           </div>
 
           <nav className="flex-1 overflow-y-auto overflow-x-hidden py-4 space-y-1 custom-scrollbar">

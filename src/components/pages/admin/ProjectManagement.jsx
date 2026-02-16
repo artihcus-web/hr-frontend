@@ -4,6 +4,7 @@ import { useAuth } from '../../../context/AuthContext'
 import { FiPlus, FiEdit2, FiTrash2, FiHash, FiX, FiUsers, FiUserCheck, FiUserX, FiFolder, FiSave, FiArrowLeft, FiInfo, FiEdit3, FiSearch, FiFilter, FiBriefcase, FiGrid, FiList, FiDownload } from 'react-icons/fi'
 import toast from 'react-hot-toast'
 import axiosInstance from '../../../utils/axiosInstance'
+import { getProfileImageUrl } from '../../../config/apiConfig'
 
 function ProjectManagement() {
   const navigate = useNavigate()
@@ -759,9 +760,28 @@ function ProjectManagement() {
                     <div key={mgr._id || mgr.id} className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden flex flex-col h-full group transition-colors">
                       <div className="p-4 bg-gray-50/50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-sm">
-                            {mgr.fullName?.split(' ').map(n => n[0]).join('').substring(0, 2) || 'TL'}
-                          </div>
+                          {mgr.profileImage ? (
+                              <img
+                                  src={getProfileImageUrl(mgr.profileImage)}
+                                  alt={mgr.fullName || 'Manager'}
+                                  className="w-10 h-10 rounded-full object-cover border border-gray-200 dark:border-gray-700"
+                                  onError={(e) => {
+                                      e.target.style.display = 'none'
+                                      const parent = e.target.parentElement
+                                      if (parent && !parent.querySelector('.avatar-fallback')) {
+                                          const fallback = document.createElement('div')
+                                          fallback.className = 'avatar-fallback w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-sm'
+                                          fallback.textContent = mgr.fullName?.split(' ').map(n => n[0]).join('').substring(0, 2) || 'TL'
+                                          parent.appendChild(fallback)
+                                      }
+                                  }}
+                              />
+                          ) : null}
+                          {(!mgr.profileImage || !getProfileImageUrl(mgr.profileImage)) && (
+                              <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-sm avatar-fallback">
+                                  {mgr.fullName?.split(' ').map(n => n[0]).join('').substring(0, 2) || 'TL'}
+                              </div>
+                          )}
                           <div className="min-w-0">
                             <p className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate" title={mgr.fullName}>{mgr.fullName}</p>
                             <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider">{mgr.role || 'Manager'}</p>
@@ -1117,9 +1137,28 @@ function ProjectManagement() {
                           <tr key={emp._id || emp.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="flex items-center">
-                                <div className="h-10 w-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-sm">
-                                  {emp.firstName?.[0]}{emp.lastName?.[0]}
-                                </div>
+                                {emp.profileImage ? (
+                                    <img
+                                        src={getProfileImageUrl(emp.profileImage)}
+                                        alt={emp.fullName || `${emp.firstName} ${emp.lastName}` || 'Employee'}
+                                        className="h-10 w-10 rounded-full object-cover border border-gray-200 dark:border-gray-700"
+                                        onError={(e) => {
+                                            e.target.style.display = 'none'
+                                            const parent = e.target.parentElement
+                                            if (parent && !parent.querySelector('.avatar-fallback')) {
+                                                const fallback = document.createElement('div')
+                                                fallback.className = 'avatar-fallback h-10 w-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-sm'
+                                                fallback.textContent = emp.firstName?.[0] + (emp.lastName?.[0] || '')
+                                                parent.appendChild(fallback)
+                                            }
+                                        }}
+                                    />
+                                ) : null}
+                                {(!emp.profileImage || !getProfileImageUrl(emp.profileImage)) && (
+                                    <div className="h-10 w-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-sm avatar-fallback">
+                                        {emp.firstName?.[0]}{emp.lastName?.[0]}
+                                    </div>
+                                )}
                                 <div className="ml-4">
                                   <div className="text-sm font-bold text-gray-900 dark:text-gray-100">{emp.fullName || `${emp.firstName} ${emp.lastName}`}</div>
                                   <div className="text-xs text-gray-500 dark:text-gray-400">ID: {emp.employeeId}</div>
@@ -1289,9 +1328,28 @@ function ProjectManagement() {
                       {/* Managers */}
                       {viewingProject.projectManagers?.map((mgr, idx) => (
                         <div key={idx} className="flex items-center gap-3 p-3 rounded-xl bg-purple-50 dark:bg-purple-900/10 border border-purple-100 dark:border-purple-900/30">
-                          <div className="w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900/50 flex items-center justify-center text-purple-600 dark:text-purple-400 text-xs font-bold">
-                            {typeof mgr === 'string' ? 'M' : (mgr.firstName?.[0] || 'M')}
-                          </div>
+                          {typeof mgr !== 'string' && mgr.profileImage ? (
+                              <img
+                                  src={getProfileImageUrl(mgr.profileImage)}
+                                  alt={mgr.fullName || 'Manager'}
+                                  className="w-8 h-8 rounded-full object-cover border border-purple-200 dark:border-purple-800"
+                                  onError={(e) => {
+                                      e.target.style.display = 'none'
+                                      const parent = e.target.parentElement
+                                      if (parent && !parent.querySelector('.avatar-fallback')) {
+                                          const fallback = document.createElement('div')
+                                          fallback.className = 'avatar-fallback w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900/50 flex items-center justify-center text-purple-600 dark:text-purple-400 text-xs font-bold'
+                                          fallback.textContent = mgr.firstName?.[0] || 'M'
+                                          parent.appendChild(fallback)
+                                      }
+                                  }}
+                              />
+                          ) : null}
+                          {(typeof mgr === 'string' || !mgr.profileImage || !getProfileImageUrl(mgr.profileImage)) && (
+                              <div className="w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900/50 flex items-center justify-center text-purple-600 dark:text-purple-400 text-xs font-bold avatar-fallback">
+                                  {typeof mgr === 'string' ? 'M' : (mgr.firstName?.[0] || 'M')}
+                              </div>
+                          )}
                           <div>
                             <p className="text-xs font-bold text-purple-900 dark:text-purple-100">{typeof mgr === 'string' ? 'Manager' : mgr.fullName}</p>
                             <p className="text-[10px] font-bold text-purple-400 uppercase tracking-wider">Project Lead</p>
@@ -1301,9 +1359,28 @@ function ProjectManagement() {
                       {/* Employees */}
                       {viewingProject.employees?.map((emp, idx) => (
                         <div key={idx} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700">
-                          <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 text-xs font-bold">
-                            {typeof emp === 'string' ? 'E' : (emp.firstName?.[0] || 'E')}
-                          </div>
+                          {typeof emp !== 'string' && emp.profileImage ? (
+                            <img
+                              src={getProfileImageUrl(emp.profileImage)}
+                              alt={emp.fullName || 'Employee'}
+                              className="w-8 h-8 rounded-full object-cover border border-slate-200 dark:border-slate-700"
+                              onError={(e) => {
+                                e.target.style.display = 'none'
+                                const parent = e.target.parentElement
+                                if (parent && !parent.querySelector('.avatar-fallback')) {
+                                  const fallback = document.createElement('div')
+                                  fallback.className = 'avatar-fallback w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 text-xs font-bold'
+                                  fallback.textContent = emp.firstName?.[0] || 'E'
+                                  parent.appendChild(fallback)
+                                }
+                              }}
+                            />
+                          ) : null}
+                          {(typeof emp === 'string' || !emp.profileImage || !getProfileImageUrl(emp.profileImage)) && (
+                            <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 text-xs font-bold avatar-fallback">
+                              {typeof emp === 'string' ? 'E' : (emp.firstName?.[0] || 'E')}
+                            </div>
+                          )}
                           <div>
                             <p className="text-xs font-bold text-slate-700 dark:text-slate-200">{typeof emp === 'string' ? 'Employee' : emp.fullName}</p>
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Member</p>
@@ -1797,9 +1874,28 @@ function ProjectManagement() {
                     {/* Managers */}
                     {viewingProject.projectManagers?.map((mgr, idx) => (
                       <div key={idx} className="flex items-center gap-3 p-3 rounded-xl bg-purple-50 dark:bg-purple-900/10 border border-purple-100 dark:border-purple-900/30">
-                        <div className="w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900/50 flex items-center justify-center text-purple-600 dark:text-purple-400 text-xs font-bold">
-                          {typeof mgr === 'string' ? 'M' : (mgr.firstName?.[0] || 'M')}
-                        </div>
+                        {typeof mgr !== 'string' && mgr.profileImage ? (
+                          <img
+                            src={getProfileImageUrl(mgr.profileImage)}
+                            alt={mgr.fullName || 'Manager'}
+                            className="w-8 h-8 rounded-full object-cover border border-purple-200 dark:border-purple-800"
+                            onError={(e) => {
+                              e.target.style.display = 'none'
+                              const parent = e.target.parentElement
+                              if (parent && !parent.querySelector('.avatar-fallback')) {
+                                const fallback = document.createElement('div')
+                                fallback.className = 'avatar-fallback w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900/50 flex items-center justify-center text-purple-600 dark:text-purple-400 text-xs font-bold'
+                                fallback.textContent = mgr.firstName?.[0] || 'M'
+                                parent.appendChild(fallback)
+                              }
+                            }}
+                          />
+                        ) : null}
+                        {(typeof mgr === 'string' || !mgr.profileImage || !getProfileImageUrl(mgr.profileImage)) && (
+                          <div className="w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900/50 flex items-center justify-center text-purple-600 dark:text-purple-400 text-xs font-bold avatar-fallback">
+                            {typeof mgr === 'string' ? 'M' : (mgr.firstName?.[0] || 'M')}
+                          </div>
+                        )}
                         <div>
                           <p className="text-xs font-bold text-purple-900 dark:text-purple-100">{typeof mgr === 'string' ? 'Manager' : mgr.fullName}</p>
                           <p className="text-[10px] font-bold text-purple-400 uppercase tracking-wider">Project Lead</p>
@@ -1809,9 +1905,28 @@ function ProjectManagement() {
                     {/* Employees */}
                     {viewingProject.employees?.map((emp, idx) => (
                       <div key={idx} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700">
-                        <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 text-xs font-bold">
-                          {typeof emp === 'string' ? 'E' : (emp.firstName?.[0] || 'E')}
-                        </div>
+                        {typeof emp !== 'string' && emp.profileImage ? (
+                          <img
+                            src={getProfileImageUrl(emp.profileImage)}
+                            alt={emp.fullName || 'Employee'}
+                            className="w-8 h-8 rounded-full object-cover border border-slate-200 dark:border-slate-700"
+                            onError={(e) => {
+                              e.target.style.display = 'none'
+                              const parent = e.target.parentElement
+                              if (parent && !parent.querySelector('.avatar-fallback')) {
+                                const fallback = document.createElement('div')
+                                fallback.className = 'avatar-fallback w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 text-xs font-bold'
+                                fallback.textContent = emp.firstName?.[0] || 'E'
+                                parent.appendChild(fallback)
+                              }
+                            }}
+                          />
+                        ) : null}
+                        {(typeof emp === 'string' || !emp.profileImage || !getProfileImageUrl(emp.profileImage)) && (
+                          <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 text-xs font-bold avatar-fallback">
+                            {typeof emp === 'string' ? 'E' : (emp.firstName?.[0] || 'E')}
+                          </div>
+                        )}
                         <div>
                           <p className="text-xs font-bold text-slate-700 dark:text-slate-200">{typeof emp === 'string' ? 'Employee' : emp.fullName}</p>
                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Member</p>

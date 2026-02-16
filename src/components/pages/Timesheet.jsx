@@ -12,6 +12,7 @@ import {
 import axiosInstance from "../../utils/axiosInstance";
 import { toast } from "react-hot-toast";
 import LoadingSpinner from "../common/LoadingSpinner";
+import { getProfileImageUrl } from "../../config/apiConfig";
 
 import ConfirmModal from '../common/ConfirmModal';
 
@@ -1274,14 +1275,26 @@ const Timesheet = () => {
           {/* Employee Details Strip */}
           <div className="px-6 py-3 flex flex-wrap xl:flex-nowrap items-center justify-between gap-4 text-sm">
             <div className="flex items-center gap-3 pr-6 border-r border-gray-100 dark:border-gray-800 min-w-max transition-colors">
-              {user?.avatar ? (
+              {user?.profileImage ? (
                 <img
-                  src={user.avatar}
+                  src={getProfileImageUrl(user.profileImage)}
                   alt="Profile"
-                  className="w-10 h-10 rounded-full border-2 border-white shadow-sm"
+                  className="w-10 h-10 rounded-full border-2 border-white dark:border-gray-800 shadow-sm object-cover"
+                  onError={(e) => {
+                    // Replace with initials fallback
+                    const parent = e.target.parentElement
+                    e.target.style.display = 'none'
+                    if (parent && !parent.querySelector('.avatar-fallback')) {
+                      const fallback = document.createElement('div')
+                      fallback.className = 'avatar-fallback w-10 h-10 rounded-full bg-indigo-500 text-white flex items-center justify-center text-lg font-bold border-2 border-white dark:border-gray-800 shadow-sm'
+                      fallback.textContent = userInitials
+                      parent.appendChild(fallback)
+                    }
+                  }}
                 />
-              ) : (
-                <div className="w-10 h-10 rounded-full bg-indigo-500 text-white flex items-center justify-center text-lg font-bold border-2 border-white dark:border-gray-800 shadow-sm">
+              ) : null}
+              {(!user?.profileImage || !getProfileImageUrl(user.profileImage)) && (
+                <div className="w-10 h-10 rounded-full bg-indigo-500 text-white flex items-center justify-center text-lg font-bold border-2 border-white dark:border-gray-800 shadow-sm avatar-fallback">
                   {userInitials}
                 </div>
               )}

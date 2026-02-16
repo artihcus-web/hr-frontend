@@ -7,6 +7,7 @@ import {
     FiClock, FiInbox, FiFilter, FiRefreshCw, FiChevronDown, FiChevronUp,
     FiCheckCircle, FiXCircle, FiPauseCircle, FiMessageSquare, FiEdit
 } from 'react-icons/fi'
+import { getProfileImageUrl } from '../../../config/apiConfig'
 
 
 const TimesheetApprovals = () => {
@@ -211,9 +212,28 @@ const TimesheetApprovals = () => {
                                         <tr className={`hover:bg-gray-50 dark:hover:bg-gray-800/80 transition-colors ${expandedRow === timesheet._id ? 'bg-indigo-50/30 dark:bg-indigo-900/10' : ''}`}>
                                             <td className="px-4 py-4">
                                                 <div className="flex items-center">
-                                                    <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-xs flex-shrink-0 transition-colors">
-                                                        {(timesheet.employeeId?.fullName || timesheet.employeeName || 'U').charAt(0)}
-                                                    </div>
+                                                    {timesheet.employeeId?.profileImage ? (
+                                                        <img
+                                                            src={getProfileImageUrl(timesheet.employeeId.profileImage)}
+                                                            alt={timesheet.employeeId?.fullName || timesheet.employeeName || 'User'}
+                                                            className="h-8 w-8 rounded-full object-cover flex-shrink-0 transition-colors border border-gray-200 dark:border-gray-700"
+                                                            onError={(e) => {
+                                                                e.target.style.display = 'none'
+                                                                const parent = e.target.parentElement
+                                                                if (parent && !parent.querySelector('.avatar-fallback')) {
+                                                                    const fallback = document.createElement('div')
+                                                                    fallback.className = 'avatar-fallback h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-xs flex-shrink-0 transition-colors'
+                                                                    fallback.textContent = (timesheet.employeeId?.fullName || timesheet.employeeName || 'U').charAt(0)
+                                                                    parent.appendChild(fallback)
+                                                                }
+                                                            }}
+                                                        />
+                                                    ) : null}
+                                                    {(!timesheet.employeeId?.profileImage || !getProfileImageUrl(timesheet.employeeId?.profileImage)) && (
+                                                        <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-xs flex-shrink-0 transition-colors avatar-fallback">
+                                                            {(timesheet.employeeId?.fullName || timesheet.employeeName || 'U').charAt(0)}
+                                                        </div>
+                                                    )}
                                                     <div className="ml-3 truncate">
                                                         <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate transition-colors">
                                                             {timesheet.employeeId?.fullName || timesheet.employeeName}

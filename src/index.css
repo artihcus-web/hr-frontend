@@ -59,3 +59,13 @@ input[type="date"][name="confirmDate"] {
   -moz-user-select: none !important;
   -ms-user-select: none !important;
 }
+
+/* Hide scrollbars */
+.hide-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari and Opera */
+}

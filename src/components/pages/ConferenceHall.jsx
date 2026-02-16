@@ -2,11 +2,9 @@ import React, { useState, useEffect } from 'react'
 import { FiCalendar, FiClock, FiUsers, FiFileText, FiPlus, FiX, FiVideo } from 'react-icons/fi'
 import axiosInstance from '../../utils/axiosInstance'
 import { toast } from 'react-hot-toast'
-import { useAuth } from '../../context/AuthContext'
 import LoadingSpinner from '../common/LoadingSpinner'
 
 const ConferenceHall = () => {
-  const { user } = useAuth()
   const [loading, setLoading] = useState(false)
   const [bookings, setBookings] = useState([])
   const [showBookingForm, setShowBookingForm] = useState(false)
@@ -111,13 +109,13 @@ const ConferenceHall = () => {
       .sort((a, b) => a.startTime.localeCompare(b.startTime))
   }
 
-  const isTimeSlotBooked = (dateStr, time) => {
-    return bookings.some(booking => 
-      booking.date === dateStr && 
-      booking.startTime <= time && 
-      booking.endTime > time
-    )
-  }
+  // const isTimeSlotBooked = (dateStr, time) => {
+  //   return bookings.some(booking => 
+  //     booking.date === dateStr && 
+  //     booking.startTime <= time && 
+  //     booking.endTime > time
+  //   )
+  // }
 
   const generateTimeSlots = () => {
     const slots = []
@@ -130,7 +128,7 @@ const ConferenceHall = () => {
     return slots
   }
 
-  const timeSlots = generateTimeSlots()
+  // const timeSlots = generateTimeSlots()
 
   const todayBookings = getBookingsForDate(todayStr)
   const tomorrowBookings = getBookingsForDate(tomorrowStr)
