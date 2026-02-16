@@ -25,7 +25,16 @@ function MyInfo() {
 
         // Fetch user data
         const userRes = await axiosInstance.get('/api/auth/me')
-        setUserData(userRes.data.user || userRes.data)
+        const fetchedUser = userRes.data.user || userRes.data
+        // Ensure _id is preserved for image URL generation
+        if (fetchedUser) {
+          if (!fetchedUser._id && fetchedUser.id) {
+            fetchedUser._id = fetchedUser.id
+          }
+          // Debug: Log profileImage value to see what we're getting
+          console.log('MyInfo - Fetched user profileImage:', fetchedUser.profileImage, 'User ID:', fetchedUser._id || fetchedUser.id)
+        }
+        setUserData(fetchedUser)
 
         // Initialize expanded sections - expand first few by default
         if (config?.sections) {
@@ -174,13 +183,31 @@ function MyInfo() {
     
     // Special handling for profile image
     if (fieldName === 'profileImage' && userData?.profileImage) {
+      const userId = userData._id || userData.id
+      const imageUrl = getProfileImageUrl(userData.profileImage, userId)
+      
       return (
         <div>
           <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{label}</p>
           <img
-            src={getProfileImageUrl(userData.profileImage)}
+            src={imageUrl}
             alt="Profile"
             className="w-24 h-24 rounded-full object-cover border-2 border-gray-200 dark:border-gray-700"
+            onError={(e) => {
+              console.error('Profile image failed to load:', imageUrl, 'User ID:', userId, 'ProfileImage value:', userData.profileImage)
+              e.target.style.display = 'none'
+              const parent = e.target.parentElement
+              if (parent && !parent.querySelector('.profile-fallback')) {
+                const fallback = document.createElement('div')
+                fallback.className = 'profile-fallback w-24 h-24 rounded-full bg-indigo-500 text-white flex items-center justify-center text-2xl font-bold border-2 border-gray-200 dark:border-gray-700'
+                const initials = (userData?.fullName || userData?.firstName || 'U').charAt(0).toUpperCase()
+                fallback.textContent = initials
+                parent.appendChild(fallback)
+              }
+            }}
+            onLoad={() => {
+              console.log('Profile image loaded successfully:', imageUrl)
+            }}
           />
         </div>
       )

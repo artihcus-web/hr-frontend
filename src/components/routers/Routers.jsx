@@ -22,6 +22,7 @@ import AdminControllers from '../pages/admin/AdminControllers'
 import ProtectedRoute from './ProtectedRoute'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import KnowYourEmployee from '../pages/common/KnowYourEmployee'
+import MyInfo from '../pages/common/MyInfo'
 import AdminPolicies from '../pages/admin/Policies'
 import Policies from '../pages/common/Policies'
 import ConferenceHall from '../pages/ConferenceHall'
@@ -40,10 +41,10 @@ function Routers() {
           <Route path='/dashboard' element={<Dashboard />} />
           <Route path='/projects' element={<UserProjects />} />
           <Route path='/timesheet' element={<Timesheet />} />
-          <Route path='/timesheet' element={<Timesheet />} />
           <Route path='/holiday-calendar' element={<HolidayCalendar />} />
           <Route path='/grievance' element={<Grievance />} />
           <Route path='/know-your-employee' element={<KnowYourEmployee />} />
+          <Route path='/my-info' element={<MyInfo />} />
           <Route path='/policies' element={<Policies />} />
           <Route path='/conference-hall' element={<ConferenceHall />} />
           </Route>
