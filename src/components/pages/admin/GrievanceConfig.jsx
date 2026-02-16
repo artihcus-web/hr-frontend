@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { FiPlus, FiUsers, FiCheck, FiX, FiBriefcase } from 'react-icons/fi'
+import { FiPlus, FiUsers, FiCheck, FiX, FiBriefcase, FiEdit2, FiTrash2 } from 'react-icons/fi'
 import axiosInstance from '../../../utils/axiosInstance'
 import { toast } from 'react-hot-toast'
 import LoadingSpinner from '../../common/LoadingSpinner'
@@ -12,8 +12,15 @@ const GrievanceConfig = () => {
     const [hrs, setHrs] = useState([]) // HR Users
 
     // Modal State
-    const [managingType, setManagingType] = useState(null) // Type being edited
+    const [managingType, setManagingType] = useState(null) // Type being edited for HR assignment
     const [selectedHrs, setSelectedHrs] = useState([]) // IDs of selected HRs
+    
+    // Edit Modal State
+    const [editingType, setEditingType] = useState(null) // Type being edited
+    const [editTypeName, setEditTypeName] = useState('')
+    
+    // Delete Confirmation State
+    const [deletingType, setDeletingType] = useState(null) // Type being deleted
 
     useEffect(() => {
         fetchTypes()
@@ -101,6 +108,46 @@ const GrievanceConfig = () => {
         }
     }
 
+    const handleEditType = (type) => {
+        setEditingType(type)
+        setEditTypeName(type.name)
+    }
+
+    const handleUpdateType = async (e) => {
+        e.preventDefault()
+        if (!editTypeName.trim()) {
+            toast.error('Type name cannot be empty')
+            return
+        }
+
+        try {
+            await axiosInstance.put(`/api/grievance/admin/types/${editingType._id}`, {
+                name: editTypeName.trim()
+            })
+            toast.success('Issue type updated successfully')
+            setEditingType(null)
+            setEditTypeName('')
+            fetchTypes()
+        } catch (error) {
+            console.error(error)
+            toast.error(error.response?.data?.message || 'Failed to update type')
+        }
+    }
+
+    const handleDeleteType = async () => {
+        if (!deletingType) return
+
+        try {
+            await axiosInstance.delete(`/api/grievance/admin/types/${deletingType._id}`)
+            toast.success('Issue type deleted successfully')
+            setDeletingType(null)
+            fetchTypes()
+        } catch (error) {
+            console.error(error)
+            toast.error(error.response?.data?.message || 'Failed to delete type')
+        }
+    }
+
     return (
         <div className="p-6 max-w-6xl mx-auto space-y-8">
             <div>
@@ -147,13 +194,27 @@ const GrievanceConfig = () => {
                                     <button
                                         onClick={() => openAssignModal(type)}
                                         className="p-1.5 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"
-                                        title="Manage Managers"
+                                        title="Manage HRs"
                                     >
                                         <FiUsers className="w-5 h-5" />
                                     </button>
                                     <button
+                                        onClick={() => handleEditType(type)}
+                                        className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
+                                        title="Edit Type"
+                                    >
+                                        <FiEdit2 className="w-5 h-5" />
+                                    </button>
+                                    <button
+                                        onClick={() => setDeletingType(type)}
+                                        className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                                        title="Delete Type"
+                                    >
+                                        <FiTrash2 className="w-5 h-5" />
+                                    </button>
+                                    <button
                                         onClick={() => handleToggleActive(type._id)}
-                                        className={`p-1.5 rounded-lg transition-colors ${type.isActive ? 'text-green-600 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-100'}`}
+                                        className={`p-1.5 rounded-lg transition-colors ${type.isActive ? 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30' : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
                                         title={type.isActive ? "Deactivate" : "Activate"}
                                     >
                                         {type.isActive ? <FiCheck className="w-5 h-5" /> : <FiX className="w-5 h-5" />}
@@ -181,6 +242,98 @@ const GrievanceConfig = () => {
                     ))
                 )}
             </div>
+
+            {/* Edit Type Modal */}
+            {editingType && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white dark:bg-gray-800 w-full max-w-md rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700">
+                        <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                                Edit Issue Type
+                            </h3>
+                            <button 
+                                onClick={() => {
+                                    setEditingType(null)
+                                    setEditTypeName('')
+                                }} 
+                                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                            >
+                                <FiX className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleUpdateType} className="p-6">
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Issue Type Name
+                                </label>
+                                <input
+                                    type="text"
+                                    value={editTypeName}
+                                    onChange={(e) => setEditTypeName(e.target.value)}
+                                    placeholder="e.g. Finance, IT Support, Workplace Harassment"
+                                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500"
+                                    autoFocus
+                                    required
+                                />
+                            </div>
+
+                            <div className="flex justify-end gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setEditingType(null)
+                                        setEditTypeName('')
+                                    }}
+                                    className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium shadow-sm transition-colors"
+                                >
+                                    Update Type
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {deletingType && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white dark:bg-gray-800 w-full max-w-md rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700">
+                        <div className="p-6 border-b border-gray-100 dark:border-gray-700">
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                                Delete Issue Type
+                            </h3>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                                Are you sure you want to delete <span className="font-semibold text-gray-900 dark:text-white">"{deletingType.name}"</span>?
+                            </p>
+                            <p className="text-xs text-red-600 dark:text-red-400 mt-2">
+                                This action cannot be undone. If there are grievances associated with this type, deletion will be prevented.
+                            </p>
+                        </div>
+
+                        <div className="p-6 flex justify-end gap-3">
+                            <button
+                                onClick={() => setDeletingType(null)}
+                                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleDeleteType}
+                                className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium shadow-sm transition-colors"
+                            >
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Assignment Modal */}
             {managingType && (
