@@ -1,5 +1,5 @@
 import axios from 'axios'
-import toast from 'react-hot-toast'
+import toast from './toast'
 import { getApiBaseUrl } from '../config/apiConfig.js'
 
 // Create axios instance (uses same base URL as profile images for deploy consistency)

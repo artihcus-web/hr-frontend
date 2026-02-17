@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { FiEye, FiEyeOff } from 'react-icons/fi'
-import toast from 'react-hot-toast'
+import toast from '../../utils/toast'
 import axiosInstance from '../../utils/axiosInstance'
 import { getProfileImageUrl } from '../../config/apiConfig'
 function Login() {

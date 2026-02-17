@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../../../context/AuthContext'
 import axiosInstance from '../../../utils/axiosInstance'
-import toast from 'react-hot-toast'
+import toast from '../../../utils/toast'
 import { FiUsers, FiMonitor, FiSettings, FiAlertCircle, FiFileText, FiSave, FiCheck, FiX } from 'react-icons/fi'
 import LoadingSpinner from '../../common/LoadingSpinner'
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { motion as Motion, AnimatePresence } from 'framer-motion'
 import axios from 'axios'
-import { toast } from 'react-hot-toast'
+import { toast } from '../../../utils/toast'
 import { useAuth } from '../../../context/AuthContext'
 import {
     FiClock, FiInbox, FiFilter, FiRefreshCw, FiChevronDown, FiChevronUp,

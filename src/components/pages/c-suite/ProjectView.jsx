@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useAuth } from '../../../context/AuthContext'
 import { FiUsers, FiFolder, FiCheckCircle, FiClock, FiAlertCircle, FiX } from 'react-icons/fi'
-import toast from 'react-hot-toast'
+import toast from '../../../utils/toast'
 import { getProfileImageUrl } from '../../../config/apiConfig'
 
 function ProjectView() {

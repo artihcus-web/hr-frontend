@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { FiPlus, FiUsers, FiCheck, FiX, FiBriefcase, FiEdit2, FiTrash2 } from 'react-icons/fi'
 import axiosInstance from '../../../utils/axiosInstance'
-import { toast } from 'react-hot-toast'
+import { toast } from '../../../utils/toast'
 import LoadingSpinner from '../../common/LoadingSpinner'
 import { getProfileImageUrl } from '../../../config/apiConfig'
 

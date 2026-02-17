@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { FiUsers, FiSearch, FiMail, FiPhone, FiBriefcase, FiUser, FiX, FiFilter, FiCalendar, FiMapPin } from 'react-icons/fi'
+import { FiUsers, FiSearch, FiMail, FiPhone, FiBriefcase, FiUser, FiX, FiFilter, FiCalendar, FiMapPin, FiCopy } from 'react-icons/fi'
 import axiosInstance from '../../../utils/axiosInstance'
-import { toast } from 'react-hot-toast'
+import { toast } from '../../../utils/toast'
 import LoadingSpinner from '../../common/LoadingSpinner'
 import { getProfileImageUrl } from '../../../config/apiConfig'
 
@@ -83,6 +83,13 @@ const KnowYourEmployee = () => {
         const d = new Date(date)
         if (isNaN(d.getTime())) return ''
         return d.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })
+    }
+
+    const copyToClipboard = (text, label) => {
+        if (!text) return
+        navigator.clipboard.writeText(String(text)).then(() => {
+            toast.success(`${label} copied`)
+        }).catch(() => toast.error('Failed to copy'))
     }
 
     return (
@@ -279,12 +286,17 @@ const KnowYourEmployee = () => {
                                         {selectedEmployee.fullName || `${selectedEmployee.firstName || ''} ${selectedEmployee.lastName || ''}`.trim() || 'Unknown'}
                                     </h2>
                                     {selectedEmployee.employeeId && (
-                                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">#{selectedEmployee.employeeId}</p>
-                                    )}
-                                    {selectedEmployee.role && (
-                                        <span className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${getRoleBadgeColor(selectedEmployee.role)}`}>
-                                            {selectedEmployee.role}
-                                        </span>
+                                        <div className="flex items-center justify-center gap-1.5 mb-2">
+                                            <p className="text-sm text-gray-500 dark:text-gray-400">#{selectedEmployee.employeeId}</p>
+                                            <button
+                                                type="button"
+                                                onClick={() => copyToClipboard(selectedEmployee.employeeId, 'Employee ID')}
+                                                className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                                                title="Copy employee ID"
+                                            >
+                                                <FiCopy className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
                                     )}
                                 </div>
 
@@ -293,13 +305,29 @@ const KnowYourEmployee = () => {
                                     {(selectedEmployee.officialEmail || selectedEmployee.email) && (
                                         <div className="flex justify-between items-start gap-4 py-2 border-b border-gray-100 dark:border-gray-700/60">
                                             <span className="text-sm text-gray-500 dark:text-gray-400 font-medium shrink-0">Email</span>
-                                            <span className="text-sm font-semibold text-gray-900 dark:text-white text-right break-all">{selectedEmployee.officialEmail || selectedEmployee.email}</span>
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <span className="text-sm font-semibold text-gray-900 dark:text-white text-right break-all truncate">{selectedEmployee.officialEmail || selectedEmployee.email}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => copyToClipboard(selectedEmployee.officialEmail || selectedEmployee.email, 'Email')}
+                                                    className="flex-shrink-0 p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                                                    title="Copy email"
+                                                >
+                                                    <FiCopy className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
                                         </div>
                                     )}
                                     {selectedEmployee.phone && (
                                         <div className="flex justify-between items-center gap-4 py-2 border-b border-gray-100 dark:border-gray-700/60">
                                             <span className="text-sm text-gray-500 dark:text-gray-400 font-medium shrink-0">Phone</span>
                                             <span className="text-sm font-semibold text-gray-900 dark:text-white text-right">{selectedEmployee.phone}</span>
+                                        </div>
+                                    )}
+                                    {selectedEmployee.dateOfBirth && (
+                                        <div className="flex justify-between items-center gap-4 py-2 border-b border-gray-100 dark:border-gray-700/60">
+                                            <span className="text-sm text-gray-500 dark:text-gray-400 font-medium shrink-0">DOB</span>
+                                            <span className="text-sm font-semibold text-gray-900 dark:text-white text-right">{formatDate(selectedEmployee.dateOfBirth)}</span>
                                         </div>
                                     )}
                                     {selectedEmployee.designation && (
@@ -318,12 +346,6 @@ const KnowYourEmployee = () => {
                                         <div className="flex justify-between items-center gap-4 py-2 border-b border-gray-100 dark:border-gray-700/60">
                                             <span className="text-sm text-gray-500 dark:text-gray-400 font-medium shrink-0">Location</span>
                                             <span className="text-sm font-semibold text-gray-900 dark:text-white text-right">{selectedEmployee.location}</span>
-                                        </div>
-                                    )}
-                                    {selectedEmployee.dateOfBirth && (
-                                        <div className="flex justify-between items-center gap-4 py-2 border-b border-gray-100 dark:border-gray-700/60">
-                                            <span className="text-sm text-gray-500 dark:text-gray-400 font-medium shrink-0">DOB</span>
-                                            <span className="text-sm font-semibold text-gray-900 dark:text-white text-right">{formatDate(selectedEmployee.dateOfBirth)}</span>
                                         </div>
                                     )}
                                     {selectedEmployee.joiningDate && (

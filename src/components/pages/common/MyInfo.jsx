@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import axiosInstance from '../../../utils/axiosInstance'
 import { FiChevronUp, FiChevronDown, FiEye, FiEyeOff } from 'react-icons/fi'
 import LoadingSpinner from '../../common/LoadingSpinner'
-import toast from 'react-hot-toast'
+import toast from '../../../utils/toast'
 import { getProfileImageUrl } from '../../../config/apiConfig'
 import { SECTION_ID_MAP, getSectionKey } from '../../../utils/formConfigHelpers'
 

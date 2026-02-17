@@ -69,3 +69,12 @@ input[type="date"][name="confirmDate"] {
 .hide-scrollbar::-webkit-scrollbar {
   display: none;  /* Chrome, Safari and Opera */
 }
+
+/* Brief pulse when the same toast is updated (e.g. copy again) */
+@keyframes toast-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.03); opacity: 0.95; }
+}
+.toast-pulse {
+  animation: toast-pulse 0.35s ease-out;
+}

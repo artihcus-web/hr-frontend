@@ -10,7 +10,7 @@ import {
   FiX
 } from "react-icons/fi";
 import axiosInstance from "../../utils/axiosInstance";
-import { toast } from "react-hot-toast";
+import { toast } from '../../utils/toast'
 import LoadingSpinner from "../common/LoadingSpinner";
 import { getProfileImageUrl } from "../../config/apiConfig";
 

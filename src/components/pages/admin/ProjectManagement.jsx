@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../context/AuthContext'
 import { FiPlus, FiEdit2, FiTrash2, FiHash, FiX, FiUsers, FiUserCheck, FiUserX, FiFolder, FiSave, FiArrowLeft, FiInfo, FiEdit3, FiSearch, FiFilter, FiBriefcase, FiGrid, FiList, FiDownload } from 'react-icons/fi'
-import toast from 'react-hot-toast'
+import toast from '../../../utils/toast'
 import axiosInstance from '../../../utils/axiosInstance'
 import { getProfileImageUrl } from '../../../config/apiConfig'
 

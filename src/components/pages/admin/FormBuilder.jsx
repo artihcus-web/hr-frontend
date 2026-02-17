@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../context/AuthContext'
 import axiosInstance from '../../../utils/axiosInstance'
-import toast from 'react-hot-toast'
+import toast from '../../../utils/toast'
 import { FiPlus, FiEdit2, FiTrash2, FiSettings, FiUsers, FiFileText, FiGrid } from 'react-icons/fi'
 import LoadingSpinner from '../../common/LoadingSpinner'
 

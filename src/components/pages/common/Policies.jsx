@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { FiFileText, FiEye, FiDownload, FiFile, FiStar, FiX } from 'react-icons/fi'
 import axiosInstance from '../../../utils/axiosInstance'
-import { toast } from 'react-hot-toast'
+import { toast } from '../../../utils/toast'
 import LoadingSpinner from '../../common/LoadingSpinner'
 
 const Policies = () => {
