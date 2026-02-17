@@ -364,7 +364,7 @@ const GrievanceConfig = () => {
                                         <div className="flex items-center gap-3">
                                             {hr.profileImage ? (
                                                 <img
-                                                    src={getProfileImageUrl(hr.profileImage)}
+                                                    src={getProfileImageUrl(hr.profileImage, hr._id || hr.id)}
                                                     alt={hr.fullName || 'HR User'}
                                                     className="w-8 h-8 rounded-full object-cover border border-gray-200 dark:border-gray-700"
                                                     onError={(e) => {
@@ -379,7 +379,7 @@ const GrievanceConfig = () => {
                                                     }}
                                                 />
                                             ) : null}
-                                            {(!hr.profileImage || !getProfileImageUrl(hr.profileImage)) && (
+                                            {(!hr.profileImage || !getProfileImageUrl(hr.profileImage, hr._id || hr.id)) && (
                                                 <div className="w-8 h-8 rounded-full bg-indigo-200 dark:bg-indigo-700 flex items-center justify-center text-indigo-700 dark:text-indigo-200 text-xs font-bold avatar-fallback">
                                                     {hr.fullName ? hr.fullName.charAt(0) : '?'}
                                                 </div>

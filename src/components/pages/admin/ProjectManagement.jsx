@@ -762,7 +762,7 @@ function ProjectManagement() {
                         <div className="flex items-center gap-3">
                           {mgr.profileImage ? (
                               <img
-                                  src={getProfileImageUrl(mgr.profileImage)}
+                                  src={getProfileImageUrl(mgr.profileImage, mgr._id || mgr.id)}
                                   alt={mgr.fullName || 'Manager'}
                                   className="w-10 h-10 rounded-full object-cover border border-gray-200 dark:border-gray-700"
                                   onError={(e) => {
@@ -777,7 +777,7 @@ function ProjectManagement() {
                                   }}
                               />
                           ) : null}
-                          {(!mgr.profileImage || !getProfileImageUrl(mgr.profileImage)) && (
+                          {(!mgr.profileImage || !getProfileImageUrl(mgr.profileImage, mgr._id || mgr.id)) && (
                               <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-sm avatar-fallback">
                                   {mgr.fullName?.split(' ').map(n => n[0]).join('').substring(0, 2) || 'TL'}
                               </div>
@@ -1139,7 +1139,7 @@ function ProjectManagement() {
                               <div className="flex items-center">
                                 {emp.profileImage ? (
                                     <img
-                                        src={getProfileImageUrl(emp.profileImage)}
+                                        src={getProfileImageUrl(emp.profileImage, emp._id || emp.id)}
                                         alt={emp.fullName || `${emp.firstName} ${emp.lastName}` || 'Employee'}
                                         className="h-10 w-10 rounded-full object-cover border border-gray-200 dark:border-gray-700"
                                         onError={(e) => {
@@ -1154,7 +1154,7 @@ function ProjectManagement() {
                                         }}
                                     />
                                 ) : null}
-                                {(!emp.profileImage || !getProfileImageUrl(emp.profileImage)) && (
+                                {(!emp.profileImage || !getProfileImageUrl(emp.profileImage, emp._id || emp.id)) && (
                                     <div className="h-10 w-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-sm avatar-fallback">
                                         {emp.firstName?.[0]}{emp.lastName?.[0]}
                                     </div>
@@ -1330,7 +1330,7 @@ function ProjectManagement() {
                         <div key={idx} className="flex items-center gap-3 p-3 rounded-xl bg-purple-50 dark:bg-purple-900/10 border border-purple-100 dark:border-purple-900/30">
                           {typeof mgr !== 'string' && mgr.profileImage ? (
                               <img
-                                  src={getProfileImageUrl(mgr.profileImage)}
+                                  src={getProfileImageUrl(mgr.profileImage, mgr._id || mgr.id)}
                                   alt={mgr.fullName || 'Manager'}
                                   className="w-8 h-8 rounded-full object-cover border border-purple-200 dark:border-purple-800"
                                   onError={(e) => {
@@ -1345,7 +1345,7 @@ function ProjectManagement() {
                                   }}
                               />
                           ) : null}
-                          {(typeof mgr === 'string' || !mgr.profileImage || !getProfileImageUrl(mgr.profileImage)) && (
+                          {(typeof mgr === 'string' || !mgr.profileImage || !getProfileImageUrl(mgr.profileImage, mgr._id || mgr.id)) && (
                               <div className="w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900/50 flex items-center justify-center text-purple-600 dark:text-purple-400 text-xs font-bold avatar-fallback">
                                   {typeof mgr === 'string' ? 'M' : (mgr.firstName?.[0] || 'M')}
                               </div>
@@ -1361,7 +1361,7 @@ function ProjectManagement() {
                         <div key={idx} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700">
                           {typeof emp !== 'string' && emp.profileImage ? (
                             <img
-                              src={getProfileImageUrl(emp.profileImage)}
+                              src={getProfileImageUrl(emp.profileImage, emp._id || emp.id)}
                               alt={emp.fullName || 'Employee'}
                               className="w-8 h-8 rounded-full object-cover border border-slate-200 dark:border-slate-700"
                               onError={(e) => {
@@ -1376,7 +1376,7 @@ function ProjectManagement() {
                               }}
                             />
                           ) : null}
-                          {(typeof emp === 'string' || !emp.profileImage || !getProfileImageUrl(emp.profileImage)) && (
+                          {(typeof emp === 'string' || !emp.profileImage || !getProfileImageUrl(emp.profileImage, emp._id || emp.id)) && (
                             <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 text-xs font-bold avatar-fallback">
                               {typeof emp === 'string' ? 'E' : (emp.firstName?.[0] || 'E')}
                             </div>
@@ -1876,7 +1876,7 @@ function ProjectManagement() {
                       <div key={idx} className="flex items-center gap-3 p-3 rounded-xl bg-purple-50 dark:bg-purple-900/10 border border-purple-100 dark:border-purple-900/30">
                         {typeof mgr !== 'string' && mgr.profileImage ? (
                           <img
-                            src={getProfileImageUrl(mgr.profileImage)}
+                            src={getProfileImageUrl(mgr.profileImage, mgr._id || mgr.id)}
                             alt={mgr.fullName || 'Manager'}
                             className="w-8 h-8 rounded-full object-cover border border-purple-200 dark:border-purple-800"
                             onError={(e) => {
@@ -1891,7 +1891,7 @@ function ProjectManagement() {
                             }}
                           />
                         ) : null}
-                        {(typeof mgr === 'string' || !mgr.profileImage || !getProfileImageUrl(mgr.profileImage)) && (
+                        {(typeof mgr === 'string' || !mgr.profileImage || !getProfileImageUrl(mgr.profileImage, mgr._id || mgr.id)) && (
                           <div className="w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900/50 flex items-center justify-center text-purple-600 dark:text-purple-400 text-xs font-bold avatar-fallback">
                             {typeof mgr === 'string' ? 'M' : (mgr.firstName?.[0] || 'M')}
                           </div>
@@ -1907,7 +1907,7 @@ function ProjectManagement() {
                       <div key={idx} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700">
                         {typeof emp !== 'string' && emp.profileImage ? (
                           <img
-                            src={getProfileImageUrl(emp.profileImage)}
+                            src={getProfileImageUrl(emp.profileImage, emp._id || emp.id)}
                             alt={emp.fullName || 'Employee'}
                             className="w-8 h-8 rounded-full object-cover border border-slate-200 dark:border-slate-700"
                             onError={(e) => {
@@ -1922,7 +1922,7 @@ function ProjectManagement() {
                             }}
                           />
                         ) : null}
-                        {(typeof emp === 'string' || !emp.profileImage || !getProfileImageUrl(emp.profileImage)) && (
+                        {(typeof emp === 'string' || !emp.profileImage || !getProfileImageUrl(emp.profileImage, emp._id || emp.id)) && (
                           <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 text-xs font-bold avatar-fallback">
                             {typeof emp === 'string' ? 'E' : (emp.firstName?.[0] || 'E')}
                           </div>

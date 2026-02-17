@@ -221,7 +221,7 @@ const KnowYourEmployee = () => {
                                     <div className="flex items-center gap-3">
                                         {emp.profileImage ? (
                                             <img
-                                                src={getProfileImageUrl(emp.profileImage)}
+                                                src={getProfileImageUrl(emp.profileImage, emp._id || emp.id)}
                                                 alt={emp.fullName || emp.firstName || 'User'}
                                                 className="w-11 h-11 rounded-full object-cover border border-gray-200 dark:border-gray-700 flex-shrink-0"
                                                 onError={(e) => {
@@ -264,7 +264,7 @@ const KnowYourEmployee = () => {
                                 <div className="flex flex-col items-center mb-8">
                                 {selectedEmployee.profileImage ? (
                                     <img
-                                        src={getProfileImageUrl(selectedEmployee.profileImage)}
+                                        src={getProfileImageUrl(selectedEmployee.profileImage, selectedEmployee._id || selectedEmployee.id)}
                                         alt={selectedEmployee.fullName || 'Employee'}
                                         className="w-28 h-28 rounded-full object-cover border-2 border-gray-200 dark:border-gray-700 mb-4"
                                         onError={(e) => {

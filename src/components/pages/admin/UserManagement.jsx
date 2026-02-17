@@ -6,7 +6,7 @@ import * as XLSX from 'xlsx'
 import toast from 'react-hot-toast'
 import { countryCodes } from '../../../utils/countryCodes'
 import axiosInstance from '../../../utils/axiosInstance'
-import { getProfileImageUrl } from '../../../config/apiConfig'
+import { getProfileImageUrl, getAssetUrl } from '../../../config/apiConfig'
 import LoadingSpinner from '../../common/LoadingSpinner'
 import { filterValueByType } from '../../../utils/fieldTypeValidation'
 
@@ -3677,7 +3677,7 @@ function UserManagement() {
                               {/* Profile Avatar */}
 {(emp.profileImage && !failedProfileImageIds.has(emp.id ?? emp._id)) ? (
                                   <img
-                                    src={getProfileImageUrl(emp.profileImage)}
+                                    src={getProfileImageUrl(emp.profileImage, emp._id || emp.id)}
                                     alt={fullName}
                                     className="w-10 h-10 rounded-full object-cover shadow-md border border-gray-200"
                                     onError={() => setFailedProfileImageIds(prev => new Set([...prev, emp.id ?? emp._id]))}
@@ -4047,7 +4047,7 @@ function UserManagement() {
               <div className="flex-shrink-0 w-12 h-12 rounded-full overflow-hidden border-2 border-gray-200 dark:border-gray-600 bg-gray-100 dark:bg-gray-800">
                 {formData.profileImage && !headerProfileImageError ? (
                   <img
-                    src={getProfileImageUrl(formData.profileImage)}
+                    src={getProfileImageUrl(formData.profileImage, editingEmployee || formData._id || formData.id)}
                     alt="Profile"
                     className="w-full h-full object-cover"
                     onError={() => setHeaderProfileImageError(true)}
@@ -4256,10 +4256,13 @@ function UserManagement() {
                 <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                   {getFieldLabelById(1, 'profileImage', 'Profile Image (Max 1MB)')}
                 </label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                  Accepted formats: JPEG and PNG only
+                </p>
                 <div className="flex items-center gap-4">
                   {(formData.profileImage && !headerProfileImageError) ? (
                     <img
-                      src={getProfileImageUrl(formData.profileImage)}
+                      src={getProfileImageUrl(formData.profileImage, editingEmployee || formData._id || formData.id)}
                       alt="Profile Preview"
                       className="w-16 h-16 rounded-full object-cover border border-gray-300 dark:border-gray-600"
                       onError={() => setHeaderProfileImageError(true)}
@@ -4271,12 +4274,13 @@ function UserManagement() {
                   ) : null}
                   <input
                     type="file"
-                    accept="image/jpeg, image/png"
+                    accept="image/jpeg, image/png, .jpg, .jpeg, .png"
                     onChange={(e) => {
                       const file = e.target.files?.[0]
                       if (!file) return
-                      if (!['image/jpeg', 'image/png'].includes(file.type)) {
-                        toast.error('Only JPEG and PNG images are allowed')
+                      const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg']
+                      if (!allowedTypes.includes(file.type)) {
+                        toast.error('Please use JPEG or PNG')
                         e.target.value = ''
                         return
                       }
@@ -5443,7 +5447,7 @@ function UserManagement() {
                             {edu.fileUrl && (
                               <>
                                 <a
-                                  href={edu.fileUrl.startsWith('http') || edu.fileUrl.startsWith('blob:') || edu.fileUrl.startsWith('/') ? (edu.fileUrl.startsWith('/') ? getProfileImageUrl(edu.fileUrl) : edu.fileUrl) : getProfileImageUrl(edu.fileUrl)}
+                                  href={getAssetUrl(edu.fileUrl)}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="text-indigo-600 hover:text-indigo-800 text-xs flex items-center gap-0.5"
@@ -5451,7 +5455,7 @@ function UserManagement() {
                                   <FiEye className="w-3.5 h-3.5" /> View
                                 </a>
                                 <a
-                                  href={edu.fileUrl.startsWith('http') || edu.fileUrl.startsWith('blob:') || edu.fileUrl.startsWith('/') ? (edu.fileUrl.startsWith('/') ? getProfileImageUrl(edu.fileUrl) : edu.fileUrl) : edu.fileUrl}
+                                  href={getAssetUrl(edu.fileUrl)}
                                   download={edu.fileName}
                                   className="text-indigo-600 hover:text-indigo-800 text-xs flex items-center gap-0.5"
                                 >
@@ -5852,10 +5856,10 @@ function UserManagement() {
                               <span className="text-xs text-gray-500 truncate max-w-[100px]">{att.fileName}</span>
                               {att.fileUrl && (
                                 <>
-                                  <a href={att.fileUrl.startsWith('http') || att.fileUrl.startsWith('blob:') || att.fileUrl.startsWith('/') ? (att.fileUrl.startsWith('/') ? getProfileImageUrl(att.fileUrl) : att.fileUrl) : getProfileImageUrl(att.fileUrl)} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-800 text-xs flex items-center gap-0.5">
+                                  <a href={getAssetUrl(att.fileUrl)} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-800 text-xs flex items-center gap-0.5">
                                     <FiEye className="w-3.5 h-3.5" /> View
                                   </a>
-                                  <a href={att.fileUrl.startsWith('http') || att.fileUrl.startsWith('blob:') || att.fileUrl.startsWith('/') ? (att.fileUrl.startsWith('/') ? getProfileImageUrl(att.fileUrl) : att.fileUrl) : att.fileUrl} download={att.fileName} className="text-indigo-600 hover:text-indigo-800 text-xs flex items-center gap-0.5">
+                                  <a href={getAssetUrl(att.fileUrl)} download={att.fileName} className="text-indigo-600 hover:text-indigo-800 text-xs flex items-center gap-0.5">
                                     <FiDownload className="w-3.5 h-3.5" /> Download
                                   </a>
                                 </>
@@ -6455,10 +6459,10 @@ function UserManagement() {
                                 <span className="text-xs text-gray-500 truncate max-w-[140px]">{doc.fileName}</span>
                                 {doc.fileUrl && (
                                   <>
-                                    <a href={doc.fileUrl.startsWith('http') || doc.fileUrl.startsWith('blob:') || doc.fileUrl.startsWith('/') ? (doc.fileUrl.startsWith('/') ? getProfileImageUrl(doc.fileUrl) : doc.fileUrl) : getProfileImageUrl(doc.fileUrl)} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-800 text-xs flex items-center gap-0.5">
+                                    <a href={getAssetUrl(doc.fileUrl)} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-800 text-xs flex items-center gap-0.5">
                                       <FiEye className="w-3.5 h-3.5" /> View
                                     </a>
-                                    <a href={doc.fileUrl.startsWith('http') || doc.fileUrl.startsWith('blob:') || doc.fileUrl.startsWith('/') ? (doc.fileUrl.startsWith('/') ? getProfileImageUrl(doc.fileUrl) : doc.fileUrl) : doc.fileUrl} download={doc.fileName} className="text-indigo-600 hover:text-indigo-800 text-xs flex items-center gap-0.5">
+                                    <a href={getAssetUrl(doc.fileUrl)} download={doc.fileName} className="text-indigo-600 hover:text-indigo-800 text-xs flex items-center gap-0.5">
                                       <FiDownload className="w-3.5 h-3.5" /> Download
                                     </a>
                                   </>

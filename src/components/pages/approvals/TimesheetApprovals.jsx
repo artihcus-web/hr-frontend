@@ -214,7 +214,7 @@ const TimesheetApprovals = () => {
                                                 <div className="flex items-center">
                                                     {timesheet.employeeId?.profileImage ? (
                                                         <img
-                                                            src={getProfileImageUrl(timesheet.employeeId.profileImage)}
+                                                            src={getProfileImageUrl(timesheet.employeeId.profileImage, timesheet.employeeId._id || timesheet.employeeId.id)}
                                                             alt={timesheet.employeeId?.fullName || timesheet.employeeName || 'User'}
                                                             className="h-8 w-8 rounded-full object-cover flex-shrink-0 transition-colors border border-gray-200 dark:border-gray-700"
                                                             onError={(e) => {
@@ -229,7 +229,7 @@ const TimesheetApprovals = () => {
                                                             }}
                                                         />
                                                     ) : null}
-                                                    {(!timesheet.employeeId?.profileImage || !getProfileImageUrl(timesheet.employeeId?.profileImage)) && (
+                                                    {(!timesheet.employeeId?.profileImage || !getProfileImageUrl(timesheet.employeeId?.profileImage, timesheet.employeeId?._id || timesheet.employeeId?.id)) && (
                                                         <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-xs flex-shrink-0 transition-colors avatar-fallback">
                                                             {(timesheet.employeeId?.fullName || timesheet.employeeName || 'U').charAt(0)}
                                                         </div>

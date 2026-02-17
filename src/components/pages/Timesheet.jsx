@@ -1277,7 +1277,7 @@ const Timesheet = () => {
             <div className="flex items-center gap-3 pr-6 border-r border-gray-100 dark:border-gray-800 min-w-max transition-colors">
               {user?.profileImage ? (
                 <img
-                  src={getProfileImageUrl(user.profileImage)}
+                  src={getProfileImageUrl(user.profileImage, user._id || user.id)}
                   alt="Profile"
                   className="w-10 h-10 rounded-full border-2 border-white dark:border-gray-800 shadow-sm object-cover"
                   onError={(e) => {
@@ -1293,7 +1293,7 @@ const Timesheet = () => {
                   }}
                 />
               ) : null}
-              {(!user?.profileImage || !getProfileImageUrl(user.profileImage)) && (
+              {(!user?.profileImage || !getProfileImageUrl(user.profileImage, user._id || user.id)) && (
                 <div className="w-10 h-10 rounded-full bg-indigo-500 text-white flex items-center justify-center text-lg font-bold border-2 border-white dark:border-gray-800 shadow-sm avatar-fallback">
                   {userInitials}
                 </div>

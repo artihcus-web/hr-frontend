@@ -133,7 +133,7 @@ function ProjectView() {
                                     <div key={emp._id || emp.id} className="flex items-center gap-2 p-1.5 rounded border border-gray-200 bg-white hover:border-orange-300 hover:bg-orange-50 transition-colors h-9">
                                         {emp.profileImage ? (
                                             <img
-                                                src={getProfileImageUrl(emp.profileImage)}
+                                                src={getProfileImageUrl(emp.profileImage, emp._id || emp.id)}
                                                 alt={emp.fullName || emp.username || 'User'}
                                                 className="h-6 w-6 rounded-full flex-shrink-0 object-cover border border-gray-200"
                                                 onError={(e) => {
@@ -148,7 +148,7 @@ function ProjectView() {
                                                 }}
                                             />
                                         ) : null}
-                                        {(!emp.profileImage || !getProfileImageUrl(emp.profileImage)) && (
+                                        {(!emp.profileImage || !getProfileImageUrl(emp.profileImage, emp._id || emp.id)) && (
                                             <div className={`h-6 w-6 rounded-full flex-shrink-0 ${getRandomColor(emp.fullName || emp.username)} flex items-center justify-center text-white text-[9px] font-bold avatar-fallback`}>
                                                 {getInitials(emp.fullName || emp.username)}
                                             </div>
@@ -204,7 +204,7 @@ function ProjectView() {
                                         emp.profileImage ? (
                                             <img
                                                 key={emp._id || emp.id}
-                                                src={getProfileImageUrl(emp.profileImage)}
+                                                src={getProfileImageUrl(emp.profileImage, emp._id || emp.id)}
                                                 alt={emp.fullName || emp.username || 'User'}
                                                 className="h-5 w-5 rounded-full ring-1 ring-white object-cover"
                                                 onError={(e) => {
@@ -269,7 +269,7 @@ function ProjectView() {
                                                 <div key={mgr._id || mgr.id} className="flex items-center gap-2 p-2 bg-indigo-50/50 border border-indigo-100 rounded">
                                                     {mgr.profileImage ? (
                                                         <img
-                                                            src={getProfileImageUrl(mgr.profileImage)}
+                                                            src={getProfileImageUrl(mgr.profileImage, mgr._id || mgr.id)}
                                                             alt={mgr.fullName || mgr.username || 'User'}
                                                             className="h-8 w-8 rounded-full object-cover border border-indigo-200"
                                                             onError={(e) => {
@@ -284,7 +284,7 @@ function ProjectView() {
                                                             }}
                                                         />
                                                     ) : null}
-                                                    {(!mgr.profileImage || !getProfileImageUrl(mgr.profileImage)) && (
+                                                    {(!mgr.profileImage || !getProfileImageUrl(mgr.profileImage, mgr._id || mgr.id)) && (
                                                         <div className={`h-8 w-8 rounded-full ${getRandomColor(mgr.fullName || mgr.username)} flex items-center justify-center text-white text-[10px] font-bold avatar-fallback`}>
                                                             {getInitials(mgr.fullName || mgr.username)}
                                                         </div>
@@ -313,7 +313,7 @@ function ProjectView() {
                                                 <div key={emp._id || emp.id} className="flex items-center gap-2 p-1.5 border border-gray-100 rounded hover:border-gray-300 transition-colors bg-white">
                                                     {emp.profileImage ? (
                                                         <img
-                                                            src={getProfileImageUrl(emp.profileImage)}
+                                                            src={getProfileImageUrl(emp.profileImage, emp._id || emp.id)}
                                                             alt={emp.fullName || emp.username || 'User'}
                                                             className="h-7 w-7 rounded-full flex-shrink-0 object-cover border border-gray-200"
                                                             onError={(e) => {
@@ -328,7 +328,7 @@ function ProjectView() {
                                                             }}
                                                         />
                                                     ) : null}
-                                                    {(!emp.profileImage || !getProfileImageUrl(emp.profileImage)) && (
+                                                    {(!emp.profileImage || !getProfileImageUrl(emp.profileImage, emp._id || emp.id)) && (
                                                         <div className={`h-7 w-7 rounded-full flex-shrink-0 ${getRandomColor(emp.fullName || emp.username)} flex items-center justify-center text-white text-[9px] font-bold avatar-fallback`}>
                                                             {getInitials(emp.fullName || emp.username)}
                                                         </div>

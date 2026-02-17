@@ -27,12 +27,8 @@ function MyInfo() {
         const userRes = await axiosInstance.get('/api/auth/me')
         const fetchedUser = userRes.data.user || userRes.data
         // Ensure _id is preserved for image URL generation
-        if (fetchedUser) {
-          if (!fetchedUser._id && fetchedUser.id) {
-            fetchedUser._id = fetchedUser.id
-          }
-          // Debug: Log profileImage value to see what we're getting
-          console.log('MyInfo - Fetched user profileImage:', fetchedUser.profileImage, 'User ID:', fetchedUser._id || fetchedUser.id)
+        if (fetchedUser && !fetchedUser._id && fetchedUser.id) {
+          fetchedUser._id = fetchedUser.id
         }
         setUserData(fetchedUser)
 
@@ -194,7 +190,6 @@ function MyInfo() {
             alt="Profile"
             className="w-24 h-24 rounded-full object-cover border-2 border-gray-200 dark:border-gray-700"
             onError={(e) => {
-              console.error('Profile image failed to load:', imageUrl, 'User ID:', userId, 'ProfileImage value:', userData.profileImage)
               e.target.style.display = 'none'
               const parent = e.target.parentElement
               if (parent && !parent.querySelector('.profile-fallback')) {
@@ -204,9 +199,6 @@ function MyInfo() {
                 fallback.textContent = initials
                 parent.appendChild(fallback)
               }
-            }}
-            onLoad={() => {
-              console.log('Profile image loaded successfully:', imageUrl)
             }}
           />
         </div>
