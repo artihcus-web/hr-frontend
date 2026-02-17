@@ -29,7 +29,7 @@ import ConferenceHall from '../pages/ConferenceHall'
 
 function Routers() {
   return (
-    <div>
+    <div className="h-full">
       <Routes>
         <Route path='/' element={<Navigate to='/login' replace />} />
         <Route path='/login' element={<Login />} />

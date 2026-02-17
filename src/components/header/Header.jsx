@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { FiPower, FiSun, FiMoon } from 'react-icons/fi'
 import { useAuth } from '../../context/AuthContext'
@@ -10,6 +10,20 @@ function Header() {
 
   const { user, logout } = useAuth()
   const [imageError, setImageError] = useState(false)
+
+  const userId = user?._id || user?.id
+  const profileImageUrl = useMemo(
+    () => (user?.profileImage && userId ? getProfileImageUrl(user.profileImage, userId) : null),
+    [user?.profileImage, userId]
+  )
+
+  useEffect(() => {
+    console.log('[Header] render:', { userId, profileImage: user?.profileImage, profileImageUrl, imageError, showingImage: !!(profileImageUrl && !imageError) })
+  }, [userId, user?.profileImage, profileImageUrl, imageError, user])
+
+  useEffect(() => {
+    setImageError(false)
+  }, [userId, profileImageUrl])
 
   const handleLogout = () => {
     logout()
@@ -24,8 +38,6 @@ function Header() {
     .map(n => n[0])
     .join('')
     .toUpperCase()
-
-  const profileImageUrl = user?.profileImage ? getProfileImageUrl(user.profileImage, user._id || user.id) : null
 
   const { theme, toggleTheme } = useTheme()
 
@@ -67,10 +79,17 @@ function Header() {
               >
                 {profileImageUrl && !imageError ? (
                   <img
+                    key={profileImageUrl}
                     src={profileImageUrl}
                     alt="User profile"
                     className="w-full h-full object-cover rounded-full"
-                    onError={() => setImageError(true)}
+                    loading="eager"
+                    fetchPriority="high"
+                    onLoad={() => console.log('[Header] avatar loaded:', profileImageUrl)}
+                    onError={() => {
+                      console.log('[Header] avatar failed:', profileImageUrl)
+                      setImageError(true)
+                    }}
                   />
                 ) : (
                   avatarInitials

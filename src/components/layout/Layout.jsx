@@ -13,7 +13,8 @@ function LayoutContent() {
   const publicRoutes = ['/', '/login', '/signup']
   const isPublicRoute = publicRoutes.includes(location.pathname)
 
-  if (loading) {
+  // Only show loading when we have no user yet (don't block when hydrated from localStorage)
+  if (loading && !user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-950 transition-colors">
         <div className="text-gray-500 dark:text-gray-400 animate-pulse">Loading...</div>
@@ -31,18 +32,19 @@ function LayoutContent() {
   }
 
   // Authenticated layout with sidebar on the left and header/content on the right
+  const isKnowYourEmployee = location.pathname === '/know-your-employee'
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex transition-colors">
+    <div className={`bg-gray-50 dark:bg-gray-950 flex transition-colors ${isKnowYourEmployee ? 'h-screen overflow-hidden' : 'min-h-screen'}`}>
       {/* Sidebar - fixed on the left */}
       {user && <Sidebar />}
 
       {/* Right side: header, content, footer */}
-      <div className="flex flex-1 flex-col min-w-0">
+      <div className="flex flex-1 flex-col min-w-0 min-h-0">
         {/* Sticky Header aligned with content (starts to the right of sidebar) */}
         <Header />
 
-        {/* Main Content - let the window handle scrolling so sticky elements work with viewport */}
-        <main className="flex-1 bg-white dark:bg-gray-950 transition-colors">
+        {/* Main Content - overflow-hidden for know-your-employee (sticky no-scroll), else scroll */}
+        <main className={`flex-1 min-h-0 bg-white dark:bg-gray-950 transition-colors ${isKnowYourEmployee ? 'overflow-hidden' : 'overflow-y-auto'}`}>
           <Routers />
         </main>
 

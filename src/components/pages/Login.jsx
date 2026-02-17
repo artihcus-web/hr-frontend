@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import { FiEye, FiEyeOff } from 'react-icons/fi'
 import toast from 'react-hot-toast'
 import axiosInstance from '../../utils/axiosInstance'
+import { getProfileImageUrl } from '../../config/apiConfig'
 function Login() {
   const [formData, setFormData] = useState({
     username: '',
@@ -35,20 +36,32 @@ function Login() {
 
       toast.success('Login successful! Welcome back.')
 
-      // Step 2: Store token and user data in localStorage + React context
-      login(data.token, data.user) // AuthContext method
+      console.log('[Login] API response user:', { hasUser: !!data.user, profileImage: data.user?.profileImage, _id: data.user?._id, id: data.user?.id })
 
-      // Step 3: Redirect handling (deep-link after login)
-      const params = new URLSearchParams(location.search)
-      const redirect = params.get('redirect')
-      if (redirect) {
-        navigate(redirect)
-        return
+      // Step 2: Store token and set user (login response)
+      login(data.token, data.user)
+
+      // Step 3: Fetch /me so header gets full user with profileImage (same as after refresh)
+      try {
+        const meRes = await axiosInstance.get('/api/auth/me')
+        const meUser = meRes.data?.user
+        console.log('[Login] /me response user:', { hasUser: !!meUser, profileImage: meUser?.profileImage, _id: meUser?._id, id: meUser?.id })
+        if (meUser) {
+          login(data.token, meUser)
+          if (meUser.profileImage) {
+            const imgUrl = getProfileImageUrl(meUser.profileImage, meUser._id || meUser.id)
+            if (imgUrl?.startsWith('http')) new Image().src = imgUrl
+          }
+        }
+      } catch (e) {
+        console.log('[Login] /me failed:', e?.message)
       }
 
-      // Default landing by role
-      if (data.user?.role === 'admin') navigate('/admin')
-      else navigate('/dashboard')
+      // Step 4: Navigate
+      const params = new URLSearchParams(location.search)
+      const redirect = params.get('redirect')
+      const targetPath = redirect || (data.user?.role === 'admin' ? '/admin' : '/dashboard')
+      queueMicrotask(() => navigate(targetPath))
     } catch (error) {
       // Handle client errors (4xx) like invalid credentials
       if (error.response && error.response.status < 500) {

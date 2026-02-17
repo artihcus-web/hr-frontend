@@ -4,7 +4,23 @@ import axiosInstance from '../utils/axiosInstance'
 const AuthContext = createContext(null)
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null)
+  // Hydrate from localStorage immediately when token exists - shows header/avatar right away
+  const [user, setUser] = useState(() => {
+    const storedToken = localStorage.getItem('token')
+    if (!storedToken) {
+      console.log('[AuthContext] hydrate: no token')
+      return null
+    }
+    try {
+      const stored = localStorage.getItem('user')
+      const parsed = stored ? JSON.parse(stored) : null
+      console.log('[AuthContext] hydrate:', { hasUser: !!parsed, profileImage: parsed?.profileImage, _id: parsed?._id })
+      return parsed
+    } catch {
+      console.log('[AuthContext] hydrate: parse error')
+      return null
+    }
+  })
   const [loading, setLoading] = useState(true)
   const [token, setToken] = useState(localStorage.getItem('token'))
 
@@ -18,6 +34,7 @@ export const AuthProvider = ({ children }) => {
   // Fetch current user from API
   const fetchUser = useCallback(async () => {
     const storedToken = localStorage.getItem('token')
+    console.log('[AuthContext] fetchUser start, hasToken:', !!storedToken)
 
     if (!storedToken) {
       setUser(null)
@@ -31,6 +48,7 @@ export const AuthProvider = ({ children }) => {
       const response = await axiosInstance.get('/api/auth/me')
 
       const userData = response.data.user
+      console.log('[AuthContext] fetchUser /me:', { hasUser: !!userData, profileImage: userData?.profileImage, _id: userData?._id })
       setUser(userData)
       setToken(storedToken)
 
@@ -60,6 +78,7 @@ export const AuthProvider = ({ children }) => {
   }, [fetchUser])
 
   const login = (newToken, userData) => {
+    console.log('[AuthContext] login called:', { hasUser: !!userData, profileImage: userData?.profileImage, _id: userData?._id })
     localStorage.setItem('token', newToken)
     localStorage.setItem('user', JSON.stringify(userData))
     setToken(newToken)
