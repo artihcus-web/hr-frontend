@@ -38,16 +38,14 @@ function Login() {
 
       console.log('[Login] API response user:', { hasUser: !!data.user, profileImage: data.user?.profileImage, _id: data.user?._id, id: data.user?.id })
 
-      // Step 2: Store token and set user (login response)
-      login(data.token, data.user)
-
-      // Step 3: Fetch /me so header gets full user with profileImage (same as after refresh)
+      // Step 2: Fetch /me to get full user data with profileImage
+      let finalUser = data.user
       try {
         const meRes = await axiosInstance.get('/api/auth/me')
         const meUser = meRes.data?.user
         console.log('[Login] /me response user:', { hasUser: !!meUser, profileImage: meUser?.profileImage, _id: meUser?._id, id: meUser?.id })
         if (meUser) {
-          login(data.token, meUser)
+          finalUser = meUser
           if (meUser.profileImage) {
             const imgUrl = getProfileImageUrl(meUser.profileImage, meUser._id || meUser.id)
             if (imgUrl?.startsWith('http')) new Image().src = imgUrl
@@ -57,11 +55,14 @@ function Login() {
         console.log('[Login] /me failed:', e?.message)
       }
 
-      // Step 4: Navigate
-      const params = new URLSearchParams(location.search)
-      const redirect = params.get('redirect')
-      const targetPath = redirect || (data.user?.role === 'admin' ? '/admin' : '/dashboard')
-      queueMicrotask(() => navigate(targetPath))
+      // Step 3: Login (this will fetch menu config in parallel)
+      await login(data.token, finalUser)
+
+      // Step 4: Always navigate to role-based dashboard (ignore redirect param for fresh login)
+      // This ensures users always start at dashboard after login, not previous pages
+      const targetPath = finalUser?.role === 'admin' ? '/admin' : '/dashboard'
+      console.log('[Login] Redirecting to role-based dashboard:', targetPath, 'for role:', finalUser?.role)
+      queueMicrotask(() => navigate(targetPath, { replace: true }))
     } catch (error) {
       // Handle client errors (4xx) like invalid credentials
       if (error.response && error.response.status < 500) {

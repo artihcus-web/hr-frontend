@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../../../context/AuthContext'
 import axiosInstance from '../../../utils/axiosInstance'
 import toast from '../../../utils/toast'
-import { FiUsers, FiMonitor, FiSettings, FiAlertCircle, FiFileText, FiSave, FiMenu, FiChevronUp, FiChevronDown, FiMove } from 'react-icons/fi'
+import { FiUsers, FiMonitor, FiSettings, FiAlertCircle, FiFileText, FiSave, FiMenu, FiMove } from 'react-icons/fi'
 import LoadingSpinner from '../../common/LoadingSpinner'
 import { menuItems as allMenuItems, roleMapping } from '../../../config/menuConfig.js'
 
@@ -16,6 +16,8 @@ const AdminControllers = () => {
   // Menu Configuration state
   const [selectedRole, setSelectedRole] = useState('admin')
   const [menuConfig, setMenuConfig] = useState([])
+  const [draggedItem, setDraggedItem] = useState(null)
+  const [draggedOverIndex, setDraggedOverIndex] = useState(null)
   
   // Feature Permissions state (existing)
   const [permissions, setPermissions] = useState({
@@ -177,6 +179,7 @@ const AdminControllers = () => {
     }))
   }
 
+  // This function is no longer needed with drag-and-drop, but keeping for backward compatibility
   const handleMenuOrderChange = (menuItemId, role, newOrder) => {
     setMenuConfig(prev => prev.map(item => {
       if (item.id === menuItemId) {
@@ -207,28 +210,72 @@ const AdminControllers = () => {
     }))
   }
 
-  const moveMenuItem = (index, direction) => {
-    if ((direction === 'up' && index === 0) || (direction === 'down' && index === menuConfig.length - 1)) {
+  const handleDragStart = (e, index) => {
+    setDraggedItem(index)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/html', e.target.outerHTML)
+    e.target.style.opacity = '0.5'
+  }
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setDraggedOverIndex(index)
+  }
+
+  const handleDragLeave = () => {
+    setDraggedOverIndex(null)
+  }
+
+  const handleDrop = (e, dropIndex) => {
+    e.preventDefault()
+    
+    if (draggedItem === null || draggedItem === dropIndex) {
+      setDraggedItem(null)
+      setDraggedOverIndex(null)
       return
     }
 
     setMenuConfig(prev => {
-      const newConfig = [...prev]
-      const targetIndex = direction === 'up' ? index - 1 : index + 1
-      const currentOrder = newConfig[index].menuOrder?.[selectedRole] ?? 999
-      const targetOrder = newConfig[targetIndex].menuOrder?.[selectedRole] ?? 999
+      // Sort by current order to get the actual items in order
+      const sorted = [...prev].sort((a, b) => {
+        const orderA = a.menuOrder?.[selectedRole] ?? 999
+        const orderB = b.menuOrder?.[selectedRole] ?? 999
+        return orderA - orderB
+      })
+      
+      const draggedItemData = sorted[draggedItem]
+      
+      // Remove dragged item
+      sorted.splice(draggedItem, 1)
+      
+      // Insert at new position
+      sorted.splice(dropIndex, 0, draggedItemData)
+      
+      // Update menuOrder for all items based on their new positions
+      const updatedConfig = sorted.map((item, idx) => ({
+        ...item,
+        menuOrder: {
+          ...item.menuOrder,
+          [selectedRole]: idx + 1
+        }
+      }))
 
-      newConfig[index].menuOrder = {
-        ...newConfig[index].menuOrder,
-        [selectedRole]: targetOrder
-      }
-      newConfig[targetIndex].menuOrder = {
-        ...newConfig[targetIndex].menuOrder,
-        [selectedRole]: currentOrder
-      }
-
-      return newConfig
+      // Map back to original array structure (preserve item references)
+      return prev.map(item => {
+        const updated = updatedConfig.find(updatedItem => updatedItem.id === item.id)
+        return updated || item
+      })
     })
+
+    setDraggedItem(null)
+    setDraggedOverIndex(null)
+  }
+
+  const handleDragEnd = (e) => {
+    e.target.style.opacity = '1'
+    setDraggedItem(null)
+    setDraggedOverIndex(null)
   }
 
   const handleSaveMenuConfig = async () => {
@@ -294,16 +341,27 @@ const AdminControllers = () => {
     return <LoadingSpinner />
   }
 
+  // Sort menu config by order for the selected role (for display)
+  const sortedMenuConfig = [...menuConfig].sort((a, b) => {
+    const orderA = a.menuOrder?.[selectedRole] ?? 999
+    const orderB = b.menuOrder?.[selectedRole] ?? 999
+    return orderA - orderB
+  })
+
   // Get filtered menu items for preview (selected role)
-  const previewMenuItems = menuConfig
+  const previewMenuItems = sortedMenuConfig
     .filter(item => {
       const hasRoleAccess = item.roles.includes(selectedRole)
       const isVisible = item.isVisible?.[selectedRole] !== false
       return hasRoleAccess && isVisible
     })
+    .map((item, idx) => ({
+      ...item,
+      displayOrder: item.menuOrder?.[selectedRole] ?? idx + 1
+    }))
     .sort((a, b) => {
-      const orderA = a.menuOrder?.[selectedRole] ?? 999
-      const orderB = b.menuOrder?.[selectedRole] ?? 999
+      const orderA = typeof a.displayOrder === 'number' ? a.displayOrder : (a.menuOrder?.[selectedRole] ?? 999)
+      const orderB = typeof b.displayOrder === 'number' ? b.displayOrder : (b.menuOrder?.[selectedRole] ?? 999)
       return orderA - orderB
     })
 
@@ -378,14 +436,38 @@ const AdminControllers = () => {
               </div>
 
               <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                {menuConfig.map((item, index) => {
+                {sortedMenuConfig.map((item, index) => {
                   const hasRoleAccess = item.roles.includes(selectedRole)
                   const isVisible = item.isVisible?.[selectedRole] !== false
-                  const order = item.menuOrder?.[selectedRole] ?? 999
+                  const order = item.menuOrder?.[selectedRole] ?? index + 1
+                  const isDragging = draggedItem === index
+                  const isDragOver = draggedOverIndex === index
 
                   return (
-                    <div key={item.id} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                    <div
+                      key={item.id}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, index)}
+                      onDragOver={(e) => handleDragOver(e, index)}
+                      onDragLeave={handleDragLeave}
+                      onDrop={(e) => handleDrop(e, index)}
+                      onDragEnd={handleDragEnd}
+                      className={`
+                        p-4 transition-all duration-200 cursor-move
+                        ${isDragging ? 'opacity-50 bg-gray-100 dark:bg-gray-700' : ''}
+                        ${isDragOver ? 'border-t-2 border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' : ''}
+                        ${!isDragging && !isDragOver ? 'hover:bg-gray-50 dark:hover:bg-gray-700/50' : ''}
+                      `}
+                    >
                       <div className="flex items-start justify-between gap-4">
+                        {/* Drag Handle */}
+                        <div className="flex items-center gap-2 flex-shrink-0 pt-1">
+                          <FiMove className="w-5 h-5 text-gray-400 dark:text-gray-500" />
+                          <span className="text-xs font-medium text-gray-500 dark:text-gray-400 w-6 text-center">
+                            {order}
+                          </span>
+                        </div>
+
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-2">
                             <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
@@ -396,7 +478,7 @@ const AdminControllers = () => {
                             </span>
                           </div>
 
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
                             {/* Roles Access */}
                             <div>
                               <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -407,6 +489,7 @@ const AdminControllers = () => {
                                   <label
                                     key={role}
                                     className="flex items-center gap-1 text-xs cursor-pointer"
+                                    onClick={(e) => e.stopPropagation()}
                                   >
                                     <input
                                       type="checkbox"
@@ -427,7 +510,10 @@ const AdminControllers = () => {
                               <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 Visibility for {selectedRole}
                               </label>
-                              <label className="flex items-center gap-2 cursor-pointer">
+                              <label 
+                                className="flex items-center gap-2 cursor-pointer"
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 <input
                                   type="checkbox"
                                   checked={isVisible}
@@ -438,38 +524,6 @@ const AdminControllers = () => {
                                   {isVisible ? 'Visible' : 'Hidden'}
                                 </span>
                               </label>
-                            </div>
-
-                            {/* Order */}
-                            <div>
-                              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Order (for {selectedRole})
-                              </label>
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => moveMenuItem(index, 'up')}
-                                  disabled={index === 0}
-                                  className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30"
-                                >
-                                  <FiChevronUp className="w-4 h-4" />
-                                </button>
-                                <input
-                                  type="number"
-                                  value={order}
-                                  onChange={(e) => handleMenuOrderChange(item.id, selectedRole, e.target.value)}
-                                  className="w-20 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                                  min="0"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => moveMenuItem(index, 'down')}
-                                  disabled={index === menuConfig.length - 1}
-                                  className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30"
-                                >
-                                  <FiChevronDown className="w-4 h-4" />
-                                </button>
-                              </div>
                             </div>
                           </div>
                         </div>
@@ -485,14 +539,23 @@ const AdminControllers = () => {
               <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
                 Preview: Menu for {selectedRole.charAt(0).toUpperCase() + selectedRole.slice(1)}
               </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                Drag items using the move icon to reorder. Order updates automatically.
+              </p>
               <div className="space-y-1">
                 {previewMenuItems.length > 0 ? (
                   previewMenuItems.map((item, idx) => (
                     <div
                       key={item.id}
-                      className="px-3 py-2 bg-gray-50 dark:bg-gray-700/50 rounded text-sm text-gray-700 dark:text-gray-300"
+                      className="px-3 py-2 bg-gray-50 dark:bg-gray-700/50 rounded text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2"
                     >
-                      {idx + 1}. {item.label} ({item.path})
+                      <span className="text-xs font-medium text-indigo-600 dark:text-indigo-400 w-6">
+                        {idx + 1}.
+                      </span>
+                      <span>{item.label}</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400 ml-auto">
+                        ({item.path})
+                      </span>
                     </div>
                   ))
                 ) : (

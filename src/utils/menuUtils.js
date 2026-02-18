@@ -29,8 +29,8 @@ const iconMap = {
   'FiClipboard': FiClipboard
 }
 
-// Cache for menu config to avoid repeated API calls
-let menuConfigCache = null
+// Cache for menu config to avoid repeated API calls (per role)
+let menuConfigCache = null // { items: [...], role: 'admin' }
 let menuConfigCacheTime = null
 const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
 
@@ -58,16 +58,23 @@ const mapFrontendRoleToBackend = (frontendRole) => {
  * @param {string} userRole - User's backend role
  * @returns {Promise<Array>} Menu items array
  */
-export const fetchMenuConfigFromAPI = async (userRole) => {
+export const fetchMenuConfigFromAPI = async (backendRole) => {
   try {
-    // Check cache
+    // Check cache (cache key should include role to avoid mixing roles)
+    const cacheKey = `menuConfig_${backendRole}`
     const now = Date.now()
-    if (menuConfigCache && menuConfigCacheTime && (now - menuConfigCacheTime) < CACHE_DURATION) {
-      return menuConfigCache
+    if (menuConfigCache && menuConfigCacheTime && menuConfigCache.role === backendRole && (now - menuConfigCacheTime) < CACHE_DURATION) {
+      return menuConfigCache.items
     }
 
-    const backendRole = mapFrontendRoleToBackend(userRole) || userRole
-    const res = await axiosInstance.get(`/api/admin/controllers/menu-config/${backendRole}`)
+    // API expects backend role directly - add timeout to prevent blocking
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 3000) // 3 second timeout
+    
+    const res = await axiosInstance.get(`/api/admin/controllers/menu-config/${backendRole}`, {
+      signal: controller.signal
+    })
+    clearTimeout(timeoutId)
     
     if (res.data.menuItems && res.data.menuItems.length > 0) {
       // Transform API response to match menuConfig.js format
@@ -90,13 +97,20 @@ export const fetchMenuConfigFromAPI = async (userRole) => {
         }
       })
 
-      // Cache the result
-      menuConfigCache = transformed
+      // Cache the result (include role in cache)
+      menuConfigCache = { items: transformed, role: backendRole }
       menuConfigCacheTime = now
       return transformed
     }
   } catch (error) {
-    console.warn('Failed to fetch menu config from API, using fallback:', error.message)
+    // Silently handle errors - we'll use hardcoded menu
+    if (error.name === 'AbortError') {
+      console.debug('Menu config API timeout, using hardcoded menu')
+    } else if (error.response?.status === 404 || error.response?.status === 200) {
+      console.debug('No menu config found in database, using hardcoded menuConfig.js')
+    } else {
+      console.debug('Failed to fetch menu config from API, using fallback:', error.message)
+    }
   }
   
   return null // Return null to trigger fallback
@@ -155,32 +169,53 @@ export const filterMenuByRole = async (menuItems = null, userRole, useAPI = true
   const frontendRole = mapBackendRoleToFrontend(userRole)
   
   let itemsToFilter = menuItems
+  let itemsFromAPI = false
 
   // Try to fetch from API if enabled and no items provided
+  // Pass backend role directly to API (it expects backend role)
   if (useAPI && !menuItems) {
-    const apiItems = await fetchMenuConfigFromAPI(frontendRole)
+    const apiItems = await fetchMenuConfigFromAPI(userRole) // Pass backend role, not frontend
     if (apiItems && apiItems.length > 0) {
       itemsToFilter = apiItems
+      itemsFromAPI = true // Mark that items came from API (already filtered)
     } else {
       // Fallback to hardcoded menuConfig.js
       itemsToFilter = allMenuItems
+      itemsFromAPI = false
     }
   } else if (!itemsToFilter) {
     itemsToFilter = allMenuItems
+    itemsFromAPI = false
   }
   
+  // Always filter by role AND visibility for safety (backend might have bugs)
+  // API items have roles converted to frontend format, so we can filter by frontendRole
   const filtered = itemsToFilter
     .filter(item => {
-      // Check if user has access via role or individual user override
+      // Check role access (items from API have frontend roles after conversion)
       const hasRoleAccess = item.roles.includes(frontendRole)
-      return hasRoleAccess
+      
+      // Check visibility (only for API items)
+      const isVisible = itemsFromAPI ? (item.isVisible !== false) : true
+      
+      const shouldShow = hasRoleAccess && isVisible
+      return shouldShow
     })
     .map(item => {
       // If item has children, filter them too
       if (item.children && item.children.length > 0) {
-        const filteredChildren = itemsToFilter.filter(child => 
-          child.parentId === item.id && child.roles.includes(frontendRole)
-        )
+        let filteredChildren
+        if (itemsFromAPI) {
+          // API items - children already filtered
+          filteredChildren = itemsToFilter.filter(child => 
+            child.parentId === item.id && child.isVisible !== false
+          )
+        } else {
+          // Hardcoded items - filter by role
+          filteredChildren = itemsToFilter.filter(child => 
+            child.parentId === item.id && child.roles.includes(frontendRole)
+          )
+        }
         // Only include parent if it has at least one visible child
         if (filteredChildren.length > 0) {
           return {
@@ -247,5 +282,6 @@ export const hasRouteAccess = (routePath, userRole, items = allMenuItems) => {
 export const clearMenuConfigCache = () => {
   menuConfigCache = null
   menuConfigCacheTime = null
+  console.log('Menu config cache cleared')
 }
 

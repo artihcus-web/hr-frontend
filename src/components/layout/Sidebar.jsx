@@ -8,51 +8,61 @@ import Logo from '../../assets/artihcus-logo1.svg'
 
 function Sidebar() {
   const location = useLocation()
-  const { user, activeRole } = useAuth()
+  const { user, activeRole, menuConfig, loading: authLoading } = useAuth()
   const [filteredMenu, setFilteredMenu] = useState([])
   const [expandedItems, setExpandedItems] = useState({})
   const [isMobileOpen, setIsMobileOpen] = useState(false)
   const [isCollapsed, setIsCollapsed] = useState(false)
-  const [menuLoading, setMenuLoading] = useState(true)
 
   useEffect(() => {
-    // Use activeRole if available (for project context), otherwise user.role
+    // Use menu config from AuthContext (fetched during login)
+    // If not available, fallback to hardcoded menu
     const roleToUse = activeRole || user?.role
 
-    if (user && roleToUse) {
-      console.log('Filtering Menu for Role:', roleToUse)
-      setMenuLoading(true)
-      
-      // Use async filterMenuByRole (will fetch from API if available)
-      filterMenuByRole(null, roleToUse, true)
-        .then(filtered => {
-          setFilteredMenu(filtered || [])
-
-          const currentPath = location.pathname
-          const autoExpand = {}
-          filtered?.forEach(item => {
-            if (item.children) {
-              const hasActiveChild = item.children.some(child => child.path === currentPath)
-              if (hasActiveChild) {
-                autoExpand[item.id] = true
-              }
-            }
-          })
-          setExpandedItems(autoExpand)
-          setMenuLoading(false)
-        })
-        .catch(error => {
-          console.error('Error filtering menu:', error)
-          // Fallback to hardcoded menu (synchronous)
-          const fallbackFiltered = filterMenuByRoleSync(menuItems, roleToUse)
-          setFilteredMenu(fallbackFiltered || [])
-          setMenuLoading(false)
-        })
-    } else {
-      setFilteredMenu([])
-      setMenuLoading(false)
+    if (authLoading) {
+      // Still loading - don't render menu yet
+      return
     }
-  }, [location.pathname, user, activeRole])
+
+    if (!user || !roleToUse) {
+      setFilteredMenu([])
+      return
+    }
+
+    // Use menu config from context if available (from login fetch)
+    if (menuConfig && menuConfig.length > 0) {
+      setFilteredMenu(menuConfig)
+      
+      // Setup auto-expand for current path
+      const currentPath = location.pathname
+      const autoExpand = {}
+      menuConfig.forEach(item => {
+        if (item.children) {
+          const hasActiveChild = item.children.some(child => child.path === currentPath)
+          if (hasActiveChild) {
+            autoExpand[item.id] = true
+          }
+        }
+      })
+      setExpandedItems(autoExpand)
+    } else {
+      // Fallback to hardcoded menu (shouldn't happen after login, but safe fallback)
+      const fallbackMenu = filterMenuByRoleSync(menuItems, roleToUse)
+      setFilteredMenu(fallbackMenu || [])
+      
+      const currentPath = location.pathname
+      const autoExpand = {}
+      fallbackMenu?.forEach(item => {
+        if (item.children) {
+          const hasActiveChild = item.children.some(child => child.path === currentPath)
+          if (hasActiveChild) {
+            autoExpand[item.id] = true
+          }
+        }
+      })
+      setExpandedItems(autoExpand)
+    }
+  }, [location.pathname, user, activeRole, menuConfig, authLoading])
 
   const toggleExpand = (itemId) => {
     setExpandedItems(prev => ({

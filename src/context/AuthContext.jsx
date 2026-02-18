@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import axiosInstance from '../utils/axiosInstance'
+import { filterMenuByRole, clearMenuConfigCache } from '../utils/menuUtils'
 
 const AuthContext = createContext(null)
 
@@ -17,13 +18,40 @@ export const AuthProvider = ({ children }) => {
   })
   const [loading, setLoading] = useState(true)
   const [token, setToken] = useState(localStorage.getItem('token'))
+  const [menuConfig, setMenuConfig] = useState(null)
+  const [menuConfigLoading, setMenuConfigLoading] = useState(false)
 
   const logout = () => {
     localStorage.removeItem('token')
     localStorage.removeItem('user')
+    // Clear any redirect parameters from URL
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href)
+      url.searchParams.delete('redirect')
+      window.history.replaceState({}, '', url.toString())
+    }
     setToken(null)
     setUser(null)
+    setMenuConfig(null)
+    clearMenuConfigCache()
   }
+
+  // Fetch menu config for user role
+  const fetchMenuConfig = useCallback(async (userRole) => {
+    if (!userRole) return null
+    
+    setMenuConfigLoading(true)
+    try {
+      const filtered = await filterMenuByRole(null, userRole, true)
+      setMenuConfig(filtered)
+      return filtered
+    } catch (error) {
+      console.error('[AuthContext] Error fetching menu config:', error)
+      return null
+    } finally {
+      setMenuConfigLoading(false)
+    }
+  }, [])
 
   // Fetch current user from API
   const fetchUser = useCallback(async () => {
@@ -32,22 +60,27 @@ export const AuthProvider = ({ children }) => {
 
     if (!storedToken) {
       setUser(null)
+      setMenuConfig(null)
       setLoading(false)
       return
     }
 
     try {
-      // Use axiosInstance - base URL and headers are already configured
-      // Token is automatically attached by the interceptor
-      const response = await axiosInstance.get('/api/auth/me')
+      // Fetch user and menu config in parallel during initial load
+      const [userResponse] = await Promise.all([
+        axiosInstance.get('/api/auth/me'),
+        // Menu config will be fetched after user is set (in useEffect)
+      ])
 
-      const userData = response.data.user
+      const userData = userResponse.data.user
       console.log('[AuthContext] fetchUser /me:', { hasUser: !!userData, profileImage: userData?.profileImage, _id: userData?._id })
       setUser(userData)
       setToken(storedToken)
 
       // Also update localStorage for backward compatibility
       localStorage.setItem('user', JSON.stringify(userData))
+
+      // Fetch menu config after user is set (will happen in useEffect)
     } catch (error) {
       console.error('Error fetching user:', error)
       // On network error or other error, try to use localStorage as fallback
@@ -71,12 +104,19 @@ export const AuthProvider = ({ children }) => {
     fetchUser()
   }, [fetchUser])
 
-  const login = (newToken, userData) => {
+  const login = async (newToken, userData) => {
     console.log('[AuthContext] login called:', { hasUser: !!userData, profileImage: userData?.profileImage, _id: userData?._id })
     localStorage.setItem('token', newToken)
     localStorage.setItem('user', JSON.stringify(userData))
     setToken(newToken)
     setUser(userData)
+    
+    // Fetch menu config immediately after login
+    const roleToUse = userData?.role
+    if (roleToUse) {
+      console.log('[AuthContext] Fetching menu config during login for role:', roleToUse)
+      await fetchMenuConfig(roleToUse)
+    }
   }
 
   const refreshUser = () => {
@@ -112,6 +152,18 @@ export const AuthProvider = ({ children }) => {
 
     return user.role // Fallback to default role
   }, [user, activeProject])
+
+  // Fetch menu config when user is loaded (during initial load/login)
+  // Must be after activeRole is defined
+  useEffect(() => {
+    if (user && !menuConfig && loading === false) {
+      const roleToUse = activeRole || user.role
+      if (roleToUse) {
+        console.log('[AuthContext] Fetching menu config for role:', roleToUse)
+        fetchMenuConfig(roleToUse)
+      }
+    }
+  }, [user, activeRole, loading, menuConfig, fetchMenuConfig])
 
   // Fetch user's projects
   const fetchMyProjects = useCallback(async () => {
@@ -151,11 +203,16 @@ export const AuthProvider = ({ children }) => {
     }
   }
 
+  // Combined loading state: true if user OR menu config is still loading
+  const isLoading = loading || (user && !menuConfig && menuConfigLoading)
+
   return (
     <AuthContext.Provider value={{
       user,
       token,
-      loading,
+      loading: isLoading,
+      menuConfig,
+      menuConfigLoading,
       login,
       logout,
       refreshUser,

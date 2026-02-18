@@ -25,10 +25,10 @@ const ProtectedRoute = ({ allowedRoles = [] }) => {
 
     // Authenticated but not authorized for this route
     if (allowedRoles.length > 0 && !allowedRoles.includes(currentRole)) {
-        // Redirect based on role or to a generic unauthorized page
-        // For now, redirecting to dashboard which is safe for all authenticated users
-        console.warn(`Access denied. Role: ${currentRole}, Allowed: ${allowedRoles}`)
-        return <Navigate to="/dashboard" replace />
+        // Redirect to role-based dashboard
+        const roleBasedDashboard = currentRole === 'admin' ? '/admin' : '/dashboard'
+        console.warn(`Access denied. Role: ${currentRole}, Allowed: ${allowedRoles}, Redirecting to: ${roleBasedDashboard}`)
+        return <Navigate to={roleBasedDashboard} replace />
     }
 
     return <Outlet />

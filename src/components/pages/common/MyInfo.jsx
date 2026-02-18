@@ -5,8 +5,10 @@ import LoadingSpinner from '../../common/LoadingSpinner'
 import toast from '../../../utils/toast'
 import { getProfileImageUrl } from '../../../config/apiConfig'
 import { SECTION_ID_MAP, getSectionKey } from '../../../utils/formConfigHelpers'
+import { useAuth } from '../../../context/AuthContext'
 
 function MyInfo() {
+  const { user: authUser } = useAuth()
   const [userData, setUserData] = useState(null)
   const [formConfig, setFormConfig] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -15,6 +17,13 @@ function MyInfo() {
 
   // Fetch form schema and user data
   useEffect(() => {
+    // Clear data when user logs out
+    if (!authUser) {
+      setUserData(null)
+      setLoading(false)
+      return
+    }
+
     const fetchData = async () => {
       try {
         setLoading(true)
@@ -26,10 +35,42 @@ function MyInfo() {
         // Fetch user data
         const userRes = await axiosInstance.get('/api/auth/me')
         const fetchedUser = userRes.data.user || userRes.data
+        
+        // Verify this is the current logged-in user (prevent stale data)
+        const currentUserId = authUser?._id || authUser?.id
+        const fetchedUserId = fetchedUser?._id || fetchedUser?.id
+        if (currentUserId && fetchedUserId && currentUserId.toString() !== fetchedUserId.toString()) {
+          console.warn('[MyInfo] User ID mismatch, clearing stale data')
+          setUserData(null)
+          setLoading(false)
+          return
+        }
+        
         // Ensure _id is preserved for image URL generation
         if (fetchedUser && !fetchedUser._id && fetchedUser.id) {
           fetchedUser._id = fetchedUser.id
         }
+        
+        // Ensure array fields are initialized as arrays if missing
+        if (fetchedUser) {
+          fetchedUser.languages = Array.isArray(fetchedUser.languages) ? fetchedUser.languages : []
+          fetchedUser.experience = Array.isArray(fetchedUser.experience) ? fetchedUser.experience : []
+          fetchedUser.documents = Array.isArray(fetchedUser.documents) ? fetchedUser.documents : []
+          fetchedUser.education = Array.isArray(fetchedUser.education) ? fetchedUser.education : []
+          fetchedUser.familyDetails = Array.isArray(fetchedUser.familyDetails) ? fetchedUser.familyDetails : []
+        }
+        
+        console.log('[MyInfo] Fetched user data:', {
+          userId: fetchedUser?._id || fetchedUser?.id,
+          hasLanguages: Array.isArray(fetchedUser?.languages),
+          languagesCount: fetchedUser?.languages?.length || 0,
+          hasExperience: Array.isArray(fetchedUser?.experience),
+          experienceCount: fetchedUser?.experience?.length || 0,
+          hasDocuments: Array.isArray(fetchedUser?.documents),
+          documentsCount: fetchedUser?.documents?.length || 0,
+          hasBankDetails: !!fetchedUser?.bankName || !!fetchedUser?.accountNumber
+        })
+        
         setUserData(fetchedUser)
 
         // Initialize expanded sections - expand first few by default
@@ -46,13 +87,14 @@ function MyInfo() {
       } catch (error) {
         console.error('Error fetching data:', error)
         toast.error('Failed to load your information')
+        setUserData(null)
       } finally {
         setLoading(false)
       }
     }
 
     fetchData()
-  }, [])
+  }, [authUser?._id, authUser?.id]) // Refetch when user changes
 
   // Helper to get section config by sectionId
   const getSectionConfigById = useCallback((sectionId) => {
@@ -235,10 +277,14 @@ function MyInfo() {
     )
   }
 
-  // Render array section (education, experience, documents, familyDetails)
+  // Render array section (education, experience, documents, familyDetails, languages)
   const renderArraySection = (sectionId, arrayData) => {
     if (!Array.isArray(arrayData) || arrayData.length === 0) {
-      return null // Show blank instead of "—"
+      return (
+        <div className="text-sm text-gray-500 dark:text-gray-400 italic">
+          No data available
+        </div>
+      )
     }
 
     const section = getSectionConfigById(sectionId)
@@ -248,7 +294,7 @@ function MyInfo() {
       <div className="space-y-4">
         {arrayData.map((item, index) => {
           const itemFields = fields
-            .filter(f => f.isActive !== false && !['addExperience', 'addQualification', 'addDocument', 'addMember'].includes(f.name))
+            .filter(f => f.isActive !== false && !['addExperience', 'addQualification', 'addDocument', 'addMember', 'addLanguage'].includes(f.name))
             .map(field => {
               const value = item[field.name]
               if (value === null || value === undefined || value === '') return null
@@ -323,9 +369,13 @@ function MyInfo() {
       3: 'education',
       10: 'experience',
       5: 'documents',
-      13: 'familyDetails'
+      13: 'familyDetails',
+      14: 'languages' // Languages Known section
     }
     const arrayKey = arraySections[sectionId]
+
+    // Get array data for array sections
+    const arrayData = arrayKey ? (userData?.[arrayKey] || []) : null
 
     return (
       <div key={sectionId} id={sectionKey} className="mb-6 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -341,17 +391,27 @@ function MyInfo() {
         {isExpanded && (
           <div className="p-4">
             {arrayKey ? (
-              renderArraySection(sectionId, userData?.[arrayKey], title)
+              // Array sections (Languages, Experience, Documents, etc.)
+              renderArraySection(sectionId, arrayData, title)
             ) : (
+              // Non-array sections (Bank Details, etc.)
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {fields
                   .filter(f => f.isActive !== false)
                   .map(field => {
                     // Skip array fields that are handled separately
-                    if (['education', 'experience', 'documents', 'familyDetails'].includes(field.name)) return null
+                    if (['education', 'experience', 'documents', 'familyDetails', 'languages'].includes(field.name)) return null
                     
                     const renderedField = renderField(sectionId, field.name, field.type)
-                    if (!renderedField) return null
+                    if (!renderedField) {
+                      // Show field label with "—" if no value (for Bank Details and other non-array sections)
+                      return (
+                        <div key={field.name}>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{field.label || field.name}</p>
+                          <p className="text-sm font-semibold text-gray-500 dark:text-gray-400">—</p>
+                        </div>
+                      )
+                    }
                     
                     return (
                       <div key={field.name}>
@@ -359,6 +419,12 @@ function MyInfo() {
                       </div>
                     )
                   })}
+                {/* Show message if no fields have values */}
+                {fields.filter(f => f.isActive !== false && !['education', 'experience', 'documents', 'familyDetails', 'languages'].includes(f.name)).length === 0 && (
+                  <div className="col-span-full text-sm text-gray-500 dark:text-gray-400 italic">
+                    No data available
+                  </div>
+                )}
               </div>
             )}
           </div>
