@@ -1577,36 +1577,38 @@ function UserManagement() {
       navigate('/login')
       return
     }
-    if (user && user.role !== 'admin') {
+    // Allow admin and hr (HR can access Employee Directory)
+    if (user && user.role !== 'admin' && user.role !== 'hr') {
       navigate('/')
     }
   }, [navigate, user, loading])
 
-  // Fetch employees list
+  // Fetch employees list (HR uses /api/employees which allows any authenticated user; admin uses /api/auth/users for full data)
   const fetchEmployees = useCallback(async () => {
     if (!token) return
 
     try {
       setLoadingEmployees(true)
-      const res = await axiosInstance.get('/api/auth/users')
+      const isHr = user?.role === 'hr'
+      const url = isHr ? '/api/employees' : '/api/auth/users'
+      const res = await axiosInstance.get(url)
       const data = res.data
-
-      const nonAdminUsers = (data.users || []).filter(u => u.role !== 'admin')
+      const list = data.users || data.employees || []
+      const nonAdminUsers = list.filter(u => u.role !== 'admin')
       setEmployees(nonAdminUsers)
       setFailedProfileImageIds(new Set())
     } catch (error) {
       console.error('Error fetching employees:', error)
-      // Global toast handles 5xx/network. 
-      // We can toast for other errors if needed, or rely on global.
+      // Global toast handles 5xx/network.
     } finally {
       setLoadingEmployees(false)
     }
-  }, [token])
+  }, [token, user?.role])
 
 
 
   useEffect(() => {
-    if (user && user.role === 'admin' && token && !showForm) {
+    if (user && (user.role === 'admin' || user.role === 'hr') && token && !showForm) {
       fetchEmployees()
     }
   }, [user, token, showForm, fetchEmployees])
@@ -4305,40 +4307,45 @@ function UserManagement() {
                 )
               })()}
 
-              {/* Physically Challenged - Conditional */}
-              {isFieldVisibleById(1, 'isPhysicallyChallenged') && (
-              <div className="col-span-full">
-                <div className="flex items-center mb-2">
-                  <input
-                    type="checkbox"
-                    id="isPhysicallyChallenged"
-                    name="isPhysicallyChallenged"
-                    checked={formData.isPhysicallyChallenged || false}
-                    onChange={handleChange}
-                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="isPhysicallyChallenged" className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {getFieldLabelById(1, 'isPhysicallyChallenged', 'Is Physically Challenged?')}
-                  </label>
-                </div>
-
-                {formData.isPhysicallyChallenged && (
-                  <div className="mt-2 animate-fadeIn">
-                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Details (Please specify)
-                    </label>
-                    <textarea
-                      name="physicallyChallengedDetails"
-                      value={formData.physicallyChallengedDetails || ''}
-                      onChange={handleChange}
-                      rows={2}
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                      placeholder="Provide details about the physical challenge..."
-                    />
+              {/* Physically Challenged: when schema has it as checkbox, show checkbox + optional details text only when checked (both from schema) */}
+              {(() => {
+                const pcField = getFieldConfig(getSectionKey(1), 'isPhysicallyChallenged')
+                const detailsField = getFieldConfig(getSectionKey(1), 'physicallyChallengedDetails')
+                const isCheckbox = pcField && String(pcField.type || '').toLowerCase() === 'checkbox'
+                const showCheckbox = pcField && isFieldVisibleById(1, 'isPhysicallyChallenged') && isCheckbox
+                const showDetailsWhenChecked = detailsField && isFieldVisibleById(1, 'physicallyChallengedDetails')
+                if (!showCheckbox) return null
+                return (
+                  <div className="col-span-full">
+                    <div className="flex items-center mb-2">
+                      <input
+                        type="checkbox"
+                        id="isPhysicallyChallenged"
+                        name="isPhysicallyChallenged"
+                        checked={formData.isPhysicallyChallenged || false}
+                        onChange={handleChange}
+                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                      />
+                      <label htmlFor="isPhysicallyChallenged" className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {getFieldLabelById(1, 'isPhysicallyChallenged', 'Is Physically Challenged?')}
+                      </label>
+                    </div>
+                    {showDetailsWhenChecked && (formData.isPhysicallyChallenged === true || formData.isPhysicallyChallenged === 'true') && (
+                      <div className="mt-2 animate-fadeIn">
+                        <FormField
+                          label={getFieldLabelById(1, 'physicallyChallengedDetails', 'Details (Please specify)')}
+                          name="physicallyChallengedDetails"
+                          type={getFieldTypeById(1, 'physicallyChallengedDetails', 'text')}
+                          required={getFieldRequiredById(1, 'physicallyChallengedDetails', false)}
+                          formData={formData}
+                          handleChange={handleChange}
+                          placeholder={detailsField?.placeholder || 'Provide details about the physical challenge...'}
+                        />
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-              )}
+                )
+              })()}
 
               {/* Profile Image Upload (file upload, not base64) */}
               {isFieldVisibleById(1, 'profileImage') && (
@@ -4410,7 +4417,10 @@ function UserManagement() {
                 )}
               </div>
               )}
-              {renderSchemaExtraFields(1, ['employeeName', 'firstName', 'middleName', 'lastName', 'gender', 'bloodGroup', 'birthdayDate', 'dateOfBirth', 'maritalStatus', 'marriageDate', 'isPhysicallyChallenged', 'physicallyChallengedDetails', 'profileImage', 'isInternationalEmployee', 'countryOfOrigin', 'cityLocation'])}
+              {renderSchemaExtraFields(1, [
+                'employeeName', 'firstName', 'middleName', 'lastName', 'gender', 'bloodGroup', 'birthdayDate', 'dateOfBirth', 'maritalStatus', 'marriageDate', 'profileImage', 'isInternationalEmployee', 'countryOfOrigin', 'cityLocation',
+                ...(getFieldConfig(getSectionKey(1), 'isPhysicallyChallenged')?.type === 'checkbox' ? ['isPhysicallyChallenged', 'physicallyChallengedDetails'] : [])
+              ])}
             </FormSection>
 
             {/* Contact Information (New Section) */}

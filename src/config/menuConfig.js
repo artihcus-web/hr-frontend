@@ -19,7 +19,7 @@ export const roleMapping = {
 }
 
 export const menuItems = [
-  // Super Admin Only - Ordered as requested
+  // Super Admin Only
   {
     id: 'admin-dashboard',
     label: 'Admin Dashboard',
@@ -29,25 +29,11 @@ export const menuItems = [
     roles: ['super_admin']
   },
   {
-    id: 'user-management',
-    label: 'Employee Directory',
-    icon: FiUsers,
-    path: '/admin/users',
-    roles: ['super_admin', 'hr_admin']
-  },
-  {
     id: 'project-management',
     label: 'Project Management',
     icon: FiBriefcase,
     path: '/admin/projects',
     roles: ['super_admin']
-  },
-  {
-    id: 'form-builder',
-    label: 'Schema Configuration',
-    icon: FiSettings,
-    path: '/admin/form-builder',
-    roles: ['super_admin', 'hr_admin']
   },
   {
     id: 'admin-controllers',
@@ -78,7 +64,7 @@ export const menuItems = [
     roles: ['super_admin']
   },
 
-  // Employee and Others - Ordered as requested
+  // Shared: Dashboard, Projects, Timesheet, Holiday Calendar (then Employee Directory & Schema Config for HR)
   {
     id: 'dashboard',
     label: 'Dashboard',
@@ -106,6 +92,20 @@ export const menuItems = [
     icon: FiCalendar,
     path: '/holiday-calendar',
     roles: ['employee', 'manager', 'hr_admin', 'team_lead', 'c_suite', 'super_manager']
+  },
+  {
+    id: 'user-management',
+    label: 'Employee Directory',
+    icon: FiUsers,
+    path: '/admin/users',
+    roles: ['super_admin', 'hr_admin']
+  },
+  {
+    id: 'form-builder',
+    label: 'Schema Configuration',
+    icon: FiSettings,
+    path: '/admin/form-builder',
+    roles: ['super_admin', 'hr_admin']
   },
   {
     id: 'know-your-employee',
