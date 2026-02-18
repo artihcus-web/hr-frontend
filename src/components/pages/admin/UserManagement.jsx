@@ -1322,6 +1322,17 @@ function UserManagement() {
     [getSectionKey, getFieldConfig]
   )
 
+  // Helper to get field help text from CMS schema (e.g. for Qualifications attachment: "PDF only...")
+  const getFieldHelpTextById = useCallback(
+    (sectionId, fieldName, defaultHelpText = '') => {
+      const sectionKey = getSectionKey(sectionId)
+      if (!sectionKey) return defaultHelpText
+      const field = getFieldConfig(sectionKey, fieldName)
+      return (field?.helpText && String(field.helpText).trim()) ? String(field.helpText).trim() : defaultHelpText
+    },
+    [getSectionKey, getFieldConfig]
+  )
+
   // Action menu (three dots) state; position for portal so dropdown isn't clipped by table overflow
   const [openActionMenuId, setOpenActionMenuId] = useState(null)
   const [actionMenuPosition, setActionMenuPosition] = useState(null)
@@ -1465,6 +1476,85 @@ function UserManagement() {
   })
   const [submittingSection, setSubmittingSection] = useState(null)
 
+  // Build default object for one array item from schema (e.g. new language row). Only includes fields defined in schema so removed fields (e.g. write) stay gone.
+  const getDefaultArrayItemFromSchema = useCallback(
+    (sectionId, arrayName) => {
+      const sectionKey = getSectionKey(sectionId)
+      if (!sectionKey) return {}
+      const section = getSectionConfig(sectionKey)
+      const fields = section?.fields?.filter(
+        (f) => f.name !== 'addLanguage' && f.isActive !== false
+      ) || []
+      const defaults = {}
+      fields.forEach((f) => {
+        const t = String(f.type || 'text').toLowerCase()
+        if (t === 'checkbox') defaults[f.name] = false
+        else if (t === 'number') defaults[f.name] = ''
+        else defaults[f.name] = ''
+      })
+      return defaults
+    },
+    [getSectionKey, getSectionConfig]
+  )
+
+  // Render all schema fields for one row of an array section (e.g. one language entry). Section is fully dynamic from schema.
+  const renderSchemaArrayItemFields = useCallback(
+    (sectionId, arrayName, arrayIndex) => {
+      const sectionKey = getSectionKey(sectionId)
+      if (!sectionKey) return null
+      const section = getSectionConfig(sectionKey)
+      const fields = section?.fields
+        ?.filter(
+          (f) => f.name !== 'addLanguage' && f.isActive !== false && isFieldVisibleById(sectionId, f.name)
+        )
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)) || []
+
+      const customHandleChange = (e) => {
+        const { name, value, type, checked } = e.target || {}
+        const fieldNameOnly = name.split('.').pop()
+        const newArray = [...(formData[arrayName] || [])]
+        if (newArray[arrayIndex]) {
+          newArray[arrayIndex] = {
+            ...newArray[arrayIndex],
+            [fieldNameOnly]: type === 'checkbox' ? checked : value
+          }
+          setFormData({ ...formData, [arrayName]: newArray })
+        }
+      }
+
+      return fields.map((field) => {
+        const fieldName = `${arrayName}.${arrayIndex}.${field.name}`
+        const fieldType = getFieldTypeById(sectionId, field.name, field.type || 'text')
+        const computedRequired = getFieldRequiredById(sectionId, field.name, field.required || false)
+        const options = getFieldOptionsById(sectionId, field.name, field.options || [])
+
+        return (
+          <FormField
+            key={field.name}
+            label={getFieldLabelById(sectionId, field.name, field.label || field.name)}
+            name={fieldName}
+            type={fieldType}
+            required={computedRequired}
+            formData={formData}
+            handleChange={customHandleChange}
+            placeholder={field.placeholder}
+            options={Array.isArray(options) ? options : []}
+            helpText={field.helpText}
+          />
+        )
+      })
+    },
+    [
+      getSectionKey,
+      getSectionConfig,
+      isFieldVisibleById,
+      getFieldTypeById,
+      getFieldRequiredById,
+      getFieldOptionsById,
+      getFieldLabelById,
+      formData
+    ]
+  )
 
   // Accordion State
   const [expandedSections, setExpandedSections] = useState([1]) // First section open by default
@@ -5415,6 +5505,10 @@ function UserManagement() {
 
                     <div className="mt-4">
                       <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(3, 'attachment', 'Attachment')}</label>
+                      {(() => {
+                        const attachmentHelp = getFieldHelpTextById(3, 'attachment', '')
+                        return attachmentHelp ? <p className="mt-0.5 mb-1.5 text-xs text-gray-500 dark:text-gray-400">{attachmentHelp}</p> : null
+                      })()}
                       <div className="flex items-center gap-3">
                         <input
                           type="file"
@@ -5500,7 +5594,7 @@ function UserManagement() {
               </div>
             </FormSection>
 
-            {/* Languages Known (Separate Section) */}
+            {/* Languages Known – fully dynamic from schema (add/remove fields in Schema Configuration) */}
             <FormSection
               title={getSectionTitleById(14, 'Languages Known')}
               sectionId={14}
@@ -5514,58 +5608,9 @@ function UserManagement() {
             >
               <div className="col-span-full">
                 {formData.languages && formData.languages.map((lang, index) => (
-                  <div key={index} className="flex flex-col md:flex-row gap-4 mb-2 items-center bg-gray-50 dark:bg-gray-900/50 p-2 rounded-lg border border-gray-200 dark:border-gray-700">
-                    <div className="flex-1">
-                      <input
-                        type="text"
-                        value={lang.name || ''}
-                        onChange={(e) => {
-                          const newLangs = [...formData.languages]
-                          newLangs[index].name = e.target.value
-                          setFormData({ ...formData, languages: newLangs })
-                        }}
-                        required={getFieldRequiredById(14, 'name', false)}
-                        className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                        placeholder={getFieldLabelById(14, 'name', 'Language (e.g. English)')}
-                      />
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <label className="flex items-center text-xs text-gray-700 dark:text-gray-300">
-                        <input
-                          type="checkbox"
-                          checked={lang.read || false}
-                          onChange={(e) => {
-                            const newLangs = [...formData.languages]
-                            newLangs[index].read = e.target.checked
-                            setFormData({ ...formData, languages: newLangs })
-                          }}
-                          className="mr-1 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                        /> {getFieldLabelById(14, 'read', 'Read')}
-                      </label>
-                      <label className="flex items-center text-xs text-gray-700 dark:text-gray-300">
-                        <input
-                          type="checkbox"
-                          checked={lang.write || false}
-                          onChange={(e) => {
-                            const newLangs = [...formData.languages]
-                            newLangs[index].write = e.target.checked
-                            setFormData({ ...formData, languages: newLangs })
-                          }}
-                          className="mr-1 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                        /> {getFieldLabelById(14, 'write', 'Write')}
-                      </label>
-                      <label className="flex items-center text-xs text-gray-700 dark:text-gray-300">
-                        <input
-                          type="checkbox"
-                          checked={lang.speak || false}
-                          onChange={(e) => {
-                            const newLangs = [...formData.languages]
-                            newLangs[index].speak = e.target.checked
-                            setFormData({ ...formData, languages: newLangs })
-                          }}
-                          className="mr-1 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                        /> {getFieldLabelById(14, 'speak', 'Speak')}
-                      </label>
+                  <div key={index} className="flex flex-col md:flex-row gap-4 mb-2 items-start md:items-center bg-gray-50 dark:bg-gray-900/50 p-2 rounded-lg border border-gray-200 dark:border-gray-700 flex-wrap">
+                    <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 min-w-0">
+                      {renderSchemaArrayItemFields(14, 'languages', index)}
                     </div>
                     <button
                       type="button"
@@ -5573,21 +5618,16 @@ function UserManagement() {
                         const newLangs = formData.languages.filter((_, i) => i !== index)
                         setFormData({ ...formData, languages: newLangs })
                       }}
-                      className="text-red-600 hover:text-red-800 p-1"
+                      className="text-red-600 hover:text-red-800 p-1 shrink-0"
                       title="Remove"
                     >
                       <FiX className="w-4 h-4" />
                     </button>
-                    
-                    {/* Render schema extra fields inside each language entry */}
-                    <div className="col-span-full mt-2">
-                      {renderSchemaExtraFields(14, ['name', 'read', 'write', 'speak', 'addLanguage'], index, 'languages')}
-                    </div>
                   </div>
                 ))}
                 <button
                   type="button"
-                  onClick={() => setFormData({ ...formData, languages: [...(formData.languages || []), { name: '', read: false, write: false, speak: false }] })}
+                  onClick={() => setFormData({ ...formData, languages: [...(formData.languages || []), getDefaultArrayItemFromSchema(14, 'languages')] })}
                   className="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium"
                 >
                   <FiPlus className="w-4 h-4" /> {getFieldLabelById(14, 'addLanguage', 'Add Language')}
@@ -5810,9 +5850,14 @@ function UserManagement() {
                       </div>
                     </div>
 
-                    {/* Attachments: name + file, Add button for multiple docs */}
+                    {/* Attachments: schema-driven – show only if field exists and is active in Schema Configuration */}
+                    {isFieldVisibleById(10, 'attachments') && (
                     <div className="col-span-full mt-4 border-t border-gray-200 dark:border-gray-600 pt-4">
-                      <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Attachments</div>
+                      <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">{getFieldLabelById(10, 'attachments', 'Attachments')}</div>
+                      {(() => {
+                        const attHelp = getFieldHelpTextById(10, 'attachments', '')
+                        return attHelp ? <p className="mt-0.5 mb-2 text-xs text-gray-500 dark:text-gray-400">{attHelp}</p> : null
+                      })()}
                       {(exp.attachments || []).map((att, attIndex) => (
                         <div key={attIndex} className="flex flex-wrap items-center gap-2 mb-3 p-2 rounded-md bg-gray-100 dark:bg-gray-800/50">
                           <input
@@ -5897,10 +5942,11 @@ function UserManagement() {
                         <FiPlus className="w-4 h-4" /> Add attachment
                       </button>
                     </div>
+                    )}
                     
                     {/* Render schema extra fields inside each experience entry */}
                     <div className="col-span-full mt-4">
-                      {renderSchemaExtraFields(10, ['organization', 'designation', 'fromDate', 'toDate', 'addExperience'], index, 'experience')}
+                      {renderSchemaExtraFields(10, ['organization', 'designation', 'fromDate', 'toDate', 'attachments', 'addExperience'], index, 'experience')}
                     </div>
                   </div>
                 ))}
@@ -6425,6 +6471,10 @@ function UserManagement() {
                         <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                           {getFieldLabelById(5, 'attachment', 'Attachment')} {getFieldRequiredById(5, 'attachment', true) && <span className="text-red-500">*</span>}
                         </label>
+                        {(() => {
+                          const attHelp = getFieldHelpTextById(5, 'attachment', '')
+                          return attHelp ? <p className="mt-0.5 mb-1.5 text-xs text-gray-500 dark:text-gray-400">{attHelp}</p> : null
+                        })()}
                         <div className="flex flex-col gap-1.5">
                           {!doc.fileName && (
                             <input
