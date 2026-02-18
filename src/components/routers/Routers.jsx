@@ -26,6 +26,8 @@ import MyInfo from '../pages/common/MyInfo'
 import AdminPolicies from '../pages/admin/Policies'
 import Policies from '../pages/common/Policies'
 import ConferenceHall from '../pages/ConferenceHall'
+import AdminAssessments from '../pages/admin/AdminAssessments'
+import UserAssessments from '../pages/common/UserAssessments'
 
 function Routers() {
   return (
@@ -47,6 +49,7 @@ function Routers() {
           <Route path='/my-info' element={<MyInfo />} />
           <Route path='/policies' element={<Policies />} />
           <Route path='/conference-hall' element={<ConferenceHall />} />
+          <Route path='/assessments' element={<UserAssessments />} />
           </Route>
 
         {/* Manager/HR Protected Routes */}
@@ -70,6 +73,7 @@ function Routers() {
           <Route path='/admin/form-builder/:formType' element={<DynamicFormSchema />} />
           <Route path='/admin/controllers' element={<AdminControllers />} />
           <Route path='/admin/policies' element={<AdminPolicies />} />
+          <Route path='/admin/assessments' element={<AdminAssessments />} />
         </Route>
 
         {/* C-Suite Protected Routes */}

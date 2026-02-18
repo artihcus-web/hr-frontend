@@ -1,4 +1,4 @@
-import { FiHome, FiUser,FiUserCheck, FiClock, FiCalendar, FiUsers, FiCheckCircle, FiDollarSign, FiFileText, FiPlus, FiPieChart, FiSettings, FiBriefcase, FiTrendingUp, FiFolder, FiAlertCircle, FiMonitor,FiVideo } from 'react-icons/fi'
+import { FiHome, FiUser, FiUserCheck, FiClock, FiCalendar, FiUsers, FiCheckCircle, FiDollarSign, FiFileText, FiPlus, FiPieChart, FiSettings, FiBriefcase, FiTrendingUp, FiFolder, FiAlertCircle, FiMonitor, FiVideo, FiClipboard } from 'react-icons/fi'
 
 
 
@@ -71,6 +71,13 @@ export const menuItems = [
     roles: ['super_admin', 'hr_admin']
   },
   {
+    id: 'admin-assessments',
+    label: 'Assessments',
+    icon: FiClipboard,
+    path: '/admin/assessments',
+    roles: ['super_admin', 'hr_admin']
+  },
+  {
     id: 'grievance-portal-admin',
     label: 'Grievance Portal',
     icon: FiAlertCircle,
@@ -134,6 +141,13 @@ export const menuItems = [
     icon: FiBriefcase,
     path: '/grievance',
     roles: ['employee', 'Employee', 'manager', 'hr_admin', 'hr', 'team_lead', 'tl']
+  },
+  {
+    id: 'assessments',
+    label: 'Assessments',
+    icon: FiClipboard,
+    path: '/assessments',
+    roles: ['employee', 'manager', 'hr_admin', 'team_lead', 'c_suite', 'super_manager', 'client']
   },
 
   // Additional items (not in main order)
