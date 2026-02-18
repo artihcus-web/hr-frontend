@@ -1,4 +1,38 @@
 import { roleMapping, menuItems as allMenuItems } from '../config/menuConfig.js'
+import axiosInstance from './axiosInstance'
+import { 
+  FiHome, FiUser, FiUserCheck, FiClock, FiCalendar, FiUsers, FiCheckCircle, 
+  FiDollarSign, FiFileText, FiPlus, FiPieChart, FiSettings, FiBriefcase, 
+  FiTrendingUp, FiFolder, FiAlertCircle, FiMonitor, FiVideo, FiClipboard 
+} from 'react-icons/fi'
+
+// Icon mapping: string name -> React component
+const iconMap = {
+  'FiHome': FiHome,
+  'FiUser': FiUser,
+  'FiUserCheck': FiUserCheck,
+  'FiClock': FiClock,
+  'FiCalendar': FiCalendar,
+  'FiUsers': FiUsers,
+  'FiCheckCircle': FiCheckCircle,
+  'FiDollarSign': FiDollarSign,
+  'FiFileText': FiFileText,
+  'FiPlus': FiPlus,
+  'FiPieChart': FiPieChart,
+  'FiSettings': FiSettings,
+  'FiBriefcase': FiBriefcase,
+  'FiTrendingUp': FiTrendingUp,
+  'FiFolder': FiFolder,
+  'FiAlertCircle': FiAlertCircle,
+  'FiMonitor': FiMonitor,
+  'FiVideo': FiVideo,
+  'FiClipboard': FiClipboard
+}
+
+// Cache for menu config to avoid repeated API calls
+let menuConfigCache = null
+let menuConfigCacheTime = null
+const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
 
 /**
  * Maps backend role to frontend role
@@ -10,12 +44,71 @@ export const mapBackendRoleToFrontend = (backendRole) => {
 }
 
 /**
- * Filters menu items based on user role
+ * Maps frontend role back to backend role (for API calls)
+ * @param {string} frontendRole - Frontend role (super_admin, hr_admin, etc.)
+ * @returns {string} Backend role (admin, hr, etc.)
+ */
+const mapFrontendRoleToBackend = (frontendRole) => {
+  const reverseMapping = Object.entries(roleMapping).find(([_, frontend]) => frontend === frontendRole)
+  return reverseMapping ? reverseMapping[0] : frontendRole
+}
+
+/**
+ * Fetches menu configuration from API
+ * @param {string} userRole - User's backend role
+ * @returns {Promise<Array>} Menu items array
+ */
+export const fetchMenuConfigFromAPI = async (userRole) => {
+  try {
+    // Check cache
+    const now = Date.now()
+    if (menuConfigCache && menuConfigCacheTime && (now - menuConfigCacheTime) < CACHE_DURATION) {
+      return menuConfigCache
+    }
+
+    const backendRole = mapFrontendRoleToBackend(userRole) || userRole
+    const res = await axiosInstance.get(`/api/admin/controllers/menu-config/${backendRole}`)
+    
+    if (res.data.menuItems && res.data.menuItems.length > 0) {
+      // Transform API response to match menuConfig.js format
+      const transformed = res.data.menuItems.map(item => {
+        // Find matching item from menuConfig.js to get icon component
+        const originalItem = allMenuItems.find(mi => mi.id === item.id)
+        const icon = originalItem?.icon || iconMap[item.icon] || FiFileText
+
+        return {
+          id: item.id,
+          label: item.label,
+          path: item.path,
+          icon: icon,
+          roles: item.roles.map(r => roleMapping[r] || r), // Convert to frontend roles
+          exact: originalItem?.exact,
+          parentId: item.parentId,
+          hasChildren: item.hasChildren,
+          menuOrder: item.menuOrder || 999, // API returns single number for the role
+          isVisible: item.isVisible !== false // API returns boolean for the role
+        }
+      })
+
+      // Cache the result
+      menuConfigCache = transformed
+      menuConfigCacheTime = now
+      return transformed
+    }
+  } catch (error) {
+    console.warn('Failed to fetch menu config from API, using fallback:', error.message)
+  }
+  
+  return null // Return null to trigger fallback
+}
+
+/**
+ * Filters menu items based on user role (synchronous version - uses hardcoded config)
  * @param {Array} menuItems - All menu items
  * @param {string} userRole - User's role (backend role format)
  * @returns {Array} Filtered menu items
  */
-export const filterMenuByRole = (menuItems, userRole) => {
+export const filterMenuByRoleSync = (menuItems, userRole) => {
   const frontendRole = mapBackendRoleToFrontend(userRole)
   
   const filtered = menuItems
@@ -23,7 +116,7 @@ export const filterMenuByRole = (menuItems, userRole) => {
     .map(item => {
       // If item has children, filter them too
       if (item.children && item.children.length > 0) {
-        const filteredChildren = filterMenuByRole(item.children, userRole)
+        const filteredChildren = filterMenuByRoleSync(item.children, userRole)
         // Only include parent if it has at least one visible child
         if (filteredChildren.length > 0) {
           return {
@@ -37,6 +130,77 @@ export const filterMenuByRole = (menuItems, userRole) => {
       return item
     })
     .filter(item => item !== null)
+
+  // Deduplicate by label so "Policies" (and any same-name items) appear once.
+  // Keep last occurrence so employee-facing link wins (e.g. /policies over /admin/policies for HR).
+  const byLabel = new Map()
+  filtered.forEach(item => {
+    const key = (item.label || '').trim().toLowerCase()
+    byLabel.set(key, item)
+  })
+  return filtered.filter(item => {
+    const key = (item.label || '').trim().toLowerCase()
+    return byLabel.get(key) === item
+  })
+}
+
+/**
+ * Filters menu items based on user role (with API support)
+ * @param {Array} menuItems - All menu items (optional, will use API if not provided)
+ * @param {string} userRole - User's role (backend role format)
+ * @param {boolean} useAPI - Whether to fetch from API (default: true)
+ * @returns {Promise<Array>} Filtered menu items
+ */
+export const filterMenuByRole = async (menuItems = null, userRole, useAPI = true) => {
+  const frontendRole = mapBackendRoleToFrontend(userRole)
+  
+  let itemsToFilter = menuItems
+
+  // Try to fetch from API if enabled and no items provided
+  if (useAPI && !menuItems) {
+    const apiItems = await fetchMenuConfigFromAPI(frontendRole)
+    if (apiItems && apiItems.length > 0) {
+      itemsToFilter = apiItems
+    } else {
+      // Fallback to hardcoded menuConfig.js
+      itemsToFilter = allMenuItems
+    }
+  } else if (!itemsToFilter) {
+    itemsToFilter = allMenuItems
+  }
+  
+  const filtered = itemsToFilter
+    .filter(item => {
+      // Check if user has access via role or individual user override
+      const hasRoleAccess = item.roles.includes(frontendRole)
+      return hasRoleAccess
+    })
+    .map(item => {
+      // If item has children, filter them too
+      if (item.children && item.children.length > 0) {
+        const filteredChildren = itemsToFilter.filter(child => 
+          child.parentId === item.id && child.roles.includes(frontendRole)
+        )
+        // Only include parent if it has at least one visible child
+        if (filteredChildren.length > 0) {
+          return {
+            ...item,
+            children: filteredChildren
+          }
+        }
+        // If no children match, still show parent if it has a direct path
+        return item.path ? { ...item, children: [] } : null
+      }
+      return item
+    })
+    .filter(item => item !== null)
+    .sort((a, b) => {
+      // Sort by menuOrder if available (from API)
+      // API returns menuOrder as a number, not an object
+      const orderA = typeof a.menuOrder === 'number' ? a.menuOrder : (a.menuOrder?.[userRole] ?? 999)
+      const orderB = typeof b.menuOrder === 'number' ? b.menuOrder : (b.menuOrder?.[userRole] ?? 999)
+      return orderA - orderB
+    })
 
   // Deduplicate by label so "Policies" (and any same-name items) appear once.
   // Keep last occurrence so employee-facing link wins (e.g. /policies over /admin/policies for HR).
@@ -75,5 +239,13 @@ export const hasRouteAccess = (routePath, userRole, items = allMenuItems) => {
   }
   
   return checkMenuItem(items)
+}
+
+/**
+ * Clears the menu config cache (useful after updates)
+ */
+export const clearMenuConfigCache = () => {
+  menuConfigCache = null
+  menuConfigCacheTime = null
 }
 

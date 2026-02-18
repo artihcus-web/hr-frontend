@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { menuItems } from '../../config/menuConfig.js'
-import { filterMenuByRole } from '../../utils/menuUtils.js'
+import { filterMenuByRole, filterMenuByRoleSync } from '../../utils/menuUtils.js'
 import { FiChevronDown, FiChevronRight, FiChevronLeft, FiMenu, FiX } from 'react-icons/fi'
 import { useAuth } from '../../context/AuthContext'
 import Logo from '../../assets/artihcus-logo1.svg'
@@ -13,6 +13,7 @@ function Sidebar() {
   const [expandedItems, setExpandedItems] = useState({})
   const [isMobileOpen, setIsMobileOpen] = useState(false)
   const [isCollapsed, setIsCollapsed] = useState(false)
+  const [menuLoading, setMenuLoading] = useState(true)
 
   useEffect(() => {
     // Use activeRole if available (for project context), otherwise user.role
@@ -20,20 +21,36 @@ function Sidebar() {
 
     if (user && roleToUse) {
       console.log('Filtering Menu for Role:', roleToUse)
-      const filtered = filterMenuByRole(menuItems, roleToUse)
-      setFilteredMenu(filtered)
+      setMenuLoading(true)
+      
+      // Use async filterMenuByRole (will fetch from API if available)
+      filterMenuByRole(null, roleToUse, true)
+        .then(filtered => {
+          setFilteredMenu(filtered || [])
 
-      const currentPath = location.pathname
-      const autoExpand = {}
-      filtered.forEach(item => {
-        if (item.children) {
-          const hasActiveChild = item.children.some(child => child.path === currentPath)
-          if (hasActiveChild) {
-            autoExpand[item.id] = true
-          }
-        }
-      })
-      setExpandedItems(autoExpand)
+          const currentPath = location.pathname
+          const autoExpand = {}
+          filtered?.forEach(item => {
+            if (item.children) {
+              const hasActiveChild = item.children.some(child => child.path === currentPath)
+              if (hasActiveChild) {
+                autoExpand[item.id] = true
+              }
+            }
+          })
+          setExpandedItems(autoExpand)
+          setMenuLoading(false)
+        })
+        .catch(error => {
+          console.error('Error filtering menu:', error)
+          // Fallback to hardcoded menu (synchronous)
+          const fallbackFiltered = filterMenuByRoleSync(menuItems, roleToUse)
+          setFilteredMenu(fallbackFiltered || [])
+          setMenuLoading(false)
+        })
+    } else {
+      setFilteredMenu([])
+      setMenuLoading(false)
     }
   }, [location.pathname, user, activeRole])
 

@@ -1289,8 +1289,9 @@ function UserManagement() {
     [getSectionKey, getFieldConfig]
   )
 
-  // Helper to get field required flag from CMS schema (so Schema Configuration drives required asterisk and validation)
-  // Normalizes required: handles boolean, string 'true'/'false', number 1/0 from API/MongoDB
+  // Helper to get field required flag from CMS schema. Required is 100% schema-driven: asterisk and validation
+  // come only from Schema Configuration. Callers must pass defaultValue = false so missing schema = not required.
+  // Normalizes required: handles boolean, string 'true'/'false', number 1/0 from API/MongoDB.
   const getFieldRequiredById = useCallback(
     (sectionId, fieldName, defaultValue = false) => {
       const sectionKey = getSectionKey(sectionId)
@@ -4195,7 +4196,7 @@ function UserManagement() {
               {isFieldVisibleById(1, 'employeeName') && (
               <div className="col-span-full">
                 <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
-                  {getFieldLabelById(1, 'employeeName', 'Employee Name')} {getFieldRequiredById(1, 'employeeName', true) && <span className="text-red-500">*</span>}
+                  {getFieldLabelById(1, 'employeeName', 'Employee Name')} {getFieldRequiredById(1, 'employeeName', false) && <span className="text-red-500">*</span>}
                 </label>
                 <input
                   type="text"
@@ -4214,7 +4215,7 @@ function UserManagement() {
                     label={getFieldLabel('basic-info', 'firstName', 'First Name')}
                     name="firstName"
                     type={getFieldTypeById(1, 'firstName', 'text')}
-                    required={getFieldRequiredById(1, 'firstName', true)}
+                    required={getFieldRequiredById(1, 'firstName', false)}
                     formData={formData}
                     handleChange={handleChange}
                     placeholder={getFieldLabel('basic-info', 'firstName', 'First Name')}
@@ -4236,7 +4237,7 @@ function UserManagement() {
                     label={getFieldLabel('basic-info', 'lastName', 'Last Name')}
                     name="lastName"
                     type={getFieldTypeById(1, 'lastName', 'text')}
-                    required={getFieldRequiredById(1, 'lastName', true)}
+                    required={getFieldRequiredById(1, 'lastName', false)}
                     formData={formData}
                     handleChange={handleChange}
                     placeholder={getFieldLabel('basic-info', 'lastName', 'Last Name')}
@@ -4440,7 +4441,7 @@ function UserManagement() {
                 {isFieldVisibleById(12, 'phone') && (
                 <div>
                   <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    {getFieldLabelById(12, 'phone', 'Primary Contact')} {getFieldRequiredById(12, 'phone', true) && <span className="text-red-500">*</span>}
+                    {getFieldLabelById(12, 'phone', 'Primary Contact')} {getFieldRequiredById(12, 'phone', false) && <span className="text-red-500">*</span>}
                   </label>
                   <div className="flex items-center gap-2 w-full">
                     <div className="w-16">
@@ -4502,7 +4503,7 @@ function UserManagement() {
                         })
                       }}
                       maxLength={10}
-                      required={getFieldRequiredById(12, 'phone', true)}
+                      required={getFieldRequiredById(12, 'phone', false)}
                       onBlur={(e) => {
                         const value = e.target.value.trim()
                         if (value && value.length !== 10) {
@@ -4598,7 +4599,7 @@ function UserManagement() {
                 {isFieldVisibleById(12, 'emergencyContactNumber') && (
                 <div>
                   <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    {getFieldLabelById(12, 'emergencyContactNumber', 'Emergency Contact Number')} {getFieldRequiredById(12, 'emergencyContact', true) && <span className="text-red-500">*</span>}
+                    {getFieldLabelById(12, 'emergencyContactNumber', 'Emergency Contact Number')} {getFieldRequiredById(12, 'emergencyContact', false) && <span className="text-red-500">*</span>}
                   </label>
                   <div className="flex items-center gap-2 w-full">
                     <div className="w-16">
@@ -4657,7 +4658,7 @@ function UserManagement() {
                         })
                       }}
                       maxLength={10}
-                      required={getFieldRequiredById(12, 'emergencyContact', true)}
+                      required={getFieldRequiredById(12, 'emergencyContact', false)}
                       onBlur={(e) => {
                         const value = e.target.value.trim()
                         if (value && value.length !== 10) {
@@ -5044,7 +5045,7 @@ function UserManagement() {
                   label={getFieldLabelById(2, 'employeeId', 'Employee ID')}
                   name="employeeId"
                   type={getFieldTypeById(2, 'employeeId', 'text')}
-                  required={getFieldRequiredById(2, 'employeeId', true)}
+                  required={getFieldRequiredById(2, 'employeeId', false)}
                   formData={formData}
                   handleChange={handleChange}
                   placeholder={getFieldLabelById(2, 'employeeId', 'Employee ID')}
@@ -5056,7 +5057,7 @@ function UserManagement() {
                   label={getFieldLabelById(2, 'officialEmail', 'Official Email ID')}
                   name="officialEmail"
                   type={getFieldTypeById(2, 'officialEmail', 'email')}
-                  required={getFieldRequiredById(2, 'officialEmail', true)}
+                  required={getFieldRequiredById(2, 'officialEmail', false)}
                   formData={formData}
                   handleChange={handleChange}
                   placeholder="official.email@company.com"
@@ -5070,10 +5071,10 @@ function UserManagement() {
                 <FormField label={getFieldLabelById(2, 'designation', 'Designation')} name="designation" type={getFieldTypeById(2, 'designation', 'text')} required={getFieldRequiredById(2, 'designation', false)} formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(2, 'role') && (
-                <FormField label={getFieldLabelById(2, 'role', 'Role')} name="role" type="select" required={getFieldRequiredById(2, 'role', true)} options={getFieldOptionsById(2, 'role', roles)} formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(2, 'role', 'Role')} name="role" type="select" required={getFieldRequiredById(2, 'role', false)} options={getFieldOptionsById(2, 'role', roles)} formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(2, 'employeeStatus') && (
-                <FormField label={getFieldLabelById(2, 'employeeStatus', 'Employee Status')} name="employeeStatus" type="select" required={getFieldRequiredById(2, 'employeeStatus', true)} options={getFieldOptionsById(2, 'employeeStatus', ['Active', 'Inactive'])} formData={formData} handleChange={handleChange} />
+                <FormField label={getFieldLabelById(2, 'employeeStatus', 'Employee Status')} name="employeeStatus" type="select" required={getFieldRequiredById(2, 'employeeStatus', false)} options={getFieldOptionsById(2, 'employeeStatus', ['Active', 'Inactive'])} formData={formData} handleChange={handleChange} />
               )}
               {isFieldVisibleById(2, 'joiningDate') && (
                 <FormField 
@@ -5188,7 +5189,7 @@ function UserManagement() {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(3, 'institute', 'Institute Name')}</label>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(3, 'institute', 'Institute Name')} {getFieldRequiredById(3, 'institute', false) && <span className="text-red-500">*</span>}</label>
                         <input
                           type="text"
                           value={edu.institute || ''}
@@ -5219,7 +5220,7 @@ function UserManagement() {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(3, 'degree', 'Degree / Qualification')}</label>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(3, 'degree', 'Degree / Qualification')} {getFieldRequiredById(3, 'degree', false) && <span className="text-red-500">*</span>}</label>
                         {(() => {
                           // Schema-driven: options from Form Schema Config (Education section, field "degree" type select). Fallback only when schema has no options.
                           const degreeOptions = getFieldOptionsById(3, 'degree', ['Other'])
@@ -5273,7 +5274,7 @@ function UserManagement() {
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(3, 'percentage', 'Percentage / CGPA')}</label>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(3, 'percentage', 'Percentage / CGPA')} {getFieldRequiredById(3, 'percentage', false) && <span className="text-red-500">*</span>}</label>
                         <input
                           type="text"
                           inputMode="numeric"
@@ -5372,7 +5373,7 @@ function UserManagement() {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(3, 'fromDate', 'From')}</label>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(3, 'fromDate', 'From')} {getFieldRequiredById(3, 'fromDate', false) && <span className="text-red-500">*</span>}</label>
                         <input
                           type="month"
                           required={getFieldRequiredById(3, 'fromDate', false)}
@@ -5442,7 +5443,7 @@ function UserManagement() {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(3, 'toDate', 'To')}</label>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(3, 'toDate', 'To')} {getFieldRequiredById(3, 'toDate', false) && <span className="text-red-500">*</span>}</label>
                         <input
                           type="month"
                           required={getFieldRequiredById(3, 'toDate', false)}
@@ -5674,10 +5675,11 @@ function UserManagement() {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(10, 'organization', 'Organization')}</label>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(10, 'organization', 'Organization')} {getFieldRequiredById(10, 'organization', false) && <span className="text-red-500">*</span>}</label>
                         <input
                           type="text"
                           value={exp.organization || ''}
+                          required={getFieldRequiredById(10, 'organization', false)}
                           onChange={(e) => {
                             // Only allow alphabets, spaces, and valid special characters (.,-&)
                             const filteredValue = e.target.value.replace(/[^a-zA-Z\s.,\-&]/g, '')
@@ -5704,10 +5706,11 @@ function UserManagement() {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(10, 'designation', 'Position / Designation')}</label>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(10, 'designation', 'Position / Designation')} {getFieldRequiredById(10, 'designation', false) && <span className="text-red-500">*</span>}</label>
                         <input
                           type="text"
                           value={exp.designation || ''}
+                          required={getFieldRequiredById(10, 'designation', false)}
                           onChange={(e) => {
                             // Only allow alphabets, spaces, and valid special characters (.,-&)
                             const filteredValue = e.target.value.replace(/[^a-zA-Z\s.,\-&]/g, '')
@@ -5737,10 +5740,11 @@ function UserManagement() {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(10, 'fromDate', 'From')}</label>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(10, 'fromDate', 'From')} {getFieldRequiredById(10, 'fromDate', false) && <span className="text-red-500">*</span>}</label>
                         <input
                           type="date"
                           value={exp.fromDate ? exp.fromDate.split('T')[0] : ''}
+                          required={getFieldRequiredById(10, 'fromDate', false)}
                           onChange={(e) => {
                             const dateValue = e.target.value
                             // Validate 4-digit year
@@ -5798,10 +5802,11 @@ function UserManagement() {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(10, 'toDate', 'To')}</label>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(10, 'toDate', 'To')} {getFieldRequiredById(10, 'toDate', false) && <span className="text-red-500">*</span>}</label>
                         <input
                           type="date"
                           value={exp.toDate ? exp.toDate.split('T')[0] : ''}
+                          required={getFieldRequiredById(10, 'toDate', false)}
                           onChange={(e) => {
                             const dateValue = e.target.value
                             // Validate 4-digit year
@@ -5863,7 +5868,7 @@ function UserManagement() {
                     {/* Attachments: schema-driven – show only if field exists and is active in Schema Configuration */}
                     {isFieldVisibleById(10, 'attachments') && (
                     <div className="col-span-full mt-4 border-t border-gray-200 dark:border-gray-600 pt-4">
-                      <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">{getFieldLabelById(10, 'attachments', 'Attachments')}</div>
+                      <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">{getFieldLabelById(10, 'attachments', 'Attachments')} {getFieldRequiredById(10, 'attachments', false) && <span className="text-red-500">*</span>}</div>
                       {(() => {
                         const attHelp = getFieldHelpTextById(10, 'attachments', '')
                         return attHelp ? <p className="mt-0.5 mb-2 text-xs text-gray-500 dark:text-gray-400">{attHelp}</p> : null
@@ -6240,7 +6245,7 @@ function UserManagement() {
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(5, 'documentType', 'Document Type')} {getFieldRequiredById(5, 'documentType', true) && <span className="text-red-500">*</span>}</label>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(5, 'documentType', 'Document Type')} {getFieldRequiredById(5, 'documentType', false) && <span className="text-red-500">*</span>}</label>
                         {(() => {
                           // Schema-driven: document types from Form Schema Config (Documents section, field "documentType" type select)
                           const docTypeOptions = getFieldOptionsById(5, 'documentType', ['Aadhar Card', 'PAN Card', 'Passport', 'Driving License', 'Voter ID', 'Other'])
@@ -6294,7 +6299,7 @@ function UserManagement() {
                                 newDocs[index].documentNumber = '' // Reset document number when type changes
                                 setFormData({ ...formData, documents: newDocs })
                               }}
-                              required={getFieldRequiredById(5, 'documentType', true)}
+                              required={getFieldRequiredById(5, 'documentType', false)}
                               className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                             >
                               <option value="">{getFieldLabelById(5, 'documentType', 'Select Type')}</option>
@@ -6324,7 +6329,7 @@ function UserManagement() {
                             if (docType) return `${docType} Number`
                             return getFieldLabelById(5, 'documentNumber', 'Document Number')
                           })()}
-                          {getFieldRequiredById(5, 'documentNumber', true) && <span className="text-red-500">*</span>}
+                          {getFieldRequiredById(5, 'documentNumber', false) && <span className="text-red-500">*</span>}
                         </label>
                         <input
                           type="text"
@@ -6463,7 +6468,7 @@ function UserManagement() {
                             }
                           }}
                           maxLength={doc.documentType === 'Aadhar Card' ? 12 : doc.documentType === 'PAN Card' ? 10 : doc.documentType === 'Passport' ? 9 : doc.documentType === 'Voter ID' ? 10 : undefined}
-                          required={getFieldRequiredById(5, 'documentNumber', true)}
+                          required={getFieldRequiredById(5, 'documentNumber', false)}
                           className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                           placeholder={(() => {
                             const docType = doc.documentType
@@ -6479,7 +6484,7 @@ function UserManagement() {
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          {getFieldLabelById(5, 'attachment', 'Attachment')} {getFieldRequiredById(5, 'attachment', true) && <span className="text-red-500">*</span>}
+                          {getFieldLabelById(5, 'attachment', 'Attachment')} {getFieldRequiredById(5, 'attachment', false) && <span className="text-red-500">*</span>}
                         </label>
                         {(() => {
                           const attHelp = getFieldHelpTextById(5, 'attachment', '')
@@ -6509,7 +6514,7 @@ function UserManagement() {
                                 }
                                 e.target.value = ''
                               }}
-                              required={getFieldRequiredById(5, 'attachment', true)}
+                              required={getFieldRequiredById(5, 'attachment', false)}
                               className="text-sm text-gray-500 file:mr-4 file:py-1.5 file:px-2.5 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
                             />
                           )}
