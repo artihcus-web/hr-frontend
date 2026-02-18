@@ -4,22 +4,16 @@ import axiosInstance from '../utils/axiosInstance'
 const AuthContext = createContext(null)
 
 export const AuthProvider = ({ children }) => {
-  // Hydrate from localStorage immediately when token exists - shows header/avatar right away
+  // When token exists, do not hydrate user from localStorage so role/menu come from /me on every load.
+  // This keeps incognito and normal login consistent (no stale role from cache).
   const [user, setUser] = useState(() => {
     const storedToken = localStorage.getItem('token')
     if (!storedToken) {
       console.log('[AuthContext] hydrate: no token')
       return null
     }
-    try {
-      const stored = localStorage.getItem('user')
-      const parsed = stored ? JSON.parse(stored) : null
-      console.log('[AuthContext] hydrate:', { hasUser: !!parsed, profileImage: parsed?.profileImage, _id: parsed?._id })
-      return parsed
-    } catch {
-      console.log('[AuthContext] hydrate: parse error')
-      return null
-    }
+    // Rely on fetchUser() to set user from /api/auth/me so role is always fresh (fixes sidebar differing in incognito vs normal).
+    return null
   })
   const [loading, setLoading] = useState(true)
   const [token, setToken] = useState(localStorage.getItem('token'))

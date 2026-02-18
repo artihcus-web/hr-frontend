@@ -18,7 +18,7 @@ export const mapBackendRoleToFrontend = (backendRole) => {
 export const filterMenuByRole = (menuItems, userRole) => {
   const frontendRole = mapBackendRoleToFrontend(userRole)
   
-  return menuItems
+  const filtered = menuItems
     .filter(item => item.roles.includes(frontendRole))
     .map(item => {
       // If item has children, filter them too
@@ -37,6 +37,18 @@ export const filterMenuByRole = (menuItems, userRole) => {
       return item
     })
     .filter(item => item !== null)
+
+  // Deduplicate by label so "Policies" (and any same-name items) appear once.
+  // Keep last occurrence so employee-facing link wins (e.g. /policies over /admin/policies for HR).
+  const byLabel = new Map()
+  filtered.forEach(item => {
+    const key = (item.label || '').trim().toLowerCase()
+    byLabel.set(key, item)
+  })
+  return filtered.filter(item => {
+    const key = (item.label || '').trim().toLowerCase()
+    return byLabel.get(key) === item
+  })
 }
 
 /**
