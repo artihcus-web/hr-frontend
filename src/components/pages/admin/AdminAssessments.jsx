@@ -51,7 +51,6 @@ const AdminAssessments = () => {
   const [showAddQuestion, setShowAddQuestion] = useState(false)
   const [newModuleName, setNewModuleName] = useState('')
   const [newModuleDescription, setNewModuleDescription] = useState('')
-  const [editingModule, setEditingModule] = useState(null)
   const [questions, setQuestions] = useState([])
   const [questionFile, setQuestionFile] = useState(null)
   const [testSettings, setTestSettings] = useState(defaultTestSettings)
@@ -63,10 +62,11 @@ const AdminAssessments = () => {
   const [newKnowledge, setNewKnowledge] = useState({ title: '', content: '', file: null })
 
   useEffect(() => {
-    // Fetch data when tab changes - placeholder for future API
+    // Fetch data when tab changes
     if (activeTab === 'approvals') fetchApprovals()
     if (activeTab === 'modules') fetchModules()
     if (activeTab === 'knowledge') fetchKnowledgeBase()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch functions are stable, avoid refetch loops
   }, [activeTab])
 
   const fetchApprovals = async () => {
@@ -215,7 +215,7 @@ const AdminAssessments = () => {
       setQuestionFile(null)
       setShowAddQuestion(false)
       loadModuleQuestions(selectedModule._id || selectedModule.id)
-    } catch (err) {
+    } catch {
       // Backend not yet implemented - show UI feedback
       setQuestions(prev => [...prev, { id: Date.now(), text: `Imported from ${questionFile.name}`, options: [] }])
       toast.success('File received. Backend parsing will be wired when API is ready.')

@@ -1478,7 +1478,7 @@ function UserManagement() {
 
   // Build default object for one array item from schema (e.g. new language row). Only includes fields defined in schema so removed fields (e.g. write) stay gone.
   const getDefaultArrayItemFromSchema = useCallback(
-    (sectionId, arrayName) => {
+    (sectionId) => {
       const sectionKey = getSectionKey(sectionId)
       if (!sectionKey) return {}
       const section = getSectionConfig(sectionKey)
