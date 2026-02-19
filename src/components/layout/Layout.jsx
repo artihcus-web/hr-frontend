@@ -9,12 +9,15 @@ import { useAuth } from '../../context/AuthContext'
 
 function LayoutContent() {
   const location = useLocation()
-  const { user, loading } = useAuth()
+  const { user, loading, menuConfig, menuConfigLoading } = useAuth()
   const publicRoutes = ['/', '/login', '/signup']
   const isPublicRoute = publicRoutes.includes(location.pathname)
 
-  // Only show loading when we have no user yet (don't block when hydrated from localStorage)
-  if (loading && !user) {
+  // Show loading while:
+  // 1. User is being fetched (initial auth check)
+  // 2. Menu config is loading after user is loaded (on reload)
+  // This ensures everything is ready before showing UI
+  if (loading || (user && !menuConfig && menuConfigLoading)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-950 transition-colors">
         <div className="text-gray-500 dark:text-gray-400 animate-pulse">Loading...</div>

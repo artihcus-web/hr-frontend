@@ -66,28 +66,46 @@ export const AuthProvider = ({ children }) => {
     }
 
     try {
-      // Fetch user and menu config in parallel during initial load
-      const [userResponse] = await Promise.all([
-        axiosInstance.get('/api/auth/me'),
-        // Menu config will be fetched after user is set (in useEffect)
-      ])
-
+      // Fetch user first (needed to determine role for menu config)
+      const userResponse = await axiosInstance.get('/api/auth/me')
       const userData = userResponse.data.user
       console.log('[AuthContext] fetchUser /me:', { hasUser: !!userData, profileImage: userData?.profileImage, _id: userData?._id })
+      
       setUser(userData)
       setToken(storedToken)
 
       // Also update localStorage for backward compatibility
       localStorage.setItem('user', JSON.stringify(userData))
 
-      // Fetch menu config after user is set (will happen in useEffect)
+      // Fetch menu config BEFORE marking loading as complete
+      // This ensures everything is loaded before UI renders (on page reload)
+      const roleToUse = userData?.role
+      if (roleToUse) {
+        console.log('[AuthContext] Fetching menu config for role (on reload):', roleToUse)
+        try {
+          await fetchMenuConfig(roleToUse)
+          console.log('[AuthContext] Menu config loaded successfully (on reload)')
+        } catch (error) {
+          console.warn('[AuthContext] Menu config fetch failed on reload, will use fallback:', error.message)
+          // Continue anyway - sidebar will use fallback menu
+        }
+      }
     } catch (error) {
       console.error('Error fetching user:', error)
       // On network error or other error, try to use localStorage as fallback
       const storedUser = localStorage.getItem('user')
       if (storedUser) {
         try {
-          setUser(JSON.parse(storedUser))
+          const parsedUser = JSON.parse(storedUser)
+          setUser(parsedUser)
+          // Try to fetch menu config for cached user too
+          if (parsedUser?.role) {
+            try {
+              await fetchMenuConfig(parsedUser.role)
+            } catch {
+              // Use fallback menu
+            }
+          }
         } catch {
           logout()
         }
@@ -97,7 +115,7 @@ export const AuthProvider = ({ children }) => {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [fetchMenuConfig])
 
   // Fetch user on mount and when token changes
   useEffect(() => {
@@ -111,11 +129,18 @@ export const AuthProvider = ({ children }) => {
     setToken(newToken)
     setUser(userData)
     
-    // Fetch menu config immediately after login
+    // Fetch menu config BEFORE login completes - wait for it to finish
+    // This ensures everything is loaded before navigation
     const roleToUse = userData?.role
     if (roleToUse) {
       console.log('[AuthContext] Fetching menu config during login for role:', roleToUse)
-      await fetchMenuConfig(roleToUse)
+      try {
+        await fetchMenuConfig(roleToUse)
+        console.log('[AuthContext] Menu config loaded successfully')
+      } catch (error) {
+        console.warn('[AuthContext] Menu config fetch failed, will use fallback:', error.message)
+        // Continue anyway - sidebar will use fallback menu
+      }
     }
   }
 
@@ -153,14 +178,14 @@ export const AuthProvider = ({ children }) => {
     return user.role // Fallback to default role
   }, [user, activeProject])
 
-  // Fetch menu config when user is loaded (during initial load/login)
-  // Must be after activeRole is defined
+  // Fetch menu config when user changes (e.g., role change, project switch)
+  // This is a backup in case fetchUser didn't trigger it, or for role changes
   useEffect(() => {
     if (user && !menuConfig && loading === false) {
       const roleToUse = activeRole || user.role
       if (roleToUse) {
-        console.log('[AuthContext] Fetching menu config for role:', roleToUse)
-        fetchMenuConfig(roleToUse)
+        console.log('[AuthContext] Fetching menu config for role (backup):', roleToUse)
+        fetchMenuConfig(roleToUse).catch(() => {})
       }
     }
   }, [user, activeRole, loading, menuConfig, fetchMenuConfig])
@@ -203,7 +228,9 @@ export const AuthProvider = ({ children }) => {
     }
   }
 
-  // Combined loading state: true if user OR menu config is still loading
+  // Combined loading state: true if user is loading OR menu config is loading (on reload)
+  // During login, menu config is loaded before login() completes, so this won't block
+  // On reload, we wait for both user and menu config before showing UI
   const isLoading = loading || (user && !menuConfig && menuConfigLoading)
 
   return (

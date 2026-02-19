@@ -15,21 +15,17 @@ function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false)
 
   useEffect(() => {
-    // Use menu config from AuthContext (fetched during login)
-    // If not available, fallback to hardcoded menu
+    // Use menu config from AuthContext (fetched during login/reload)
+    // After login completes, menuConfig should always be available
+    // On reload, AuthContext waits for menuConfig before setting loading=false
     const roleToUse = activeRole || user?.role
-
-    if (authLoading) {
-      // Still loading - don't render menu yet
-      return
-    }
 
     if (!user || !roleToUse) {
       setFilteredMenu([])
       return
     }
 
-    // Use menu config from context if available (from login fetch)
+    // Use menu config from context if available (should be after login/reload completes)
     if (menuConfig && menuConfig.length > 0) {
       setFilteredMenu(menuConfig)
       
@@ -46,7 +42,7 @@ function Sidebar() {
       })
       setExpandedItems(autoExpand)
     } else {
-      // Fallback to hardcoded menu (shouldn't happen after login, but safe fallback)
+      // Fallback to hardcoded menu (shouldn't happen after login/reload, but safe fallback)
       const fallbackMenu = filterMenuByRoleSync(menuItems, roleToUse)
       setFilteredMenu(fallbackMenu || [])
       
@@ -62,7 +58,7 @@ function Sidebar() {
       })
       setExpandedItems(autoExpand)
     }
-  }, [location.pathname, user, activeRole, menuConfig, authLoading])
+  }, [location.pathname, user, activeRole, menuConfig])
 
   const toggleExpand = (itemId) => {
     setExpandedItems(prev => ({

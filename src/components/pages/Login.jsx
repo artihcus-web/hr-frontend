@@ -143,7 +143,7 @@ function Login() {
               disabled={loading}
               className="mt-4 w-full flex justify-center py-3 px-4 rounded-full text-sm font-semibold text-white bg-orange-500 dark:bg-orange-600 hover:bg-orange-600 dark:hover:bg-orange-700 shadow-md hover:shadow-lg transition-all disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {loading ? 'Logging in...' : 'Login'}
+              {loading ? 'Loading...' : 'Login'}
             </button>
 
             <div className="text-center pt-2">
