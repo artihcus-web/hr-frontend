@@ -295,11 +295,12 @@ const Timesheet = () => {
     }
 
     // Extract digits only for parsing
-    const digitsOnly = cleaned.replace(/\D/g, '');
+    let digitsOnly = cleaned.replace(/\D/g, '');
     
-    // Limit to 4 digits max (HHMM format)
+    // Limit to 4 digits max (HMMM format - max 8 hours)
+    // If more than 4 digits, take only the first 4
     if (digitsOnly.length > 4) {
-      return; // Don't update if exceeding limit
+      digitsOnly = digitsOnly.slice(0, 4);
     }
 
     // Parse the input intelligently
@@ -310,63 +311,98 @@ const Timesheet = () => {
       setPopoverData({ ...popoverData, hours: '' });
       return;
     } else if (digitsOnly.length === 1) {
-      // Single digit: hours (0-9)
+      // Single digit: hours (0-8)
       const h = parseInt(digitsOnly[0]);
-      if (h <= 9) {
+      if (h <= 8) {
         hours = digitsOnly[0];
+      } else {
+        // Cap at 8
+        hours = '8';
       }
     } else if (digitsOnly.length === 2) {
-      // Two digits: could be hours (00-23) or HH
-      const h = parseInt(digitsOnly);
-      if (h <= 23) {
-        hours = digitsOnly;
-      } else {
-        // First digit is hours, second is start of minutes
+      // Two digits: interpret as H + M (hours 0-8, minutes 0-9)
+      const firstDigit = parseInt(digitsOnly[0]);
+      
+      if (firstDigit < 8) {
         hours = digitsOnly[0];
         minutes = digitsOnly[1];
+      } else if (firstDigit === 8) {
+        // If hours is 8, minutes must be 0
+        hours = '8';
+        minutes = '0';
+      } else {
+        // First digit > 8, cap hours at 8, minutes must be 0
+        hours = '8';
+        minutes = '0';
       }
     } else if (digitsOnly.length === 3) {
-      // Three digits: HH + first digit of minutes
-      const firstTwo = parseInt(digitsOnly.slice(0, 2));
-      if (firstTwo <= 23) {
-        hours = digitsOnly.slice(0, 2);
-        minutes = digitsOnly[2];
-      } else {
-        // Hours exceeded 23, use first digit only
+      // Three digits: H + MM (hours 0-8, minutes 00-59)
+      const firstDigit = parseInt(digitsOnly[0]);
+      if (firstDigit < 8) {
         hours = digitsOnly[0];
-        minutes = digitsOnly.slice(1, 3);
-        // Validate minutes
-        const m = parseInt(minutes);
-        if (m > 59) {
+        const lastTwo = parseInt(digitsOnly.slice(1, 3));
+        if (lastTwo <= 59) {
+          minutes = digitsOnly.slice(1, 3);
+        } else {
+          // Minutes exceeded 59, cap at 59
           minutes = '59';
         }
+      } else if (firstDigit === 8) {
+        // If hours is 8, minutes must be 00
+        hours = '8';
+        minutes = '00';
+      } else {
+        // Hours exceeded 8, cap at 8, minutes must be 00
+        hours = '8';
+        minutes = '00';
       }
     } else if (digitsOnly.length === 4) {
-      // Four digits: HHMM
-      hours = digitsOnly.slice(0, 2);
-      minutes = digitsOnly.slice(2);
-      const h = parseInt(hours);
-      const m = parseInt(minutes);
-      
-      // Validate hours (0-23)
-      if (h > 23) {
-        hours = '23';
-      }
-      
-      // Validate minutes (0-59)
-      if (m > 59) {
-        minutes = '59';
+      // Four digits: HMMM (hours 0-8, minutes 000-999 but cap at 59)
+      const firstDigit = parseInt(digitsOnly[0]);
+      if (firstDigit < 8) {
+        hours = digitsOnly[0];
+        const mins = parseInt(digitsOnly.slice(1, 4));
+        if (mins <= 59) {
+          minutes = String(mins).padStart(2, '0');
+        } else {
+          // Minutes exceeded 59, cap at 59
+          minutes = '59';
+        }
+      } else if (firstDigit === 8) {
+        // If hours is 8, minutes must be 00
+        hours = '8';
+        minutes = '00';
+      } else {
+        // Hours exceeded 8, cap at 8, minutes must be 00
+        hours = '8';
+        minutes = '00';
       }
     }
 
-    // Format as "H : MM" or "HH : MM"
+    // Validate final hours value (0-8)
+    const finalHours = parseInt(hours);
+    if (finalHours > 8) {
+      hours = '8';
+    }
+
+    // If hours is 8, minutes must be 0 (max is 8:00)
+    if (finalHours === 8 && minutes !== '' && parseInt(minutes) > 0) {
+      minutes = '0';
+    }
+
+    // Format as "H : MM" or "8 : MM"
     let formatted = '';
     if (hours && minutes !== '') {
       // Pad minutes to 2 digits
       const paddedMinutes = String(minutes).padStart(2, '0');
       formatted = `${hours} : ${paddedMinutes}`;
     } else if (hours) {
-      formatted = hours;
+      // If hours is 8 and no minutes specified, default to "8 : 00"
+      if (finalHours === 8) {
+        formatted = '8 : 00';
+      } else {
+        formatted = hours;
+      }
     }
 
     setPopoverData({ ...popoverData, hours: formatted });

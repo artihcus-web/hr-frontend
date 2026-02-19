@@ -1066,21 +1066,18 @@ function ProjectManagement() {
                       <div
                         key={project._id || project.id}
                         onClick={() => { window.scrollTo(0, 0); handleEdit(project._id || project.id); }}
-                        className="group relative bg-white dark:bg-slate-800/80 rounded-xl shadow-sm hover:shadow-md border border-slate-200 dark:border-slate-700 transition-all duration-200 p-4 flex flex-col min-h-[160px] cursor-pointer"
+                        className="group relative bg-white dark:bg-slate-800/80 rounded-xl shadow-sm hover:shadow-md border border-slate-200 dark:border-slate-700 transition-all duration-200 p-3 flex flex-col min-h-[120px] cursor-pointer"
                       >
-                        {/* Top row: folder icon + status badge */}
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex items-center justify-center w-10 h-10 rounded-lg border-2 border-indigo-200 dark:border-indigo-600/60 text-indigo-600 dark:text-indigo-400 bg-transparent group-hover:border-indigo-400 dark:group-hover:border-indigo-500 transition-colors">
-                            <FiFolder className="w-5 h-5" strokeWidth={2} />
-                          </div>
+                        {/* Top row: status badge */}
+                        <div className="flex items-start justify-end mb-2">
                           <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${getStatusColor(project.status)}`}>
                             {project.status}
                           </span>
                         </div>
 
                         {/* Project name + ID */}
-                        <div className="flex-1 min-h-0 mb-4">
-                          <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate leading-tight mb-0.5" title={project.projectName}>
+                        <div className="flex-1 min-h-0 mb-3">
+                          <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate leading-tight mb-1" title={project.projectName}>
                             {project.projectName}
                           </h3>
                           <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
@@ -1088,8 +1085,8 @@ function ProjectManagement() {
                           </p>
                         </div>
 
-                        {/* Footer: metrics only (no edit icon) */}
-                        <div className="flex items-center gap-3 pt-3 border-t border-slate-100 dark:border-slate-700/80 text-slate-500 dark:text-slate-400">
+                        {/* Footer: metrics */}
+                        <div className="flex items-center gap-3 pt-2 border-t border-slate-100 dark:border-slate-700/80 text-slate-500 dark:text-slate-400">
                           <span className="flex items-center gap-1" title="Team members">
                             <FiUsers className="w-3.5 h-3.5" />
                             <span className="text-xs font-semibold tabular-nums">{project.employees?.length || 0}</span>
