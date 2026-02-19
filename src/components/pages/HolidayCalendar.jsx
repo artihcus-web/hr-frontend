@@ -3,8 +3,12 @@ import { FiChevronLeft, FiChevronRight } from 'react-icons/fi'
 import { useSettings } from '../../context/SettingsContext'
 import axiosInstance from '../../utils/axiosInstance'
 
+const currentYear = new Date().getFullYear()
+const YEAR_OPTIONS = [currentYear + 1, currentYear, currentYear - 1, currentYear - 2]
+
 const HolidayCalendar = () => {
-  const { settings } = useSettings()
+  const { settings, refetchSettings } = useSettings()
+  const [selectedYear, setSelectedYear] = useState(currentYear)
   const [currentDate, setCurrentDate] = useState(() => {
     const d = new Date()
     return new Date(d.getFullYear(), d.getMonth(), 1)
@@ -12,7 +16,16 @@ const HolidayCalendar = () => {
   const [holidays, setHolidays] = useState([])
   const [loading, setLoading] = useState(true)
 
-  const year = currentDate.getFullYear()
+  const year = selectedYear
+
+  useEffect(() => {
+    setCurrentDate((d) => new Date(selectedYear, d.getMonth(), 1))
+  }, [selectedYear])
+
+  // Refetch settings on mount so holidayYearsPublished is up to date (e.g. after HR just added a holiday)
+  useEffect(() => {
+    refetchSettings()
+  }, [refetchSettings])
 
   const fetchHolidays = useCallback(async () => {
     setLoading(true)
@@ -32,10 +45,11 @@ const HolidayCalendar = () => {
   }, [fetchHolidays])
 
   const changeMonth = (offset) => {
-    const newDate = new Date(currentDate)
-    newDate.setMonth(newDate.getMonth() + offset)
-    setCurrentDate(newDate)
+    setCurrentDate((d) => new Date(selectedYear, d.getMonth() + offset, 1))
   }
+
+  const publishedYears = Array.isArray(settings.holidayYearsPublished) ? settings.holidayYearsPublished : []
+  const isYearPublished = publishedYears.includes(selectedYear)
 
   const getWeekNumber = (d) => {
     d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
@@ -99,10 +113,31 @@ const HolidayCalendar = () => {
   return (
     <div className="min-h-screen bg-gray-50/50 dark:bg-gray-950 p-6 font-sans transition-colors">
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{title}</h1>
-          <p className="text-gray-500 dark:text-gray-400 text-xs">{subtitle} {year}</p>
+        <div className="flex flex-wrap items-center gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{title}</h1>
+            <p className="text-gray-500 dark:text-gray-400 text-xs">{subtitle}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <label htmlFor="holiday-year" className="text-sm font-medium text-gray-700 dark:text-gray-300">Year</label>
+            <select
+              id="holiday-year"
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(parseInt(e.target.value, 10))}
+              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm"
+            >
+              {YEAR_OPTIONS.map((y) => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+          </div>
         </div>
+
+        {!isYearPublished && (
+          <div className="max-w-4xl mx-auto px-4 py-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-sm">
+            Your HR department has not updated holidays for {selectedYear} yet.
+          </div>
+        )}
 
         <div className="w-full max-w-4xl mx-auto bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden flex flex-col transition-colors">
           <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-white dark:bg-gray-900 sticky top-0 z-10 transition-colors">

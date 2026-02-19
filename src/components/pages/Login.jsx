@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { FiEye, FiEyeOff } from 'react-icons/fi'
 import toast from '../../utils/toast'
@@ -14,7 +14,6 @@ function Login() {
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const navigate = useNavigate()
-  const location = useLocation()
   const { login } = useAuth()
 
   const handleChange = (e) => {
