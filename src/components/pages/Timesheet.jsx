@@ -283,6 +283,95 @@ const Timesheet = () => {
     return `${h} : ${String(m).padStart(2, '0')}`;
   };
 
+  // Handler to validate and format hours input
+  const handleHoursChange = (value) => {
+    // Remove any non-digit, non-space, non-colon characters
+    let cleaned = value.replace(/[^\d\s:]/g, '');
+    
+    // If empty, allow it (user might be clearing)
+    if (cleaned === '') {
+      setPopoverData({ ...popoverData, hours: '' });
+      return;
+    }
+
+    // Extract digits only for parsing
+    const digitsOnly = cleaned.replace(/\D/g, '');
+    
+    // Limit to 4 digits max (HHMM format)
+    if (digitsOnly.length > 4) {
+      return; // Don't update if exceeding limit
+    }
+
+    // Parse the input intelligently
+    let hours = '';
+    let minutes = '';
+    
+    if (digitsOnly.length === 0) {
+      setPopoverData({ ...popoverData, hours: '' });
+      return;
+    } else if (digitsOnly.length === 1) {
+      // Single digit: hours (0-9)
+      const h = parseInt(digitsOnly[0]);
+      if (h <= 9) {
+        hours = digitsOnly[0];
+      }
+    } else if (digitsOnly.length === 2) {
+      // Two digits: could be hours (00-23) or HH
+      const h = parseInt(digitsOnly);
+      if (h <= 23) {
+        hours = digitsOnly;
+      } else {
+        // First digit is hours, second is start of minutes
+        hours = digitsOnly[0];
+        minutes = digitsOnly[1];
+      }
+    } else if (digitsOnly.length === 3) {
+      // Three digits: HH + first digit of minutes
+      const firstTwo = parseInt(digitsOnly.slice(0, 2));
+      if (firstTwo <= 23) {
+        hours = digitsOnly.slice(0, 2);
+        minutes = digitsOnly[2];
+      } else {
+        // Hours exceeded 23, use first digit only
+        hours = digitsOnly[0];
+        minutes = digitsOnly.slice(1, 3);
+        // Validate minutes
+        const m = parseInt(minutes);
+        if (m > 59) {
+          minutes = '59';
+        }
+      }
+    } else if (digitsOnly.length === 4) {
+      // Four digits: HHMM
+      hours = digitsOnly.slice(0, 2);
+      minutes = digitsOnly.slice(2);
+      const h = parseInt(hours);
+      const m = parseInt(minutes);
+      
+      // Validate hours (0-23)
+      if (h > 23) {
+        hours = '23';
+      }
+      
+      // Validate minutes (0-59)
+      if (m > 59) {
+        minutes = '59';
+      }
+    }
+
+    // Format as "H : MM" or "HH : MM"
+    let formatted = '';
+    if (hours && minutes !== '') {
+      // Pad minutes to 2 digits
+      const paddedMinutes = String(minutes).padStart(2, '0');
+      formatted = `${hours} : ${paddedMinutes}`;
+    } else if (hours) {
+      formatted = hours;
+    }
+
+    setPopoverData({ ...popoverData, hours: formatted });
+  };
+
 
 
 
@@ -1784,11 +1873,12 @@ const Timesheet = () => {
                       <input
                         type="text"
                         value={popoverData.hours}
-                        onChange={(e) => setPopoverData({ ...popoverData, hours: e.target.value })}
+                        onChange={(e) => handleHoursChange(e.target.value)}
                         onFocus={(e) => e.target.select()}
                         className="w-full text-sm font-semibold border border-red-300 dark:border-red-900/50 rounded p-1.5 focus:ring-red-500 focus:border-red-500 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-600 transition-colors"
                         placeholder="0 : 00"
                         disabled={popoverData.leaveType === 'WO' || popoverData.leaveType === 'FL'}
+                        maxLength={7}
                       />
                     </div>
                   </div>
