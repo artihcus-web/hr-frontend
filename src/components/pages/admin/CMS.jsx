@@ -9,7 +9,7 @@ import LoadingSpinner from '../../common/LoadingSpinner'
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 const CMS = () => {
-  const { settings, refetchSettings } = useSettings()
+  const { settings, refetchSettings, settingsVersion } = useSettings()
   const [activeTab, setActiveTab] = useState(0)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
@@ -21,6 +21,8 @@ const CMS = () => {
   })
   const [logoFile, setLogoFile] = useState(null)
   const [faviconFile, setFaviconFile] = useState(null)
+  const [newLogoPreviewUrl, setNewLogoPreviewUrl] = useState(null)
+  const [newFaviconPreviewUrl, setNewFaviconPreviewUrl] = useState(null)
   const [holidayYear, setHolidayYear] = useState(new Date().getFullYear())
   const [currentDate, setCurrentDate] = useState(() => {
     const d = new Date()
@@ -81,11 +83,18 @@ const CMS = () => {
     e.preventDefault()
     setSaving(true)
     try {
+      // Use response values for PUT so we don't overwrite newly uploaded URLs with stale form state
+      let sidebarLogoUrlToSave = form.sidebarLogoUrl
+      let faviconUrlToSave = form.faviconUrl
+
       if (logoFile) {
         const fd = new FormData()
         fd.append('logo', logoFile)
-        const res = await axiosInstance.post('/api/cms/upload/logo', fd)
-        if (res.data?.settings) {
+        const res = await axiosInstance.post('/api/cms/upload/logo', fd, {
+          headers: { 'Content-Type': false }
+        })
+        if (res.data?.settings?.sidebarLogoUrl) {
+          sidebarLogoUrlToSave = res.data.settings.sidebarLogoUrl
           setForm((f) => ({ ...f, ...res.data.settings }))
         }
         setLogoFile(null)
@@ -93,19 +102,23 @@ const CMS = () => {
       if (faviconFile) {
         const fd = new FormData()
         fd.append('favicon', faviconFile)
-        const res = await axiosInstance.post('/api/cms/upload/favicon', fd)
-        if (res.data?.settings) {
+        const res = await axiosInstance.post('/api/cms/upload/favicon', fd, {
+          headers: { 'Content-Type': false }
+        })
+        if (res.data?.settings?.faviconUrl) {
+          faviconUrlToSave = res.data.settings.faviconUrl
           setForm((f) => ({ ...f, ...res.data.settings }))
         }
         setFaviconFile(null)
       }
+
       await axiosInstance.put('/api/cms/settings', {
         appName: form.appName,
-        sidebarLogoUrl: form.sidebarLogoUrl,
-        faviconUrl: form.faviconUrl
+        sidebarLogoUrl: sidebarLogoUrlToSave,
+        faviconUrl: faviconUrlToSave
       })
+      await refetchSettings()
       toast.success('Branding saved')
-      refetchSettings()
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to save branding')
     } finally {
@@ -260,24 +273,29 @@ const CMS = () => {
     return items
   }
 
-  const [logoPreviewUrl, setLogoPreviewUrl] = useState(null)
-  const [faviconPreviewUrl, setFaviconPreviewUrl] = useState(null)
+  // Current logo/favicon from context (same as sidebar); new file selection for preview before save
+  const currentLogoUrl = settings.sidebarLogoUrl?.trim()
+    ? `${getAssetUrl(settings.sidebarLogoUrl)}?v=${settingsVersion}`
+    : null
+  const currentFaviconUrl = settings.faviconUrl?.trim()
+    ? `${getAssetUrl(settings.faviconUrl)}?v=${settingsVersion}`
+    : null
   useEffect(() => {
     if (logoFile) {
       const url = URL.createObjectURL(logoFile)
-      setLogoPreviewUrl(url)
+      setNewLogoPreviewUrl(url)
       return () => URL.revokeObjectURL(url)
     }
-    setLogoPreviewUrl(form.sidebarLogoUrl ? getAssetUrl(form.sidebarLogoUrl) : null)
-  }, [logoFile, form.sidebarLogoUrl])
+    setNewLogoPreviewUrl(null)
+  }, [logoFile])
   useEffect(() => {
     if (faviconFile) {
       const url = URL.createObjectURL(faviconFile)
-      setFaviconPreviewUrl(url)
+      setNewFaviconPreviewUrl(url)
       return () => URL.revokeObjectURL(url)
     }
-    setFaviconPreviewUrl(form.faviconUrl ? getAssetUrl(form.faviconUrl) : null)
-  }, [faviconFile, form.faviconUrl])
+    setNewFaviconPreviewUrl(null)
+  }, [faviconFile])
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors">
@@ -322,32 +340,54 @@ const CMS = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sidebar logo</label>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">PNG or JPEG. Upload only (no URL).</p>
+                {currentLogoUrl && (
+                  <div className="mb-2">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">Current logo (shown in sidebar)</span>
+                    <div className="mt-1 p-2 bg-gray-50 dark:bg-gray-700/30 rounded-lg inline-block">
+                      <img src={currentLogoUrl} alt="Current logo" className="h-12 object-contain max-w-[200px]" />
+                    </div>
+                  </div>
+                )}
+                {newLogoPreviewUrl && (
+                  <div className="mb-2">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">New logo (preview)</span>
+                    <div className="mt-1 p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg inline-block border border-indigo-200 dark:border-indigo-800">
+                      <img src={newLogoPreviewUrl} alt="New logo preview" className="h-12 object-contain max-w-[200px]" />
+                    </div>
+                  </div>
+                )}
                 <input
                   type="file"
                   accept="image/png,image/jpeg,image/jpg"
                   onChange={(e) => setLogoFile(e.target.files?.[0] || null)}
                   className="w-full text-sm text-gray-600 dark:text-gray-300 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700 dark:file:bg-indigo-900/30 dark:file:text-indigo-300"
                 />
-                {logoPreviewUrl && (
-                  <div className="mt-2 p-2 bg-gray-50 dark:bg-gray-700/30 rounded-lg inline-block">
-                    <img src={logoPreviewUrl} alt="Logo preview" className="h-12 object-contain max-w-[200px]" />
-                  </div>
-                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Favicon</label>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">SVG only. Upload only (no URL).</p>
+                {currentFaviconUrl && (
+                  <div className="mb-2">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">Current favicon</span>
+                    <div className="mt-1 p-2 bg-gray-50 dark:bg-gray-700/30 rounded-lg inline-block">
+                      <img src={currentFaviconUrl} alt="Current favicon" className="h-8 w-8 object-contain" />
+                    </div>
+                  </div>
+                )}
+                {newFaviconPreviewUrl && (
+                  <div className="mb-2">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">New favicon (preview)</span>
+                    <div className="mt-1 p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg inline-block border border-indigo-200 dark:border-indigo-800">
+                      <img src={newFaviconPreviewUrl} alt="New favicon preview" className="h-8 w-8 object-contain" />
+                    </div>
+                  </div>
+                )}
                 <input
                   type="file"
                   accept=".svg,image/svg+xml"
                   onChange={(e) => setFaviconFile(e.target.files?.[0] || null)}
                   className="w-full text-sm text-gray-600 dark:text-gray-300 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700 dark:file:bg-indigo-900/30 dark:file:text-indigo-300"
                 />
-                {faviconPreviewUrl && (
-                  <div className="mt-2 p-2 bg-gray-50 dark:bg-gray-700/30 rounded-lg inline-block">
-                    <img src={faviconPreviewUrl} alt="Favicon preview" className="h-8 w-8 object-contain" />
-                  </div>
-                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">App name</label>
@@ -422,12 +462,13 @@ const CMS = () => {
                   onChange={(e) => setHolidayYear(parseInt(e.target.value, 10))}
                   className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 >
-                  {[new Date().getFullYear() + 1, new Date().getFullYear(), new Date().getFullYear() - 1].map((y) => (
+                  {[new Date().getFullYear() + 1, new Date().getFullYear(), new Date().getFullYear() - 1, new Date().getFullYear() - 2].map((y) => (
                     <option key={y} value={y}>{y}</option>
                   ))}
                 </select>
-                <span className="text-xs text-gray-500 dark:text-gray-400">Click a date in the calendar to add or edit a holiday.</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">Click a date to add or edit. Saving holidays for a year publishes it so employees can see that year.</span>
               </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Select year, then add or update holidays. Until you save at least one holiday for a year (e.g. 2027), users will see “Your HR department has not updated this year yet” for that year.</p>
 
               <div className="w-full max-w-4xl mx-auto bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 overflow-hidden">
                 <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">

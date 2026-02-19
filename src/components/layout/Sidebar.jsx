@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { menuItems } from '../../config/menuConfig.js'
-import { filterMenuByRole, filterMenuByRoleSync } from '../../utils/menuUtils.js'
+import { filterMenuByRoleSync } from '../../utils/menuUtils.js'
 import { FiChevronDown, FiChevronRight, FiChevronLeft, FiMenu, FiX } from 'react-icons/fi'
 import { useAuth } from '../../context/AuthContext'
 import { useSettings } from '../../context/SettingsContext'
+import { getAssetUrl } from '../../config/apiConfig'
 import Logo from '../../assets/artihcus-logo1.svg'
 
 function Sidebar() {
   const location = useLocation()
-  const { user, activeRole, menuConfig, loading: authLoading } = useAuth()
-  const { settings } = useSettings()
-  const logoUrl = settings.sidebarLogoUrl?.trim() || Logo
+  const { user, activeRole, menuConfig } = useAuth()
+  const { settings, settingsVersion } = useSettings()
+  const logoUrl = settings.sidebarLogoUrl?.trim()
+    ? `${getAssetUrl(settings.sidebarLogoUrl)}?v=${settingsVersion}`
+    : Logo
   const [filteredMenu, setFilteredMenu] = useState([])
   const [expandedItems, setExpandedItems] = useState({})
   const [isMobileOpen, setIsMobileOpen] = useState(false)

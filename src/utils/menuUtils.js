@@ -43,15 +43,6 @@ export const mapBackendRoleToFrontend = (backendRole) => {
   return roleMapping[backendRole] || backendRole
 }
 
-/**
- * Maps frontend role back to backend role (for API calls)
- * @param {string} frontendRole - Frontend role (super_admin, hr_admin, etc.)
- * @returns {string} Backend role (admin, hr, etc.)
- */
-const mapFrontendRoleToBackend = (frontendRole) => {
-  const reverseMapping = Object.entries(roleMapping).find(([_, frontend]) => frontend === frontendRole)
-  return reverseMapping ? reverseMapping[0] : frontendRole
-}
 
 /**
  * Fetches menu configuration from API
@@ -61,7 +52,6 @@ const mapFrontendRoleToBackend = (frontendRole) => {
 export const fetchMenuConfigFromAPI = async (backendRole) => {
   try {
     // Check cache (cache key should include role to avoid mixing roles)
-    const cacheKey = `menuConfig_${backendRole}`
     const now = Date.now()
     if (menuConfigCache && menuConfigCacheTime && menuConfigCache.role === backendRole && (now - menuConfigCacheTime) < CACHE_DURATION) {
       return menuConfigCache.items
@@ -284,4 +274,3 @@ export const clearMenuConfigCache = () => {
   menuConfigCacheTime = null
   console.log('Menu config cache cleared')
 }
-

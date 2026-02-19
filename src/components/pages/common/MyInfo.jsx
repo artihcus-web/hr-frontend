@@ -94,7 +94,7 @@ function MyInfo() {
     }
 
     fetchData()
-  }, [authUser?._id, authUser?.id]) // Refetch when user changes
+  }, [authUser?._id, authUser?.id, authUser]) // Refetch when user changes
 
   // Helper to get section config by sectionId
   const getSectionConfigById = useCallback((sectionId) => {

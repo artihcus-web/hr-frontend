@@ -57,7 +57,7 @@ const AdminControllers = () => {
     } catch (error) {
       console.error('Error fetching menu config:', error)
       // Fallback to menuConfig.js
-      const initialConfig = allMenuItems.map((item, index) => ({
+      const initialConfig = allMenuItems.map((item) => ({
         id: item.id,
         label: item.label,
         path: item.path,
@@ -95,6 +95,7 @@ const AdminControllers = () => {
     }))
   }
 
+  // eslint-disable-next-line no-unused-vars
   const handleMenuVisibilityToggle = (menuItemId, role) => {
     setMenuConfig(prev => prev.map(item => {
       if (item.id === menuItemId) {
@@ -112,6 +113,7 @@ const AdminControllers = () => {
   }
 
   // This function is no longer needed with drag-and-drop, but keeping for backward compatibility
+  // eslint-disable-next-line no-unused-vars
   const handleMenuOrderChange = (menuItemId, role, newOrder) => {
     setMenuConfig(prev => prev.map(item => {
       if (item.id === menuItemId) {
@@ -127,6 +129,7 @@ const AdminControllers = () => {
     }))
   }
 
+  // eslint-disable-next-line no-unused-vars
   const handleMenuUserToggle = (menuItemId, userId) => {
     setMenuConfig(prev => prev.map(item => {
       if (item.id === menuItemId) {

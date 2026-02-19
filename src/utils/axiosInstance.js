@@ -10,12 +10,16 @@ const axiosInstance = axios.create({
     }
 })
 
-// Request Interceptor: Attach Token
+// Request Interceptor: Attach Token + fix FormData (so multer receives file)
 axiosInstance.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem('token')
         if (token) {
             config.headers.Authorization = `Bearer ${token}`
+        }
+        // Let browser set Content-Type with boundary for FormData (else server gets no file)
+        if (config.data instanceof FormData) {
+            delete config.headers['Content-Type']
         }
         return config
     },
