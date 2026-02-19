@@ -24,7 +24,7 @@ const AdminControllers = () => {
         setMenuConfig(res.data.menuItems)
       } else {
         // Initialize from menuConfig.js if no DB config exists
-        const initialConfig = allMenuItems.map((item, index) => {
+        const initialConfig = allMenuItems.map((item) => {
           // Get icon name from component (if it's a React component)
           let iconName = ''
           if (item.icon) {
@@ -42,7 +42,7 @@ const AdminControllers = () => {
             icon: iconName,
             roles: item.roles.map(r => {
               // Map frontend roles back to backend roles
-              const backendRole = Object.entries(roleMapping).find(([_, frontend]) => frontend === r)?.[0]
+              const backendRole = Object.entries(roleMapping).find(([, frontend]) => frontend === r)?.[0]
               return backendRole || r
             }),
             users: [],
