@@ -19,6 +19,7 @@ import EmployeeFormSchema from '../pages/admin/EmployeeFormSchema'
 import TimesheetSchema from '../pages/admin/TimesheetSchema'
 import DynamicFormSchema from '../pages/admin/DynamicFormSchema'
 import AdminControllers from '../pages/admin/AdminControllers'
+import CMS from '../pages/admin/CMS'
 import ProtectedRoute from './ProtectedRoute'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import KnowYourEmployee from '../pages/common/KnowYourEmployee'
@@ -72,6 +73,7 @@ function Routers() {
           <Route path='/admin/form-builder/timesheet' element={<TimesheetSchema />} />
           <Route path='/admin/form-builder/:formType' element={<DynamicFormSchema />} />
           <Route path='/admin/controllers' element={<AdminControllers />} />
+          <Route path='/admin/cms' element={<CMS />} />
           <Route path='/admin/policies' element={<AdminPolicies />} />
           <Route path='/admin/assessments' element={<AdminAssessments />} />
         </Route>

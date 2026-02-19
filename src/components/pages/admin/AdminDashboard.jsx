@@ -211,13 +211,13 @@ function AdminDashboard() {
                   <span className="text-sm text-slate-500 dark:text-slate-400 font-medium">Total Employees</span>
                   <FiUsers className="h-5 w-5 text-orange-500" />
                 </div>
-                <p className="text-2xl font-bold text-slate-900 dark:text-white">
+                <div className="text-2xl font-bold text-slate-900 dark:text-white">
                   {loadingUsers ? (
                     <LoadingSpinner className="h-6 w-6" />
                   ) : (
                     totalUsers
                   )}
-                </p>
+                </div>
               </div>
 
               {/* Dynamic Graph */}

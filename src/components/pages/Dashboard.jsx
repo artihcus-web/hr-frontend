@@ -16,6 +16,7 @@ const Dashboard = () => {
   const [greeting, setGreeting] = React.useState('')
   const [showHistoryModal, setShowHistoryModal] = useState(false)
   const [showProjectDropdown, setShowProjectDropdown] = useState(false)
+  const [upcomingHolidays, setUpcomingHolidays] = useState([])
 
   // Super Manager State
   const [allTimesheets, setAllTimesheets] = useState([])
@@ -84,6 +85,24 @@ const Dashboard = () => {
 
     if (user) fetchStats()
   }, [user, activeRole])
+
+  React.useEffect(() => {
+    if (!user) return
+    const currentYear = new Date().getFullYear()
+    const today = new Date()
+    axiosInstance.get(`/api/cms/holidays?year=${currentYear}`)
+      .then(res => {
+        const list = res.data.holidays || []
+        const next = list
+          .filter(h => {
+            const hDate = new Date(currentYear, h.month, h.day)
+            return hDate >= new Date(currentYear, today.getMonth(), today.getDate())
+          })
+          .slice(0, 3)
+        setUpcomingHolidays(next)
+      })
+      .catch(() => setUpcomingHolidays([]))
+  }, [user])
 
   // --- Helpers for Super Manager View ---
   const filteredAllTimesheets = allTimesheets.filter(ts => {
@@ -392,41 +411,24 @@ const Dashboard = () => {
                 <h3 className="font-bold text-gray-900 dark:text-gray-100">Upcoming Holidays</h3>
               </div>
               <div className="space-y-4">
-                {(() => {
-                  const holidays = [
-                    { month: 0, day: 1, name: "New Year", dateStr: "Thu, Jan 1" },
-                    { month: 0, day: 14, name: "Sankranti/Pongal", dateStr: "Wed, Jan 14" },
-                    { month: 0, day: 26, name: "Republic Day", dateStr: "Mon, Jan 26" },
-                    { month: 2, day: 19, name: "Ugadi", dateStr: "Thu, Mar 19" },
-                    { month: 4, day: 1, name: "May Day", dateStr: "Fri, May 1" },
-                    { month: 8, day: 14, name: "Ganesh Chaturthi", dateStr: "Mon, Sep 14" },
-                    { month: 9, day: 2, name: "Gandhi Jayanti", dateStr: "Fri, Oct 2" },
-                    { month: 9, day: 21, name: "Dussehra", dateStr: "Wed, Oct 21" },
-                    { month: 10, day: 9, name: "Diwali", dateStr: "Mon, Nov 09" },
-                    { month: 11, day: 25, name: "Christmas", dateStr: "Fri, Dec 25" },
-                  ];
-                  const today = new Date();
-                  const currentYear = 2026;
-                  const nextHolidays = holidays.filter(h => {
-                    const hDate = new Date(currentYear, h.month, h.day);
-                    return hDate >= new Date(currentYear, today.getMonth(), today.getDate());
-                  }).slice(0, 3);
-
-                  return nextHolidays.length > 0 ? nextHolidays.map((h, i) => (
-                    <div key={i} className="flex items-center gap-3">
+                {upcomingHolidays.length > 0 ? upcomingHolidays.map((h, i) => {
+                  const currentYear = new Date().getFullYear()
+                  const dateStr = new Date(currentYear, h.month, h.day).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+                  return (
+                    <div key={h._id || i} className="flex items-center gap-3">
                       <div className="flex-col flex items-center justify-center w-10 h-10 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase">{new Date(2026, h.month, h.day).toLocaleString('default', { month: 'short' })}</span>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase">{new Date(currentYear, h.month, h.day).toLocaleString('default', { month: 'short' })}</span>
                         <span className="text-sm font-bold text-gray-900 dark:text-gray-100 leading-none">{h.day}</span>
                       </div>
                       <div>
                         <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{h.name}</p>
-                        <p className="text-xs text-gray-400">{h.dateStr}</p>
+                        <p className="text-xs text-gray-400">{dateStr}</p>
                       </div>
                     </div>
-                  )) : (
-                    <p className="text-sm text-gray-400">No upcoming holidays this year.</p>
-                  );
-                })()}
+                  )
+                }) : (
+                  <p className="text-sm text-gray-400">No upcoming holidays this year.</p>
+                )}
               </div>
               <Link to="/holiday-calendar" className="block text-center text-xs font-bold text-indigo-600 dark:text-indigo-400 mt-4 hover:underline">
                 View Full Calendar

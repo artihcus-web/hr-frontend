@@ -4,11 +4,14 @@ import { menuItems } from '../../config/menuConfig.js'
 import { filterMenuByRole, filterMenuByRoleSync } from '../../utils/menuUtils.js'
 import { FiChevronDown, FiChevronRight, FiChevronLeft, FiMenu, FiX } from 'react-icons/fi'
 import { useAuth } from '../../context/AuthContext'
+import { useSettings } from '../../context/SettingsContext'
 import Logo from '../../assets/artihcus-logo1.svg'
 
 function Sidebar() {
   const location = useLocation()
   const { user, activeRole, menuConfig, loading: authLoading } = useAuth()
+  const { settings } = useSettings()
+  const logoUrl = settings.sidebarLogoUrl?.trim() || Logo
   const [filteredMenu, setFilteredMenu] = useState([])
   const [expandedItems, setExpandedItems] = useState({})
   const [isMobileOpen, setIsMobileOpen] = useState(false)
@@ -272,8 +275,8 @@ function Sidebar() {
           <div className={`flex items-center ${isCollapsed ? 'justify-center px-2 relative h-16 gap-2' : 'justify-between px-5 h-16'} border-b border-gray-50 dark:border-gray-800 transition-all duration-300`}>
             {/* Show smaller/contained logo when collapsed */}
             <img
-              src={Logo}
-              alt="Logo"
+              src={logoUrl}
+              alt={settings.appName || 'Logo'}
               className={`transition-all duration-300 ${isCollapsed ? 'h-8 w-8 object-cover object-left' : 'h-10 w-auto'}`}
             />
 
