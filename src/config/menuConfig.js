@@ -1,4 +1,4 @@
-import { FiHome, FiUser, FiUserCheck, FiClock, FiCalendar, FiUsers, FiCheckCircle, FiDollarSign, FiFileText, FiPlus, FiPieChart, FiSettings, FiBriefcase, FiTrendingUp, FiFolder, FiAlertCircle, FiMonitor, FiVideo, FiClipboard } from 'react-icons/fi'
+import { FiHome, FiUser, FiUserCheck, FiClock, FiCalendar, FiUsers, FiCheckCircle, FiDollarSign, FiFileText, FiPlus, FiPieChart, FiSettings, FiBriefcase, FiTrendingUp, FiFolder, FiAlertCircle, FiMonitor, FiVideo, FiClipboard, FiImage } from 'react-icons/fi'
 
 
 
@@ -40,6 +40,13 @@ export const menuItems = [
     label: 'Admin Controllers',
     icon: FiSettings,
     path: '/admin/controllers',
+    roles: ['super_admin']
+  },
+  {
+    id: 'admin-cms',
+    label: 'Content & Branding',
+    icon: FiImage,
+    path: '/admin/cms',
     roles: ['super_admin']
   },
   {
