@@ -13,7 +13,9 @@ import {
   FiUpload,
   FiX,
   FiSettings,
-  FiList
+  FiList,
+  FiChevronDown,
+  FiChevronUp
 } from 'react-icons/fi'
 import axiosInstance from '../../../utils/axiosInstance'
 import toast from '../../../utils/toast'
@@ -55,6 +57,8 @@ const AdminAssessments = () => {
   const [questionFile, setQuestionFile] = useState(null)
   const [testSettings, setTestSettings] = useState(defaultTestSettings)
   const [editingSettings, setEditingSettings] = useState(false)
+  const [accordionSettingsOpen, setAccordionSettingsOpen] = useState(true)
+  const [accordionQuestionsOpen, setAccordionQuestionsOpen] = useState(true)
 
   // Knowledge base tab state
   const [knowledgeItems, setKnowledgeItems] = useState([])
@@ -169,8 +173,9 @@ const AdminAssessments = () => {
       const res = await axiosInstance.post('/api/assessments/modules', {
         name: newModuleName.trim(),
         description: newModuleDescription.trim()
-      }).catch(() => ({ data: { module: { id: Date.now(), name: newModuleName, description: newModuleDescription } } }))
-      const newMod = res.data?.module || { id: Date.now(), name: newModuleName, description: newModuleDescription }
+      })
+      const newMod = res.data?.module
+      if (!newMod) throw new Error('Invalid response')
       setModules(prev => [...prev, newMod])
       setNewModuleName('')
       setNewModuleDescription('')
@@ -201,33 +206,32 @@ const AdminAssessments = () => {
 
   const handleUploadQuestions = async () => {
     if (!questionFile || !selectedModule) return
-    if (!questionFile.name.toLowerCase().endsWith('.docx')) {
-      toast.error('Please upload a .docx file')
+    if (!questionFile.name.toLowerCase().endsWith('.xlsx')) {
+      toast.error('Please upload an Excel file (.xlsx)')
       return
     }
     try {
       const formData = new FormData()
       formData.append('file', questionFile)
-      await axiosInstance.post(`/api/assessments/modules/${selectedModule._id || selectedModule.id}/questions/upload`, formData, {
+      const res = await axiosInstance.post(`/api/assessments/modules/${selectedModule._id || selectedModule.id}/questions/upload`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       })
-      toast.success('Questions uploaded successfully')
+      toast.success(res.data?.message || `Uploaded ${res.data?.count ?? 0} question(s)`)
+      if (res.data?.errors?.length) {
+        toast.error(`${res.data.errors.length} row(s) had errors. Check format.`)
+      }
       setQuestionFile(null)
       setShowAddQuestion(false)
       loadModuleQuestions(selectedModule._id || selectedModule.id)
-    } catch {
-      // Backend not yet implemented - show UI feedback
-      setQuestions(prev => [...prev, { id: Date.now(), text: `Imported from ${questionFile.name}`, options: [] }])
-      toast.success('File received. Backend parsing will be wired when API is ready.')
-      setQuestionFile(null)
-      setShowAddQuestion(false)
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Upload failed')
     }
   }
 
   const handleSaveSettings = async () => {
     if (!selectedModule) return
     try {
-      await axiosInstance.put(`/api/assessments/modules/${selectedModule._id || selectedModule.id}/settings`, testSettings).catch(() => {})
+      await axiosInstance.put(`/api/assessments/modules/${selectedModule._id || selectedModule.id}/settings`, testSettings)
       setEditingSettings(false)
       toast.success('Test settings saved')
     } catch (err) {
@@ -389,27 +393,37 @@ const AdminAssessments = () => {
                 <div className="flex-1 space-y-6">
                   {selectedModule ? (
                     <>
-                      {/* Test settings */}
+                      {/* Test settings accordion */}
                       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                        <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                        <button
+                          type="button"
+                          onClick={() => setAccordionSettingsOpen(prev => !prev)}
+                          className="w-full p-4 flex justify-between items-center hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-left"
+                        >
                           <h3 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
                             <FiSettings className="w-4 h-4" />
                             Test Settings — {selectedModule.name}
+                            <span className="text-gray-400 dark:text-gray-500 ml-1">
+                              {accordionSettingsOpen ? <FiChevronUp className="w-5 h-5" /> : <FiChevronDown className="w-5 h-5" />}
+                            </span>
                           </h3>
-                          {editingSettings ? (
-                            <div className="flex gap-2">
-                              <button onClick={handleSaveSettings} className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white rounded-md text-sm">
-                                <FiSave className="w-4 h-4" /> Save
+                          <div onClick={e => e.stopPropagation()} className="flex gap-2">
+                            {editingSettings ? (
+                              <>
+                                <button onClick={handleSaveSettings} className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white rounded-md text-sm">
+                                  <FiSave className="w-4 h-4" /> Save
+                                </button>
+                                <button onClick={() => setEditingSettings(false)} className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm">Cancel</button>
+                              </>
+                            ) : (
+                              <button onClick={() => setEditingSettings(true)} className="flex items-center gap-1 px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm">
+                                <FiEdit2 className="w-4 h-4" /> Edit
                               </button>
-                              <button onClick={() => setEditingSettings(false)} className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm">Cancel</button>
-                            </div>
-                          ) : (
-                            <button onClick={() => setEditingSettings(true)} className="flex items-center gap-1 px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm">
-                              <FiEdit2 className="w-4 h-4" /> Edit
-                            </button>
-                          )}
-                        </div>
-                        <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            )}
+                          </div>
+                        </button>
+                        {accordionSettingsOpen && (
+                        <div className="p-4 border-t border-gray-200 dark:border-gray-700 grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Duration (minutes)</label>
                             <input
@@ -496,45 +510,64 @@ const AdminAssessments = () => {
                             />
                           </div>
                         </div>
+                        )}
                       </div>
 
-                      {/* Questions */}
+                      {/* Questions accordion */}
                       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                        <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                        <button
+                          type="button"
+                          onClick={() => setAccordionQuestionsOpen(prev => !prev)}
+                          className="w-full p-4 flex justify-between items-center hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-left"
+                        >
                           <h3 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
                             <FiList className="w-4 h-4" />
                             Questions ({questions.length})
+                            <span className="text-gray-400 dark:text-gray-500 ml-1">
+                              {accordionQuestionsOpen ? <FiChevronUp className="w-5 h-5" /> : <FiChevronDown className="w-5 h-5" />}
+                            </span>
                           </h3>
-                          <button
-                            onClick={() => setShowAddQuestion(true)}
-                            className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white rounded-md text-sm"
-                          >
-                            <FiUpload className="w-4 h-4" /> Upload .docx
-                          </button>
-                        </div>
-                        <div className="p-4">
+                          <span onClick={e => e.stopPropagation()}>
+                            <button
+                              onClick={() => setShowAddQuestion(true)}
+                              className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white rounded-md text-sm"
+                            >
+                              <FiUpload className="w-4 h-4" /> Upload Excel
+                            </button>
+                          </span>
+                        </button>
+                        {accordionQuestionsOpen && (
+                        <div className="p-4 border-t border-gray-200 dark:border-gray-700">
                           <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-                            Upload a .docx file with fixed format: Each question on a new paragraph; options as A), B), C), D); correct answer marked with * before the option.
+                            Upload an <strong>.xlsx</strong> file. Columns: <strong>SECTION</strong>, <strong>TYPE</strong> (mcq, yes_no, fill_blanks, short_answer, long_answer), <strong>QUESTION</strong>, <strong>OPTION_A</strong>–<strong>OPTION_D</strong>, <strong>CORRECT_ANSWER</strong>. First row = headers.
                           </p>
                           {questions.length === 0 ? (
-                            <p className="text-gray-500 dark:text-gray-400 text-center py-8">No questions yet. Upload a .docx file.</p>
+                            <p className="text-gray-500 dark:text-gray-400 text-center py-8">No questions yet. Upload an Excel (.xlsx) file.</p>
                           ) : (
                             <ul className="space-y-3">
                               {questions.map((q, i) => (
                                 <li key={q._id || q.id || i} className="p-3 rounded-lg border border-gray-200 dark:border-gray-700">
+                                  <div className="flex flex-wrap gap-2 mb-1">
+                                    <span className="text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded">{q.section || '—'}</span>
+                                    <span className="text-xs text-gray-500 dark:text-gray-400">{q.type || '—'}</span>
+                                  </div>
                                   <p className="font-medium text-gray-900 dark:text-gray-100">{i + 1}. {q.text || q.question || 'Question'}</p>
                                   {q.options?.length > 0 && (
                                     <ul className="mt-2 ml-4 space-y-1 text-sm text-gray-600 dark:text-gray-400">
                                       {q.options.map((opt, j) => (
-                                        <li key={j}>{String.fromCharCode(65 + j)}) {opt.text || opt} {opt.correct ? '✓' : ''}</li>
+                                        <li key={j}>{opt.label || String.fromCharCode(65 + j)}) {opt.text || opt} {opt.label === (q.correctAnswer || '') || opt.text === q.correctAnswer ? '✓' : ''}</li>
                                       ))}
                                     </ul>
+                                  )}
+                                  {q.type && ['fill_blanks', 'short_answer', 'long_answer'].includes(q.type) && (
+                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Answer: {q.correctAnswer}</p>
                                   )}
                                 </li>
                               ))}
                             </ul>
                           )}
                         </div>
+                        )}
                       </div>
                     </>
                   ) : (
@@ -620,17 +653,25 @@ const AdminAssessments = () => {
         </div>
       )}
 
-      {/* Add Question (Upload .docx) Modal */}
+      {/* Add Question (Upload Excel) Modal */}
       {showAddQuestion && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Upload Questions (.docx)</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Upload Questions (Excel)</h3>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-              Use the fixed format: Each question on a new line; options prefixed with A), B), C), D); mark correct with * before the option.
+              Upload <strong>.xlsx</strong> with columns: SECTION, TYPE, QUESTION, OPTION_A–D, CORRECT_ANSWER. Types: mcq, yes_no, fill_blanks, short_answer, long_answer.
             </p>
+            <a
+              href={`${axiosInstance.defaults.baseURL || ''}/api/assessments/questions-template`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block text-sm text-indigo-600 dark:text-indigo-400 hover:underline mb-4"
+            >
+              Download Excel template
+            </a>
             <input
               type="file"
-              accept=".docx"
+              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               onChange={e => setQuestionFile(e.target.files?.[0] || null)}
               className="w-full text-sm text-gray-600 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-indigo-50 file:text-indigo-600 dark:file:bg-indigo-900/30 dark:file:text-indigo-400"
             />

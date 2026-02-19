@@ -4,7 +4,7 @@ import { FiPower, FiSun, FiMoon } from 'react-icons/fi'
 import { useAuth } from '../../context/AuthContext'
 import { useTheme } from '../../context/ThemeContext'
 import { getProfileImageUrl } from '../../config/apiConfig'
-
+import artihcusLogo from '../../assets/artihcus-logo1.svg'
 function Header() {
   const navigate = useNavigate()
 
@@ -51,7 +51,7 @@ function Header() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 gap-4">
           {/* Left: page title (Hidden/Removed) */}
-
+          {/* <img src={artihcusLogo} alt="Artihcus Logo" className="h-8 w-8 object-cover object-left" /> */}
           {/* Center: Spacer */}
           <div className="flex-1"></div>
 
