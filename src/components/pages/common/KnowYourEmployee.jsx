@@ -38,9 +38,11 @@ const KnowYourEmployee = () => {
             const res = await axiosInstance.get('/api/employees')
             // Backend returns both 'employees' and 'users' for compatibility
             const allUsers = res.data.users || res.data.employees || []
+            // Exclude admin users – show only employees/users, not admins
+            const nonAdmins = allUsers.filter(u => (u.role || '').toLowerCase() !== 'admin')
             
             // Backend already sorts by employeeId, but ensure sorting here as well
-            const sortedUsers = allUsers.sort((a, b) => {
+            const sortedUsers = nonAdmins.sort((a, b) => {
                 const idA = a.employeeId || ''
                 const idB = b.employeeId || ''
                 return idA.localeCompare(idB, undefined, { numeric: true, sensitivity: 'base' })
@@ -278,64 +280,58 @@ const KnowYourEmployee = () => {
                                     )}
                                 </div>
 
-                                {/* Details - compact, no scroll */}
-                                <div className="flex-1 min-h-0 flex flex-col gap-1 overflow-hidden">
+                                {/* Details - larger fonts to fill space */}
+                                <div className="flex-1 min-h-0 flex flex-col justify-center gap-0 overflow-hidden">
                                     {(selectedEmployee.officialEmail || selectedEmployee.email) && (
-                                        <div className="flex justify-between items-start gap-2 py-1.5 border-b border-gray-100 dark:border-gray-700/60">
-                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-medium shrink-0">Email</span>
-                                            <div className="flex items-center gap-1 min-w-0">
-                                                <span className="text-xs font-semibold text-gray-900 dark:text-white text-right break-all truncate">{selectedEmployee.officialEmail || selectedEmployee.email}</span>
+                                        <div className="flex justify-between items-start gap-3 py-2.5 border-b border-gray-100 dark:border-gray-700/60">
+                                            <span className="text-sm text-gray-500 dark:text-gray-400 font-medium shrink-0">Email</span>
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <span className="text-sm font-semibold text-gray-900 dark:text-white text-right break-all truncate">{selectedEmployee.officialEmail || selectedEmployee.email}</span>
                                                 <button
                                                     type="button"
                                                     onClick={() => copyToClipboard(selectedEmployee.officialEmail || selectedEmployee.email, 'Email')}
-                                                    className="flex-shrink-0 p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 transition-colors"
+                                                    className="flex-shrink-0 p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 transition-colors"
                                                     title="Copy email"
                                                 >
-                                                    <FiCopy className="w-3 h-3" />
+                                                    <FiCopy className="w-4 h-4" />
                                                 </button>
                                             </div>
                                         </div>
                                     )}
                                     {selectedEmployee.phone && (
-                                        <div className="flex justify-between items-center gap-2 py-1.5 border-b border-gray-100 dark:border-gray-700/60">
-                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-medium shrink-0">Phone</span>
-                                            <span className="text-xs font-semibold text-gray-900 dark:text-white text-right">{selectedEmployee.phone}</span>
+                                        <div className="flex justify-between items-center gap-3 py-2.5 border-b border-gray-100 dark:border-gray-700/60">
+                                            <span className="text-sm text-gray-500 dark:text-gray-400 font-medium shrink-0">Phone</span>
+                                            <span className="text-sm font-semibold text-gray-900 dark:text-white text-right">{selectedEmployee.phone}</span>
                                         </div>
                                     )}
                                     {(selectedEmployee.dateOfBirth || selectedEmployee.birthdayDate) && (
-                                        <div className="flex justify-between items-center gap-2 py-1.5 border-b border-gray-100 dark:border-gray-700/60">
-                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-medium shrink-0">DOB</span>
-                                            <span className="text-xs font-semibold text-gray-900 dark:text-white text-right">{formatDate(selectedEmployee.dateOfBirth || selectedEmployee.birthdayDate)}</span>
+                                        <div className="flex justify-between items-center gap-3 py-2.5 border-b border-gray-100 dark:border-gray-700/60">
+                                            <span className="text-sm text-gray-500 dark:text-gray-400 font-medium shrink-0">DOB</span>
+                                            <span className="text-sm font-semibold text-gray-900 dark:text-white text-right">{formatDate(selectedEmployee.dateOfBirth || selectedEmployee.birthdayDate)}</span>
                                         </div>
                                     )}
-                                    <div className="flex justify-between items-start gap-2 py-1.5 border-b border-gray-100 dark:border-gray-700/60">
-                                        <span className="text-xs text-gray-500 dark:text-gray-400 font-medium shrink-0">Designation</span>
-                                        <span className="text-xs font-semibold text-gray-900 dark:text-white text-right">
+                                    <div className="flex justify-between items-start gap-3 py-2.5 border-b border-gray-100 dark:border-gray-700/60">
+                                        <span className="text-sm text-gray-500 dark:text-gray-400 font-medium shrink-0">Designation</span>
+                                        <span className="text-sm font-semibold text-gray-900 dark:text-white text-right">
                                             {String(selectedEmployee.designation ?? '').trim()}
                                         </span>
                                     </div>
                                     {selectedEmployee.department && (
-                                        <div className="flex justify-between items-center gap-2 py-1.5 border-b border-gray-100 dark:border-gray-700/60">
-                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-medium shrink-0">Department</span>
-                                            <span className="text-xs font-semibold text-gray-900 dark:text-white text-right">{selectedEmployee.department}</span>
+                                        <div className="flex justify-between items-center gap-3 py-2.5 border-b border-gray-100 dark:border-gray-700/60">
+                                            <span className="text-sm text-gray-500 dark:text-gray-400 font-medium shrink-0">Department</span>
+                                            <span className="text-sm font-semibold text-gray-900 dark:text-white text-right">{selectedEmployee.department}</span>
                                         </div>
                                     )}
                                     {selectedEmployee.location && (
-                                        <div className="flex justify-between items-center gap-2 py-1.5 border-b border-gray-100 dark:border-gray-700/60">
-                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-medium shrink-0">Location</span>
-                                            <span className="text-xs font-semibold text-gray-900 dark:text-white text-right">{selectedEmployee.location}</span>
-                                        </div>
-                                    )}
-                                    {selectedEmployee.joiningDate && (
-                                        <div className="flex justify-between items-center gap-2 py-1.5 border-b border-gray-100 dark:border-gray-700/60">
-                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-medium shrink-0">Joining</span>
-                                            <span className="text-xs font-semibold text-gray-900 dark:text-white text-right">{formatDate(selectedEmployee.joiningDate)}</span>
+                                        <div className="flex justify-between items-center gap-2 py-2 border-b border-gray-100 dark:border-gray-700/60">
+                                            <span className="text-sm text-gray-500 dark:text-gray-400 font-medium shrink-0">Location</span>
+                                            <span className="text-sm font-semibold text-gray-900 dark:text-white text-right">{selectedEmployee.location}</span>
                                         </div>
                                     )}
                                     {selectedEmployee.extensionNumber && (
-                                        <div className="flex justify-between items-center gap-2 py-1.5 border-b border-gray-100 dark:border-gray-700/60">
-                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-medium shrink-0">Ext</span>
-                                            <span className="text-xs font-semibold text-gray-900 dark:text-white text-right">{selectedEmployee.extensionNumber}</span>
+                                        <div className="flex justify-between items-center gap-3 py-2.5 border-b border-gray-100 dark:border-gray-700/60">
+                                            <span className="text-sm text-gray-500 dark:text-gray-400 font-medium shrink-0">Ext</span>
+                                            <span className="text-sm font-semibold text-gray-900 dark:text-white text-right">{selectedEmployee.extensionNumber}</span>
                                         </div>
                                     )}
                                 </div>
