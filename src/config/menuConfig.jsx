@@ -1,9 +1,5 @@
-import { FiHome, FiUser, FiUserCheck, FiClock, FiCalendar, FiUsers, FiCheckCircle, FiDollarSign, FiFileText, FiPlus, FiPieChart, FiSettings, FiBriefcase, FiTrendingUp, FiFolder, FiAlertCircle, FiMonitor, FiVideo, FiClipboard, FiImage } from 'react-icons/fi'
-
-
-
-
-
+import { FiHome, FiUser, FiCalendar, FiUsers, FiCheckCircle, FiFileText, FiBriefcase, FiFolder, FiAlertCircle, FiMonitor, FiVideo, FiClipboard, FiImage } from 'react-icons/fi'
+import { AdminControllersIcon, SchemaChecklistIcon } from './menuConfigIcons'
 
 // Menu configuration based on HR_PORTAL_ARCHITECTURE.md
 // Maps backend roles to frontend roles for menu filtering
@@ -38,7 +34,7 @@ export const menuItems = [
   {
     id: 'admin-controllers',
     label: 'Admin Controllers',
-    icon: FiSettings,
+    icon: AdminControllersIcon,
     path: '/admin/controllers',
     roles: ['super_admin']
   },
@@ -117,7 +113,7 @@ export const menuItems = [
   {
     id: 'form-builder',
     label: 'Schema Configuration',
-    icon: FiSettings,
+    icon: SchemaChecklistIcon,
     path: '/admin/form-builder',
     roles: ['super_admin', 'hr_admin']
   },

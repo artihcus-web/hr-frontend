@@ -4,7 +4,7 @@ import axiosInstance from '../../../utils/axiosInstance'
 import toast from '../../../utils/toast'
 import { FiSave, FiMove } from 'react-icons/fi'
 import LoadingSpinner from '../../common/LoadingSpinner'
-import { menuItems as allMenuItems, roleMapping } from '../../../config/menuConfig.js'
+import { menuItems as allMenuItems, roleMapping } from '../../../config/menuConfig.jsx'
 
 const AdminControllers = () => {
   const { token } = useAuth()

@@ -13,7 +13,7 @@ import { filterValueByType } from '../../../utils/fieldTypeValidation'
 const roles = ['admin', 'c-suite', 'hr', 'manager', 'supermanager', 'tl', 'employee', 'client']
 
 // Form debug: set to true to enable detailed console logs for testing (schema, required, visibility, etc.)
-const FORM_DEBUG = true
+const FORM_DEBUG = false
 const formLog = (tag, data) => {
   if (FORM_DEBUG && typeof console !== 'undefined') {
     console.log(`📋 [Form:${tag}]`, data)
@@ -1197,7 +1197,17 @@ function UserManagement() {
     (sectionKey, fieldName) => {
       const section = getSectionConfig(sectionKey)
       if (!section?.fields) return null
-      return section.fields.find((f) => f.name === fieldName)
+      const exact = section.fields.find((f) => f.name === fieldName)
+      if (exact) return exact
+      // Fallback: match by normalized name or label (so schema "Date of Birth (Actual)" matches form field "dateOfBirth")
+      const normalize = (s) => (s && String(s).toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '')) || ''
+      const keyNorm = normalize(fieldName)
+      if (!keyNorm) return null
+      return section.fields.find((f) => {
+        const nameNorm = normalize(f.name)
+        const labelNorm = normalize(f.label)
+        return nameNorm === keyNorm || labelNorm === keyNorm || labelNorm.startsWith(keyNorm) || nameNorm.startsWith(keyNorm)
+      }) || null
     },
     [getSectionConfig]
   )
@@ -3470,8 +3480,9 @@ function UserManagement() {
 
     } catch (error) {
       console.error('Submit error:', error)
-      const apiMsg = error.response?.data?.message || error.message
-      formLog('SubmitError', { status: error.response?.status, message: apiMsg })
+      const data = error.response?.data
+      const apiMsg = data?.message || data?.error || error.message
+      if (FORM_DEBUG) formLog('SubmitError', { status: error.response?.status, message: apiMsg })
       if (error.response && error.response.status < 500) {
         toast.error(apiMsg || `Failed to ${editingEmployee ? 'update' : 'create'} employee`)
       } else {
@@ -4280,6 +4291,7 @@ function UserManagement() {
                     label={getFieldLabelById(1, 'dateOfBirth', 'Date of Birth (Actual)')}
                     name="dateOfBirth"
                     type="date"
+                    required={getFieldRequiredById(1, 'dateOfBirth', false)}
                     formData={formData}
                     handleChange={handleChange}
                     min="1900-01-01"
@@ -4296,11 +4308,12 @@ function UserManagement() {
                 const today = new Date()
                 const todayStr = today.toISOString().slice(0, 10)
                 return (
-                  <FormField 
-                    label={getFieldLabelById(1, 'marriageDate', 'Marriage Date')} 
-                    name="marriageDate" 
-                    type="date" 
-                    formData={formData} 
+                  <FormField
+                    label={getFieldLabelById(1, 'marriageDate', 'Marriage Date')}
+                    name="marriageDate"
+                    type="date"
+                    required={getFieldRequiredById(1, 'marriageDate', false)}
+                    formData={formData}
                     handleChange={handleChange}
                     min="1900-01-01"
                     max={todayStr}
@@ -4329,6 +4342,7 @@ function UserManagement() {
                       />
                       <label htmlFor="isPhysicallyChallenged" className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
                         {getFieldLabelById(1, 'isPhysicallyChallenged', 'Is Physically Challenged?')}
+                        {getFieldRequiredById(1, 'isPhysicallyChallenged', false) && <span className="text-red-500 ml-0.5">*</span>}
                       </label>
                     </div>
                     {showDetailsWhenChecked && (formData.isPhysicallyChallenged === true || formData.isPhysicallyChallenged === 'true') && (
@@ -4353,6 +4367,7 @@ function UserManagement() {
               <div className="col-span-full mt-4">
                 <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                   {getFieldLabelById(1, 'profileImage', 'Profile Image (Max 1MB)')}
+                  {getFieldRequiredById(1, 'profileImage', false) && <span className="text-red-500 ml-0.5">*</span>}
                 </label>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
                   Accepted formats: JPEG and PNG only
@@ -4523,6 +4538,7 @@ function UserManagement() {
                 <div>
                   <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                     {getFieldLabelById(12, 'secondaryContact', 'Secondary Contact')}
+                    {getFieldRequiredById(12, 'secondaryContact', false) && <span className="text-red-500 ml-0.5">*</span>}
                   </label>
                   <div className="flex items-center gap-2 w-full">
                     <div className="w-16">
@@ -4581,6 +4597,7 @@ function UserManagement() {
                         })
                       }}
                       maxLength={10}
+                      required={getFieldRequiredById(12, 'secondaryContact', false)}
                       onBlur={(e) => {
                         const value = e.target.value.trim()
                         if (value && value.length !== 10) {
@@ -4813,6 +4830,7 @@ function UserManagement() {
                     label={getFieldLabelById(16, 'aadhaarAddress.line2', 'Address Line 2')}
                     name="aadhaarAddress.line2"
                     type={getFieldTypeById(16, 'aadhaarAddress.line2', 'alphanumeric')}
+                    required={getFieldRequiredById(16, 'aadhaarAddress.line2', false)}
                     formData={formData}
                     handleChange={handleChange}
                     disabled={formData.aadhaarAddressOption === 'present' || formData.aadhaarAddressOption === 'permanent'}
@@ -5515,7 +5533,7 @@ function UserManagement() {
                     </div>
 
                     <div className="mt-4">
-                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(3, 'attachment', 'Attachment')}</label>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{getFieldLabelById(3, 'attachment', 'Attachment')} {getFieldRequiredById(3, 'attachment', false) && <span className="text-red-500">*</span>}</label>
                       {(() => {
                         const attachmentHelp = getFieldHelpTextById(3, 'attachment', '')
                         return attachmentHelp ? <p className="mt-0.5 mb-1.5 text-xs text-gray-500 dark:text-gray-400">{attachmentHelp}</p> : null
@@ -5524,6 +5542,7 @@ function UserManagement() {
                         <input
                           type="file"
                           accept=".pdf,application/pdf"
+                          required={getFieldRequiredById(3, 'attachment', false)}
                           onChange={(e) => {
                             const file = e.target.files[0]
                             if (file) {

@@ -283,6 +283,131 @@ const Timesheet = () => {
     return `${h} : ${String(m).padStart(2, '0')}`;
   };
 
+  // Handler to validate and format hours input
+  const handleHoursChange = (value) => {
+    // Remove any non-digit, non-space, non-colon characters
+    let cleaned = value.replace(/[^\d\s:]/g, '');
+    
+    // If empty, allow it (user might be clearing)
+    if (cleaned === '') {
+      setPopoverData({ ...popoverData, hours: '' });
+      return;
+    }
+
+    // Extract digits only for parsing
+    let digitsOnly = cleaned.replace(/\D/g, '');
+    
+    // Limit to 4 digits max (HMMM format - max 8 hours)
+    // If more than 4 digits, take only the first 4
+    if (digitsOnly.length > 4) {
+      digitsOnly = digitsOnly.slice(0, 4);
+    }
+
+    // Parse the input intelligently
+    let hours = '';
+    let minutes = '';
+    
+    if (digitsOnly.length === 0) {
+      setPopoverData({ ...popoverData, hours: '' });
+      return;
+    } else if (digitsOnly.length === 1) {
+      // Single digit: hours (0-8)
+      const h = parseInt(digitsOnly[0]);
+      if (h <= 8) {
+        hours = digitsOnly[0];
+      } else {
+        // Cap at 8
+        hours = '8';
+      }
+    } else if (digitsOnly.length === 2) {
+      // Two digits: interpret as H + M (hours 0-8, minutes 0-9)
+      const firstDigit = parseInt(digitsOnly[0]);
+      
+      if (firstDigit < 8) {
+        hours = digitsOnly[0];
+        minutes = digitsOnly[1];
+      } else if (firstDigit === 8) {
+        // If hours is 8, minutes must be 0
+        hours = '8';
+        minutes = '0';
+      } else {
+        // First digit > 8, cap hours at 8, minutes must be 0
+        hours = '8';
+        minutes = '0';
+      }
+    } else if (digitsOnly.length === 3) {
+      // Three digits: H + MM (hours 0-8, minutes 00-59)
+      const firstDigit = parseInt(digitsOnly[0]);
+      if (firstDigit < 8) {
+        hours = digitsOnly[0];
+        const lastTwo = parseInt(digitsOnly.slice(1, 3));
+        if (lastTwo <= 59) {
+          minutes = digitsOnly.slice(1, 3);
+        } else {
+          // Minutes exceeded 59, cap at 59
+          minutes = '59';
+        }
+      } else if (firstDigit === 8) {
+        // If hours is 8, minutes must be 00
+        hours = '8';
+        minutes = '00';
+      } else {
+        // Hours exceeded 8, cap at 8, minutes must be 00
+        hours = '8';
+        minutes = '00';
+      }
+    } else if (digitsOnly.length === 4) {
+      // Four digits: HMMM (hours 0-8, minutes 000-999 but cap at 59)
+      const firstDigit = parseInt(digitsOnly[0]);
+      if (firstDigit < 8) {
+        hours = digitsOnly[0];
+        const mins = parseInt(digitsOnly.slice(1, 4));
+        if (mins <= 59) {
+          minutes = String(mins).padStart(2, '0');
+        } else {
+          // Minutes exceeded 59, cap at 59
+          minutes = '59';
+        }
+      } else if (firstDigit === 8) {
+        // If hours is 8, minutes must be 00
+        hours = '8';
+        minutes = '00';
+      } else {
+        // Hours exceeded 8, cap at 8, minutes must be 00
+        hours = '8';
+        minutes = '00';
+      }
+    }
+
+    // Validate final hours value (0-8)
+    const finalHours = parseInt(hours);
+    if (finalHours > 8) {
+      hours = '8';
+    }
+
+    // If hours is 8, minutes must be 0 (max is 8:00)
+    if (finalHours === 8 && minutes !== '' && parseInt(minutes) > 0) {
+      minutes = '0';
+    }
+
+    // Format as "H : MM" or "8 : MM"
+    let formatted = '';
+    if (hours && minutes !== '') {
+      // Pad minutes to 2 digits
+      const paddedMinutes = String(minutes).padStart(2, '0');
+      formatted = `${hours} : ${paddedMinutes}`;
+    } else if (hours) {
+      // If hours is 8 and no minutes specified, default to "8 : 00"
+      if (finalHours === 8) {
+        formatted = '8 : 00';
+      } else {
+        formatted = hours;
+      }
+    }
+
+    setPopoverData({ ...popoverData, hours: formatted });
+  };
+
 
 
 
@@ -1784,11 +1909,12 @@ const Timesheet = () => {
                       <input
                         type="text"
                         value={popoverData.hours}
-                        onChange={(e) => setPopoverData({ ...popoverData, hours: e.target.value })}
+                        onChange={(e) => handleHoursChange(e.target.value)}
                         onFocus={(e) => e.target.select()}
                         className="w-full text-sm font-semibold border border-red-300 dark:border-red-900/50 rounded p-1.5 focus:ring-red-500 focus:border-red-500 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-600 transition-colors"
                         placeholder="0 : 00"
                         disabled={popoverData.leaveType === 'WO' || popoverData.leaveType === 'FL'}
+                        maxLength={7}
                       />
                     </div>
                   </div>
