@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react'
-import { FiUsers, FiSearch, FiMail, FiPhone, FiBriefcase, FiUser, FiX, FiFilter, FiCalendar, FiMapPin, FiCopy } from 'react-icons/fi'
+import React, { useState, useEffect, useRef } from 'react'
+import { FiUsers, FiSearch, FiMail, FiPhone, FiBriefcase, FiUser, FiX, FiCalendar, FiMapPin, FiCopy } from 'react-icons/fi'
 import axiosInstance from '../../../utils/axiosInstance'
 import { toast } from '../../../utils/toast'
 import LoadingSpinner from '../../common/LoadingSpinner'
@@ -12,11 +12,25 @@ const KnowYourEmployee = () => {
     const [filterRole, setFilterRole] = useState('all')
     const [filterDepartment, setFilterDepartment] = useState('all')
     const [selectedEmployee, setSelectedEmployee] = useState(null)
-    const [showFilters, setShowFilters] = useState(false)
+    const selectedIdRef = useRef(null)
 
     useEffect(() => {
         fetchEmployees()
     }, [])
+
+    const onSelectEmployee = (emp) => {
+        setSelectedEmployee(emp)
+        const id = emp._id
+        if (!id) return
+        selectedIdRef.current = id
+        axiosInstance.get(`/api/employees/${id}`)
+            .then(res => {
+                if (res.data.employee && selectedIdRef.current === id) {
+                    setSelectedEmployee(res.data.employee)
+                }
+            })
+            .catch(() => {})
+    }
 
     const fetchEmployees = async () => {
         try {
@@ -62,7 +76,7 @@ const KnowYourEmployee = () => {
     const uniqueDepartments = [...new Set(employees.map(emp => emp.department).filter(Boolean))].sort()
     const uniqueRoles = [...new Set(employees.map(emp => emp.role).filter(Boolean))].sort()
 
-    // Check if any filters or search is active
+    // Check if any filters or search is active (for clear button)
     const hasActiveFilters = searchQuery || filterRole !== 'all' || filterDepartment !== 'all'
 
     const formatDate = (date) => {
@@ -81,85 +95,60 @@ const KnowYourEmployee = () => {
 
     return (
         <div className="h-full flex flex-col overflow-hidden bg-gray-50 dark:bg-gray-950 p-4">
-            {/* Header - compact */}
+            {/* Header */}
             <div className="mb-3 flex-shrink-0">
                 <h1 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-3">
                     <FiUsers className="text-indigo-600 dark:text-indigo-400 w-5 h-5" />
                     Know Your Employee
                 </h1>
 
-                {/* Search Bar and Filter - compact */}
-                <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-800 shadow-sm">
-                    <div className="flex items-center gap-3 mb-0">
-                        <div className="relative flex-1">
-                            <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                            <input
-                                type="text"
-                                placeholder="Enter Emp. Name or ID"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
-                            />
-                        </div>
-                        <button
-                            onClick={() => setShowFilters(!showFilters)}
-                            className={`p-2.5 rounded-lg border transition-all ${
-                                showFilters || hasActiveFilters
-                                    ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300'
-                                    : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
-                            }`}
-                        >
-                            <FiFilter className="w-5 h-5" />
-                        </button>
+                {/* Sleek horizontal filter bar: search, role, department, search button */}
+                <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm min-w-[180px] max-w-[220px]">
+                        <FiSearch className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                        <input
+                            type="text"
+                            placeholder="Name or ID"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="flex-1 min-w-0 py-1.5 bg-transparent border-0 text-sm text-gray-900 dark:text-white placeholder-gray-500 focus:ring-0 focus:outline-none"
+                        />
                     </div>
-
-                    {/* Filter Options */}
-                    {showFilters && (
-                        <div className="pt-3 mt-3 border-t border-gray-200 dark:border-gray-700">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        Role
-                                    </label>
-                                    <select
-                                        value={filterRole}
-                                        onChange={(e) => setFilterRole(e.target.value)}
-                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                                    >
-                                        <option value="all">All Roles</option>
-                                        {uniqueRoles.map(role => (
-                                            <option key={role} value={role}>{role}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        Department
-                                    </label>
-                                    <select
-                                        value={filterDepartment}
-                                        onChange={(e) => setFilterDepartment(e.target.value)}
-                                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                                    >
-                                        <option value="all">All Departments</option>
-                                        {uniqueDepartments.map(dept => (
-                                            <option key={dept} value={dept}>{dept}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
-                            {(filterRole !== 'all' || filterDepartment !== 'all') && (
-                                <button
-                                    onClick={() => {
-                                        setFilterRole('all')
-                                        setFilterDepartment('all')
-                                    }}
-                                    className="mt-3 text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
-                                >
-                                    Clear filters
-                                </button>
-                            )}
-                        </div>
+                    <select
+                        value={filterRole}
+                        onChange={(e) => setFilterRole(e.target.value)}
+                        className="h-9 px-3 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent min-w-[120px]"
+                    >
+                        <option value="all">All Roles</option>
+                        {uniqueRoles.map(role => (
+                            <option key={role} value={role}>{role}</option>
+                        ))}
+                    </select>
+                    <select
+                        value={filterDepartment}
+                        onChange={(e) => setFilterDepartment(e.target.value)}
+                        className="h-9 px-3 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent min-w-[140px]"
+                    >
+                        <option value="all">All Departments</option>
+                        {uniqueDepartments.map(dept => (
+                            <option key={dept} value={dept}>{dept}</option>
+                        ))}
+                    </select>
+                    <button
+                        type="button"
+                        className="h-9 px-4 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium inline-flex items-center gap-2 transition-colors shadow-sm"
+                    >
+                        <FiSearch className="w-4 h-4" />
+                        Search
+                    </button>
+                    {hasActiveFilters && (
+                        <button
+                            type="button"
+                            onClick={() => { setSearchQuery(''); setFilterRole('all'); setFilterDepartment('all'); }}
+                            className="h-9 px-3 rounded-md text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        >
+                            Clear
+                        </button>
                     )}
                 </div>
             </div>
@@ -181,26 +170,28 @@ const KnowYourEmployee = () => {
                             </p>
                         </div>
                         <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4">
-                            {!hasActiveFilters ? (
-                                <div className="flex flex-col items-center justify-center h-full py-12 text-center">
-                                    <FiSearch className="h-12 w-12 text-gray-300 dark:text-gray-600 mb-3" />
-                                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                                        Search or use filters to see employees
-                                    </p>
-                                </div>
-                            ) : filteredEmployees.length === 0 ? (
+                            {filteredEmployees.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center py-12 text-center">
-                                    <FiUsers className="h-12 w-12 text-gray-300 dark:text-gray-600 mb-3" />
-                                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">No employees found</p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                        {searchQuery ? `No results match "${searchQuery}".` : 'No employees match the selected filters.'}
-                                    </p>
+                                    {employees.length === 0 ? (
+                                        <>
+                                            <FiSearch className="h-12 w-12 text-gray-300 dark:text-gray-600 mb-3" />
+                                            <p className="text-sm text-gray-500 dark:text-gray-400">No employees to display</p>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <FiUsers className="h-12 w-12 text-gray-300 dark:text-gray-600 mb-3" />
+                                            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">No employees found</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                {searchQuery ? `No results match "${searchQuery}".` : 'No employees match the selected filters.'}
+                                            </p>
+                                        </>
+                                    )}
                                 </div>
                             ) : (
                             filteredEmployees.map((emp) => (
                                 <div
                                     key={emp._id || emp.id}
-                                    onClick={() => setSelectedEmployee(emp)}
+                                    onClick={() => onSelectEmployee(emp)}
                                     className="px-4 py-3.5 border-b border-gray-100 dark:border-gray-800 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50 last:border-b-0"
                                 >
                                     <div className="flex items-center gap-3">
@@ -245,36 +236,36 @@ const KnowYourEmployee = () => {
                     {/* Right Panel - Employee Details: no scrollbar, compact fit in card */}
                     <div className="flex-1 min-w-0 w-full md:min-w-[320px] min-h-0 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 shadow-sm overflow-hidden flex flex-col">
                         {selectedEmployee ? (
-                            <div className="h-full p-6 flex flex-col overflow-hidden">
-                                {/* Profile - centered, larger avatar and text */}
-                                <div className="flex flex-col items-center mb-6 flex-shrink-0">
+                            <div className="h-full px-4 py-3 flex flex-col overflow-hidden">
+                                {/* Profile - compact avatar and text */}
+                                <div className="flex flex-col items-center mb-3 flex-shrink-0">
                                     {selectedEmployee.profileImage ? (
                                         <img
                                             src={getProfileImageUrl(selectedEmployee.profileImage, selectedEmployee._id || selectedEmployee.id)}
                                             alt={selectedEmployee.fullName || 'Employee'}
-                                            className="w-24 h-24 rounded-full object-cover border-2 border-gray-200 dark:border-gray-600 shadow-sm flex-shrink-0 mb-3"
+                                            className="w-14 h-14 rounded-full object-cover border-2 border-gray-200 dark:border-gray-600 shadow-sm flex-shrink-0 mb-2"
                                             onError={(e) => {
                                                 e.target.style.display = 'none'
                                                 const parent = e.target.parentElement
                                                 if (parent && !parent.querySelector('.avatar-fallback')) {
                                                     const fallback = document.createElement('div')
-                                                    fallback.className = 'avatar-fallback w-24 h-24 rounded-full bg-indigo-500 text-white flex items-center justify-center text-2xl font-bold flex-shrink-0 mb-3 shadow-sm'
+                                                    fallback.className = 'avatar-fallback w-14 h-14 rounded-full bg-indigo-500 text-white flex items-center justify-center text-lg font-bold flex-shrink-0 mb-2 shadow-sm'
                                                     fallback.textContent = (selectedEmployee.fullName || selectedEmployee.firstName || 'U').charAt(0).toUpperCase()
                                                     parent.appendChild(fallback)
                                                 }
                                             }}
                                         />
                                     ) : (
-                                        <div className="w-24 h-24 rounded-full bg-indigo-500 text-white flex items-center justify-center text-2xl font-bold flex-shrink-0 mb-3 shadow-sm">
+                                        <div className="w-14 h-14 rounded-full bg-indigo-500 text-white flex items-center justify-center text-lg font-bold flex-shrink-0 mb-2 shadow-sm">
                                             {(selectedEmployee.fullName || selectedEmployee.firstName || 'U').charAt(0).toUpperCase()}
                                         </div>
                                     )}
-                                    <h2 className="text-xl font-bold text-gray-900 dark:text-white text-center mb-1">
+                                    <h2 className="text-base font-bold text-gray-900 dark:text-white text-center mb-0.5">
                                         {selectedEmployee.fullName || `${selectedEmployee.firstName || ''} ${selectedEmployee.lastName || ''}`.trim() || 'Unknown'}
                                     </h2>
                                     {selectedEmployee.employeeId && (
-                                        <div className="flex items-center justify-center gap-1.5 mb-2">
-                                            <p className="text-sm text-gray-500 dark:text-gray-400">#{selectedEmployee.employeeId}</p>
+                                        <div className="flex items-center justify-center gap-1.5 mb-1">
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">#{selectedEmployee.employeeId}</p>
                                             <button
                                                 type="button"
                                                 onClick={() => copyToClipboard(selectedEmployee.employeeId, 'Employee ID')}
@@ -287,64 +278,64 @@ const KnowYourEmployee = () => {
                                     )}
                                 </div>
 
-                                {/* Details - modern 2-col: label | value, larger text */}
-                                <div className="flex-1 min-h-0 flex flex-col gap-3 overflow-hidden">
+                                {/* Details - compact, no scroll */}
+                                <div className="flex-1 min-h-0 flex flex-col gap-1 overflow-hidden">
                                     {(selectedEmployee.officialEmail || selectedEmployee.email) && (
-                                        <div className="flex justify-between items-start gap-4 py-2 border-b border-gray-100 dark:border-gray-700/60">
-                                            <span className="text-sm text-gray-500 dark:text-gray-400 font-medium shrink-0">Email</span>
-                                            <div className="flex items-center gap-2 min-w-0">
-                                                <span className="text-sm font-semibold text-gray-900 dark:text-white text-right break-all truncate">{selectedEmployee.officialEmail || selectedEmployee.email}</span>
+                                        <div className="flex justify-between items-start gap-2 py-1.5 border-b border-gray-100 dark:border-gray-700/60">
+                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-medium shrink-0">Email</span>
+                                            <div className="flex items-center gap-1 min-w-0">
+                                                <span className="text-xs font-semibold text-gray-900 dark:text-white text-right break-all truncate">{selectedEmployee.officialEmail || selectedEmployee.email}</span>
                                                 <button
                                                     type="button"
                                                     onClick={() => copyToClipboard(selectedEmployee.officialEmail || selectedEmployee.email, 'Email')}
-                                                    className="flex-shrink-0 p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                                                    className="flex-shrink-0 p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 transition-colors"
                                                     title="Copy email"
                                                 >
-                                                    <FiCopy className="w-3.5 h-3.5" />
+                                                    <FiCopy className="w-3 h-3" />
                                                 </button>
                                             </div>
                                         </div>
                                     )}
                                     {selectedEmployee.phone && (
-                                        <div className="flex justify-between items-center gap-4 py-2 border-b border-gray-100 dark:border-gray-700/60">
-                                            <span className="text-sm text-gray-500 dark:text-gray-400 font-medium shrink-0">Phone</span>
-                                            <span className="text-sm font-semibold text-gray-900 dark:text-white text-right">{selectedEmployee.phone}</span>
+                                        <div className="flex justify-between items-center gap-2 py-1.5 border-b border-gray-100 dark:border-gray-700/60">
+                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-medium shrink-0">Phone</span>
+                                            <span className="text-xs font-semibold text-gray-900 dark:text-white text-right">{selectedEmployee.phone}</span>
                                         </div>
                                     )}
-                                    {selectedEmployee.dateOfBirth && (
-                                        <div className="flex justify-between items-center gap-4 py-2 border-b border-gray-100 dark:border-gray-700/60">
-                                            <span className="text-sm text-gray-500 dark:text-gray-400 font-medium shrink-0">DOB</span>
-                                            <span className="text-sm font-semibold text-gray-900 dark:text-white text-right">{formatDate(selectedEmployee.dateOfBirth)}</span>
+                                    {(selectedEmployee.dateOfBirth || selectedEmployee.birthdayDate) && (
+                                        <div className="flex justify-between items-center gap-2 py-1.5 border-b border-gray-100 dark:border-gray-700/60">
+                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-medium shrink-0">DOB</span>
+                                            <span className="text-xs font-semibold text-gray-900 dark:text-white text-right">{formatDate(selectedEmployee.dateOfBirth || selectedEmployee.birthdayDate)}</span>
                                         </div>
                                     )}
-                                    {selectedEmployee.designation && (
-                                        <div className="flex justify-between items-start gap-4 py-2 border-b border-gray-100 dark:border-gray-700/60">
-                                            <span className="text-sm text-gray-500 dark:text-gray-400 font-medium shrink-0">Designation</span>
-                                            <span className="text-sm font-semibold text-gray-900 dark:text-white text-right">{selectedEmployee.designation}</span>
-                                        </div>
-                                    )}
+                                    <div className="flex justify-between items-start gap-2 py-1.5 border-b border-gray-100 dark:border-gray-700/60">
+                                        <span className="text-xs text-gray-500 dark:text-gray-400 font-medium shrink-0">Designation</span>
+                                        <span className="text-xs font-semibold text-gray-900 dark:text-white text-right">
+                                            {String(selectedEmployee.designation ?? '').trim()}
+                                        </span>
+                                    </div>
                                     {selectedEmployee.department && (
-                                        <div className="flex justify-between items-center gap-4 py-2 border-b border-gray-100 dark:border-gray-700/60">
-                                            <span className="text-sm text-gray-500 dark:text-gray-400 font-medium shrink-0">Department</span>
-                                            <span className="text-sm font-semibold text-gray-900 dark:text-white text-right">{selectedEmployee.department}</span>
+                                        <div className="flex justify-between items-center gap-2 py-1.5 border-b border-gray-100 dark:border-gray-700/60">
+                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-medium shrink-0">Department</span>
+                                            <span className="text-xs font-semibold text-gray-900 dark:text-white text-right">{selectedEmployee.department}</span>
                                         </div>
                                     )}
                                     {selectedEmployee.location && (
-                                        <div className="flex justify-between items-center gap-4 py-2 border-b border-gray-100 dark:border-gray-700/60">
-                                            <span className="text-sm text-gray-500 dark:text-gray-400 font-medium shrink-0">Location</span>
-                                            <span className="text-sm font-semibold text-gray-900 dark:text-white text-right">{selectedEmployee.location}</span>
+                                        <div className="flex justify-between items-center gap-2 py-1.5 border-b border-gray-100 dark:border-gray-700/60">
+                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-medium shrink-0">Location</span>
+                                            <span className="text-xs font-semibold text-gray-900 dark:text-white text-right">{selectedEmployee.location}</span>
                                         </div>
                                     )}
                                     {selectedEmployee.joiningDate && (
-                                        <div className="flex justify-between items-center gap-4 py-2 border-b border-gray-100 dark:border-gray-700/60">
-                                            <span className="text-sm text-gray-500 dark:text-gray-400 font-medium shrink-0">Joining</span>
-                                            <span className="text-sm font-semibold text-gray-900 dark:text-white text-right">{formatDate(selectedEmployee.joiningDate)}</span>
+                                        <div className="flex justify-between items-center gap-2 py-1.5 border-b border-gray-100 dark:border-gray-700/60">
+                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-medium shrink-0">Joining</span>
+                                            <span className="text-xs font-semibold text-gray-900 dark:text-white text-right">{formatDate(selectedEmployee.joiningDate)}</span>
                                         </div>
                                     )}
                                     {selectedEmployee.extensionNumber && (
-                                        <div className="flex justify-between items-center gap-4 py-2 border-b border-gray-100 dark:border-gray-700/60">
-                                            <span className="text-sm text-gray-500 dark:text-gray-400 font-medium shrink-0">Ext</span>
-                                            <span className="text-sm font-semibold text-gray-900 dark:text-white text-right">{selectedEmployee.extensionNumber}</span>
+                                        <div className="flex justify-between items-center gap-2 py-1.5 border-b border-gray-100 dark:border-gray-700/60">
+                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-medium shrink-0">Ext</span>
+                                            <span className="text-xs font-semibold text-gray-900 dark:text-white text-right">{selectedEmployee.extensionNumber}</span>
                                         </div>
                                     )}
                                 </div>

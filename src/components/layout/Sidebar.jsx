@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { menuItems } from '../../config/menuConfig.js'
+import { menuItems } from '../../config/menuConfig.jsx'
 import { filterMenuByRoleSync } from '../../utils/menuUtils.js'
 import { FiChevronDown, FiChevronRight, FiChevronLeft, FiMenu, FiX } from 'react-icons/fi'
 import { useAuth } from '../../context/AuthContext'

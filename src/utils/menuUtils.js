@@ -1,4 +1,4 @@
-import { roleMapping, menuItems as allMenuItems } from '../config/menuConfig.js'
+import { roleMapping, menuItems as allMenuItems } from '../config/menuConfig.jsx'
 import axiosInstance from './axiosInstance'
 import { 
   FiHome, FiUser, FiUserCheck, FiClock, FiCalendar, FiUsers, FiCheckCircle, 
