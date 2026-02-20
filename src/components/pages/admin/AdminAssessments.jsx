@@ -62,14 +62,20 @@ const AdminAssessments = () => {
 
   // Knowledge base tab state
   const [knowledgeItems, setKnowledgeItems] = useState([])
+  const [knowledgeModules, setKnowledgeModules] = useState([])
   const [showAddKnowledge, setShowAddKnowledge] = useState(false)
-  const [newKnowledge, setNewKnowledge] = useState({ title: '', content: '', file: null })
+  const [newKnowledge, setNewKnowledge] = useState({ moduleId: '', title: '', file: null })
+  const [knowledgeFilterModule, setKnowledgeFilterModule] = useState('')
+  const [uploadingNote, setUploadingNote] = useState(false)
 
   useEffect(() => {
     // Fetch data when tab changes
     if (activeTab === 'approvals') fetchApprovals()
     if (activeTab === 'modules') fetchModules()
-    if (activeTab === 'knowledge') fetchKnowledgeBase()
+    if (activeTab === 'knowledge') {
+      fetchKnowledgeBase()
+      fetchModulesForKnowledge()
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch functions are stable, avoid refetch loops
   }, [activeTab])
 
@@ -140,10 +146,23 @@ const AdminAssessments = () => {
     }
   }
 
-  const fetchKnowledgeBase = async () => {
+  const fetchModulesForKnowledge = async () => {
+    try {
+      const res = await axiosInstance.get('/api/assessments/modules').catch(() => ({ data: { modules: [] } }))
+      setKnowledgeModules(res.data?.modules || [])
+    } catch {
+      setKnowledgeModules([])
+    }
+  }
+
+  const fetchKnowledgeBase = async (moduleIdFilter) => {
     try {
       setLoading(true)
-      const res = await axiosInstance.get('/api/assessments/knowledge-base').catch(() => ({ data: { items: [] } }))
+      const filter = moduleIdFilter !== undefined ? moduleIdFilter : knowledgeFilterModule
+      const url = filter
+        ? `/api/assessments/knowledge-base?moduleId=${filter}`
+        : '/api/assessments/knowledge-base'
+      const res = await axiosInstance.get(url).catch(() => ({ data: { items: [] } }))
       setKnowledgeItems(res.data?.items || [])
     } catch {
       setKnowledgeItems([])
@@ -240,28 +259,43 @@ const AdminAssessments = () => {
   }
 
   const handleAddKnowledge = async () => {
-    if (!newKnowledge.title.trim()) {
-      toast.error('Title is required')
+    if (!newKnowledge.moduleId) {
+      toast.error('Please select a module')
+      return
+    }
+    if (!newKnowledge.file) {
+      toast.error('Please select a file (PDF, DOC, DOCX, or TXT)')
       return
     }
     try {
+      setUploadingNote(true)
       const formData = new FormData()
-      formData.append('title', newKnowledge.title)
-      formData.append('content', newKnowledge.content)
-      if (newKnowledge.file) formData.append('file', newKnowledge.file)
-      await axiosInstance.post('/api/assessments/knowledge-base', formData, {
-        headers: newKnowledge.file ? { 'Content-Type': 'multipart/form-data' } : {}
-      }).catch(() => ({
-        data: { item: { id: Date.now(), title: newKnowledge.title, content: newKnowledge.content } }
-      }))
-      setKnowledgeItems(prev => [...prev, { id: Date.now(), title: newKnowledge.title, content: newKnowledge.content }])
-      setNewKnowledge({ title: '', content: '', file: null })
+      formData.append('moduleId', newKnowledge.moduleId)
+      formData.append('title', newKnowledge.title.trim() || newKnowledge.file.name)
+      formData.append('file', newKnowledge.file)
+      const res = await axiosInstance.post('/api/assessments/knowledge-base', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+      const item = res.data?.item
+      if (item) setKnowledgeItems(prev => [item, ...prev])
+      setNewKnowledge({ moduleId: '', title: '', file: null })
       setShowAddKnowledge(false)
-      toast.success('Knowledge item added')
-    } catch {
-      setKnowledgeItems(prev => [...prev, { id: Date.now(), title: newKnowledge.title, content: newKnowledge.content }])
-      setShowAddKnowledge(false)
-      toast.success('Knowledge item added')
+      toast.success('Note uploaded')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Upload failed')
+    } finally {
+      setUploadingNote(false)
+    }
+  }
+
+  const handleDeleteKnowledge = async (item) => {
+    if (!window.confirm(`Delete "${item.title || item.fileName}"?`)) return
+    try {
+      await axiosInstance.delete(`/api/assessments/knowledge-base/${item._id || item.id}`)
+      setKnowledgeItems(prev => prev.filter(k => (k._id || k.id) !== (item._id || item.id)))
+      toast.success('Note deleted')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to delete')
     }
   }
 
@@ -582,27 +616,67 @@ const AdminAssessments = () => {
             {/* Knowledge Base Tab */}
             {activeTab === 'knowledge' && (
               <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-                  <h3 className="font-semibold text-gray-900 dark:text-gray-100">Knowledge Base</h3>
-                  <button
-                    onClick={() => setShowAddKnowledge(true)}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white rounded-md text-sm"
-                  >
-                    <FiPlus className="w-4 h-4" /> Add
-                  </button>
+                <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex flex-wrap justify-between items-center gap-3">
+                  <h3 className="font-semibold text-gray-900 dark:text-gray-100">Knowledge Base — Notes by Module</h3>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <select
+                      value={knowledgeFilterModule}
+                      onChange={e => {
+                        setKnowledgeFilterModule(e.target.value)
+                        fetchKnowledgeBase(e.target.value)
+                      }}
+                      className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm"
+                    >
+                      <option value="">All modules</option>
+                      {knowledgeModules.map(mod => (
+                        <option key={mod._id || mod.id} value={mod._id || mod.id}>{mod.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => setShowAddKnowledge(true)}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white rounded-md text-sm"
+                    >
+                      <FiPlus className="w-4 h-4" /> Upload note
+                    </button>
+                  </div>
                 </div>
                 <div className="p-4">
                   {knowledgeItems.length === 0 ? (
-                    <p className="text-gray-500 dark:text-gray-400 text-center py-12">No knowledge base items yet.</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-center py-12">No notes yet. Upload a document (PDF, DOC, DOCX, TXT) for a module.</p>
                   ) : (
                     <div className="space-y-3">
                       {knowledgeItems.map(item => (
                         <div
                           key={item.id || item._id}
-                          className="p-4 rounded-lg border border-gray-200 dark:border-gray-700"
+                          className="p-4 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-wrap items-center justify-between gap-3"
                         >
-                          <h4 className="font-medium text-gray-900 dark:text-gray-100">{item.title}</h4>
-                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{item.content || '—'}</p>
+                          <div className="flex items-center gap-3 min-w-0">
+                            <FiFileText className="w-5 h-5 text-indigo-500 flex-shrink-0" />
+                            <div className="min-w-0">
+                              <h4 className="font-medium text-gray-900 dark:text-gray-100 truncate">{item.title || item.fileName}</h4>
+                              <p className="text-sm text-gray-500 dark:text-gray-400">
+                                {item.moduleName ? <span className="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 px-1.5 py-0.5 rounded text-xs mr-2">{item.moduleName}</span> : null}
+                                {item.fileName}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <a
+                              href={`${axiosInstance.defaults.baseURL || ''}/api/assessments/knowledge-base/${item._id || item.id}/download`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-2 py-1.5 text-indigo-600 dark:text-indigo-400 hover:underline text-sm"
+                            >
+                              View / Download
+                            </a>
+                            <button
+                              onClick={() => handleDeleteKnowledge(item)}
+                              className="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400"
+                              title="Delete"
+                            >
+                              <FiTrash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -691,41 +765,48 @@ const AdminAssessments = () => {
       {showAddKnowledge && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Add Knowledge Base Item</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Upload Note (by Module)</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Title</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Module *</label>
+                <select
+                  value={newKnowledge.moduleId}
+                  onChange={e => setNewKnowledge(k => ({ ...k, moduleId: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                >
+                  <option value="">Select module</option>
+                  {knowledgeModules.map(mod => (
+                    <option key={mod._id || mod.id} value={mod._id || mod.id}>{mod.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Title (optional)</label>
                 <input
                   type="text"
                   value={newKnowledge.title}
                   onChange={e => setNewKnowledge(k => ({ ...k, title: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                  placeholder="Title"
+                  placeholder="Display name (defaults to file name)"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Content</label>
-                <textarea
-                  rows={4}
-                  value={newKnowledge.content}
-                  onChange={e => setNewKnowledge(k => ({ ...k, content: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                  placeholder="Content or description"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Attachment (optional)</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Document * (PDF, DOC, DOCX, TXT)</label>
                 <input
                   type="file"
-                  accept=".pdf,.docx"
+                  accept=".pdf,.doc,.docx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
                   onChange={e => setNewKnowledge(k => ({ ...k, file: e.target.files?.[0] || null }))}
-                  className="w-full text-sm"
+                  className="w-full text-sm text-gray-600 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-indigo-50 file:text-indigo-600 dark:file:bg-indigo-900/30 dark:file:text-indigo-400"
                 />
               </div>
             </div>
             <div className="flex gap-2 mt-6">
-              <button onClick={handleAddKnowledge} className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md font-medium">
-                Add
+              <button
+                onClick={handleAddKnowledge}
+                disabled={uploadingNote || !newKnowledge.moduleId || !newKnowledge.file}
+                className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md font-medium disabled:opacity-50"
+              >
+                {uploadingNote ? 'Uploading…' : 'Upload'}
               </button>
               <button onClick={() => setShowAddKnowledge(false)} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md">
                 Cancel
