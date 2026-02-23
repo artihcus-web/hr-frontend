@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { flushSync } from 'react-dom'
 import axiosInstance from '../utils/axiosInstance'
 import { filterMenuByRole, clearMenuConfigCache } from '../utils/menuUtils'
 
@@ -24,16 +25,14 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     localStorage.removeItem('token')
     localStorage.removeItem('user')
-    // Clear any redirect parameters from URL
-    if (typeof window !== 'undefined') {
-      const url = new URL(window.location.href)
-      url.searchParams.delete('redirect')
-      window.history.replaceState({}, '', url.toString())
-    }
     setToken(null)
     setUser(null)
     setMenuConfig(null)
     clearMenuConfigCache()
+    // Force full page reload for every user (admin, employee, HR, etc.) so next login has no stale cache/state
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login'
+    }
   }
 
   // Fetch menu config for user role
@@ -126,8 +125,11 @@ export const AuthProvider = ({ children }) => {
     console.log('[AuthContext] login called:', { hasUser: !!userData, profileImage: userData?.profileImage, _id: userData?._id })
     localStorage.setItem('token', newToken)
     localStorage.setItem('user', JSON.stringify(userData))
-    setToken(newToken)
-    setUser(userData)
+    // Flush state so redirect/navigation sees the new user (avoids employee seeing admin dashboard after admin logout)
+    flushSync(() => {
+      setToken(newToken)
+      setUser(userData)
+    })
     
     // Fetch menu config BEFORE login completes - wait for it to finish
     // This ensures everything is loaded before navigation

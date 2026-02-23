@@ -35,9 +35,13 @@ function Login() {
 
       toast.success('Login successful! Welcome back.')
 
+      // Set token and user in storage immediately so /me and any other request use the new session (avoids stale cache)
+      if (data.token) localStorage.setItem('token', data.token)
+      if (data.user) localStorage.setItem('user', JSON.stringify(data.user))
+
       console.log('[Login] API response user:', { hasUser: !!data.user, profileImage: data.user?.profileImage, _id: data.user?._id, id: data.user?.id })
 
-      // Step 2: Fetch /me to get full user data with profileImage
+      // Step 2: Fetch /me to get full user data with profileImage (uses new token from storage)
       let finalUser = data.user
       try {
         const meRes = await axiosInstance.get('/api/auth/me')
