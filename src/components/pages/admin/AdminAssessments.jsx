@@ -104,7 +104,6 @@ const AdminAssessments = () => {
       setQuestions([])
       setTestSettings(defaultTestSettings)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, selectedTest])
 
   const fetchApprovals = async () => {
