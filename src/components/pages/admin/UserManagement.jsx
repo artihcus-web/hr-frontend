@@ -1,8 +1,9 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react'
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../context/AuthContext'
 import { FiEdit2, FiTrash2, FiUpload, FiX, FiSearch, FiFilter, FiDownload, FiChevronDown, FiChevronUp, FiSave, FiPlus, FiMoreVertical, FiEye } from 'react-icons/fi'
 import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs'
 import toast from '../../../utils/toast'
 import { countryCodes } from '../../../utils/countryCodes'
 import axiosInstance from '../../../utils/axiosInstance'
@@ -1230,6 +1231,49 @@ function UserManagement() {
     [getFieldConfig]
   )
 
+  // Schema-driven Excel import: build column label -> field name mapping and type/required from form config
+  const excelImportFromSchema = useMemo(() => {
+    if (!employeeFormConfig?.sections) return { mapping: {}, fieldTypes: {}, requiredFieldNames: [] }
+    const mapping = {}
+    const fieldTypes = {}
+    const requiredFieldNames = []
+    const normalizeKey = (s) => (s && String(s).toLowerCase().replace(/\s+/g, '').trim()) || ''
+    employeeFormConfig.sections.forEach((section) => {
+      (section.fields || []).forEach((field) => {
+        if (field.isActive === false) return
+        const name = field.name
+        const label = (field.label && String(field.label).trim()) || name
+        if (!name) return
+        fieldTypes[name] = (field.type && String(field.type).toLowerCase()) || 'text'
+        if (field.required === true || field.required === 'true' || field.required === 1) {
+          requiredFieldNames.push(name)
+        }
+        mapping[label] = name
+        mapping[label + ' *'] = name
+        mapping[label.trim()] = name
+        const norm = normalizeKey(label)
+        if (norm) mapping[norm] = name
+      })
+    })
+    return { mapping, fieldTypes, requiredFieldNames }
+  }, [employeeFormConfig])
+
+  // Schema-driven export: ordered list of { key: fieldName, header: label } for Excel columns
+  const exportColumnsFromSchema = useMemo(() => {
+    if (!employeeFormConfig?.sections) return []
+    const cols = []
+    employeeFormConfig.sections.forEach((section) => {
+      (section.fields || []).forEach((field) => {
+        if (field.isActive === false) return
+        const name = field.name
+        const label = (field.label && String(field.label).trim()) || name
+        if (!name) return
+        cols.push({ key: name, header: label })
+      })
+    })
+    return cols
+  }, [employeeFormConfig])
+
   // Map numeric sectionId to schema section key
   const getSectionKey = useCallback((sectionId) => {
     const mapping = {
@@ -2329,10 +2373,10 @@ function UserManagement() {
             return
           }
 
-          // Map Excel columns to form fields
-          const mapExcelRowToEmployee = (row) => {
-            // Common column name mappings
-            const mapping = {
+          // Map Excel columns to form fields (schema-driven + legacy fallback)
+          const schemaMapping = excelImportFromSchema.mapping || {}
+          const schemaFieldTypes = excelImportFromSchema.fieldTypes || {}
+          const legacyMapping = {
               'First Name': 'firstName',
               'First Name *': 'firstName', // Handle asterisk
               'FirstName': 'firstName',
@@ -2399,6 +2443,7 @@ function UserManagement() {
               'Marriage Date': 'marriageDate',
               'Blood Group': 'bloodGroup',
               'Is Physically Challenged': 'isPhysicallyChallenged',
+              'Physically Challenged': 'isPhysicallyChallenged',
               'Is International Employee': 'isInternationalEmployee',
               'Is International Employee *': 'isInternationalEmployee', // Handle asterisk
               'Country of Origin': 'countryOfOrigin',
@@ -2406,6 +2451,18 @@ function UserManagement() {
               'Emergency Contact Name': 'emergencyContactName',
               'Present Address': 'presentAddress',
               'Permanent Address': 'permanentAddress',
+              'Present Address Line 1': 'presentAddress.line1',
+              'Present Address Line 2': 'presentAddress.line2',
+              'City': 'presentAddress.district',
+              'State/Province/Region': 'presentAddress.state',
+              'ZIP/Postal Code': 'presentAddress.pincode',
+              'Country': 'presentAddress.country',
+              'Permanent Address Line 1': 'permanentAddress.line1',
+              'Permanent Address Line 2': 'permanentAddress.line2',
+              'Permanent City': 'permanentAddress.district',
+              'Permanent State/Province/Region': 'permanentAddress.state',
+              'Permanent ZIP/Postal Code': 'permanentAddress.pincode',
+              'Permanent Country': 'permanentAddress.country',
               'Father\'s Name': 'fathersName',
               'Spouse Name': 'spouseName',
               'IP Address': 'ipAddress',
@@ -2415,14 +2472,39 @@ function UserManagement() {
               'Super Manager ID': 'superManagerId',
               'Super Manager ID *': 'superManagerId', // Handle asterisk
               'Probation Period': 'probationPeriod',
+              'Probation Period (days)': 'probationPeriod',
               'Notice Period': 'noticePeriod',
               'Division': 'division',
               'Cost Center': 'costCenter',
               'Grade': 'grade',
 
-              // Professional
+              // Professional / Education (flat columns → build education[] in post-step)
+              'Institute': 'institute',
+              'Institute Name': 'institute',
+              'Degree': 'degree',
+              'Degree / Qualification': 'degree',
+              'Percentage': 'percentage',
+              'Percentage / CGPA': 'percentage',
+              'Education From Date': 'educationFromDate',
+              'Education To Date': 'educationToDate',
+              'Education From': 'educationFromDate',
+              'Education To': 'educationToDate',
               'Education': 'education',
               'Experience': 'experience',
+              'Organization': 'organization',
+              'Experience Designation': 'experienceDesignation',
+              'Position / Designation': 'experienceDesignation',
+              'Position': 'experienceDesignation',
+              'Experience From Date': 'experienceFromDate',
+              'Experience To Date': 'experienceToDate',
+              'Experience From': 'experienceFromDate',
+              'Experience To': 'experienceToDate',
+              'Family Member Name': 'familyMemberName',
+              'Family Name': 'familyMemberName',
+              'Relationship': 'relation',
+              'Relation': 'relation',
+              'Family DOB': 'familyDob',
+              'Member DOB': 'familyDob',
               'Skills': 'skills',
               'Salary': 'salary',
 
@@ -2469,20 +2551,91 @@ function UserManagement() {
               'Is Employee Eligible for ESI': 'isEligibleForESI',
               'ESI Number': 'esiNumber',
               'Is Covered Under LWF': 'isCoveredUnderLWF'
-            }
+          }
+          const mergedMapping = { ...legacyMapping, ...schemaMapping }
 
+            const mapExcelRowToEmployee = (row) => {
             const employee = {}
 
-            // Map each column
+            // Map each column (schema + legacy; new schema fields automatically supported)
             Object.keys(row).forEach(key => {
               const normalizedKey = key.trim()
-              const fieldName = mapping[normalizedKey] || normalizedKey.toLowerCase().replace(/\s+/g, '')
+              const fieldName = mergedMapping[normalizedKey] || mergedMapping[normalizedKey + ' *'] || normalizedKey.toLowerCase().replace(/\s+/g, '')
 
-              // Only include if it's a valid field
               if (fieldName && row[key] !== undefined && row[key] !== null && row[key] !== '') {
-                employee[fieldName] = row[key]
+                let value = row[key]
+                const fieldType = schemaFieldTypes[fieldName]
+                if (fieldType === 'checkbox' || fieldType === 'boolean') {
+                  const v = String(value).toLowerCase().trim()
+                  value = (v === 'yes' || v === 'true' || v === '1')
+                } else if (fieldType === 'number') {
+                  const n = Number(value)
+                  if (!isNaN(n)) value = n
+                } else if (fieldType === 'date' && value) {
+                  const d = new Date(value)
+                  if (!isNaN(d.getTime())) value = d.toISOString ? d.toISOString().split('T')[0] : value
+                }
+                employee[fieldName] = value
               }
             })
+
+            // Build education[] from flat columns (Institute, Degree, Education From/To, etc.)
+            if (employee.institute != null || employee.degree != null || employee.educationFromDate != null || employee.educationToDate != null || employee.percentage != null) {
+              const parseDateStr = (v) => {
+                if (v == null || v === '') return null
+                const d = new Date(v)
+                return isNaN(d.getTime()) ? null : (d.toISOString ? d.toISOString().split('T')[0] : v)
+              }
+              employee.education = [{
+                institute: employee.institute != null ? String(employee.institute).trim() : '',
+                degree: employee.degree != null ? String(employee.degree).trim() : '',
+                percentage: employee.percentage != null ? String(employee.percentage).trim() : '',
+                fromDate: parseDateStr(employee.educationFromDate),
+                toDate: parseDateStr(employee.educationToDate)
+              }]
+              delete employee.institute
+              delete employee.degree
+              delete employee.percentage
+              delete employee.educationFromDate
+              delete employee.educationToDate
+            }
+
+            // Build experience[] from flat columns (Organization, Position, Experience From/To)
+            if (employee.organization != null || employee.experienceDesignation != null || employee.experienceFromDate != null || employee.experienceToDate != null) {
+              const parseDateStr = (v) => {
+                if (v == null || v === '') return null
+                const d = new Date(v)
+                return isNaN(d.getTime()) ? null : (d.toISOString ? d.toISOString().split('T')[0] : v)
+              }
+              employee.experience = [{
+                organization: employee.organization != null ? String(employee.organization).trim() : '',
+                designation: employee.experienceDesignation != null ? String(employee.experienceDesignation).trim() : '',
+                fromDate: parseDateStr(employee.experienceFromDate),
+                toDate: parseDateStr(employee.experienceToDate),
+                attachments: []
+              }]
+              delete employee.organization
+              delete employee.experienceDesignation
+              delete employee.experienceFromDate
+              delete employee.experienceToDate
+            }
+
+            // Build familyDetails[] from flat columns (Family Member Name, Relation, Family DOB)
+            if (employee.familyMemberName != null || employee.relation != null || employee.familyDob != null) {
+              const parseDateStr = (v) => {
+                if (v == null || v === '') return null
+                const d = new Date(v)
+                return isNaN(d.getTime()) ? null : (d.toISOString ? d.toISOString().split('T')[0] : v)
+              }
+              employee.familyDetails = [{
+                name: employee.familyMemberName != null ? String(employee.familyMemberName).trim() : '',
+                relation: employee.relation != null ? String(employee.relation).trim() : '',
+                dob: parseDateStr(employee.familyDob)
+              }]
+              delete employee.familyMemberName
+              delete employee.relation
+              delete employee.familyDob
+            }
 
             // Handle special fields
             if (employee.childrenDobs && typeof employee.childrenDobs === 'string') {
@@ -2542,6 +2695,15 @@ function UserManagement() {
             if (!employee.officialEmail && employee.email) {
               employee.officialEmail = employee.email
             }
+
+            // Normalize select/dropdown values so they match schema options and display correctly
+            if (employee.employeeStatus != null && employee.employeeStatus !== '') {
+              const s = String(employee.employeeStatus).trim().toLowerCase()
+              employee.employeeStatus = s === 'inactive' ? 'Inactive' : 'Active'
+            }
+            if (employee.role != null && employee.role !== '') {
+              employee.role = String(employee.role).trim().toLowerCase()
+            }
             
             // Ensure required fields
             if (!employee.firstName) employee.firstName = ''
@@ -2553,6 +2715,20 @@ function UserManagement() {
               // Generate default password if not provided
               employee.password = `Temp${employee.employeeId || 'Pass'}123!`
             }
+
+            // Expand dotted keys (e.g. presentAddress.line1) into nested objects for API
+            const dottedKeys = Object.keys(employee).filter(k => typeof k === 'string' && k.includes('.') && !Array.isArray(employee[k]))
+            dottedKeys.forEach(key => {
+              const parts = key.split('.')
+              let target = employee
+              for (let i = 0; i < parts.length - 1; i++) {
+                const p = parts[i]
+                if (!target[p] || typeof target[p] !== 'object') target[p] = {}
+                target = target[p]
+              }
+              target[parts[parts.length - 1]] = employee[key]
+              delete employee[key]
+            })
 
             return employee
           }
@@ -2649,12 +2825,27 @@ function UserManagement() {
     }
   }
 
-  // Helper to format employee for export
+  // Helper to format employee for export (schema-driven: columns = field labels so export matches import)
   const formatEmployeeForExport = (emp) => {
-    // Clone and remove sensitive/internal fields
+    const formatVal = (val, key) => {
+      if (val == null || val === '') return ''
+      if (Array.isArray(val)) return val.map(v => (typeof v === 'object' && v !== null ? JSON.stringify(v) : v)).join('; ')
+      if (key === 'dateOfBirth' || key === 'birthdayDate' || key === 'joiningDate' || key === 'marriageDate' || key === 'spouseDob' || (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}/.test(val))) {
+        const d = new Date(val)
+        return isNaN(d.getTime()) ? val : d.toLocaleDateString()
+      }
+      return val
+    }
+    if (exportColumnsFromSchema.length > 0) {
+      const row = {}
+      exportColumnsFromSchema.forEach(({ key, header }) => {
+        let val = emp[key]
+        if (typeof emp[key] === 'object' && emp[key] !== null && !Array.isArray(emp[key]) && !(emp[key] instanceof Date)) val = undefined
+        row[header] = formatVal(val, key)
+      })
+      return row
+    }
     const { _id, id: _unusedId, __v, password: _unusedPassword, profileImage: _unusedProfileImage, ...rest } = emp
-
-    // Flatten or format specific fields if needed
     return {
       ...rest,
       dateOfBirth: emp.dateOfBirth ? new Date(emp.dateOfBirth).toLocaleDateString() : '',
@@ -2698,6 +2889,42 @@ function UserManagement() {
       console.error('Export failed:', err)
       toast.error('Failed to export data')
     }
+  }
+
+  // Download Excel import template (headers from schema; required fields get * in header; styled header row)
+  const handleDownloadImportTemplate = async () => {
+    const requiredSet = new Set(excelImportFromSchema.requiredFieldNames || [])
+    const cols = exportColumnsFromSchema.length > 0 ? exportColumnsFromSchema : [
+      { key: 'firstName', header: 'First Name' }, { key: 'lastName', header: 'Last Name' },
+      { key: 'officialEmail', header: 'Official Email ID' }, { key: 'phone', header: 'Phone Number' },
+      { key: 'employeeId', header: 'Employee ID' }, { key: 'role', header: 'Role' }
+    ]
+    const headers = cols.map(c => (requiredSet.has(c.key) ? `${c.header} *` : c.header))
+
+    const wb = new ExcelJS.Workbook()
+    const ws = wb.addWorksheet('Employees', { views: [{ state: 'frozen', ySplit: 1 }] })
+    const headerRow = ws.addRow(headers)
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+    headerRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF4472C4' }
+    }
+    headerRow.alignment = { horizontal: 'center' }
+    headerRow.height = 22
+    cols.forEach((_, i) => {
+      ws.getColumn(i + 1).width = Math.max(12, (headers[i]?.length || 0) + 2)
+    })
+
+    const buffer = await wb.xlsx.writeBuffer()
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'Employee_Import_Template.xlsx'
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success('Template downloaded. Required columns are marked with *.')
   }
 
   // Generate profile avatar with initials
@@ -4046,8 +4273,20 @@ function UserManagement() {
                   </div>
 
                   <div className="mb-6">
-                    <p className="text-sm text-gray-600 mb-4">
-                      Upload an Excel file (.xlsx, .xls) or CSV file with employee data. Required columns: <strong>First Name, Email, Phone, Employee ID</strong>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                      Upload an Excel file (.xlsx, .xls or .csv). Use the template below so column headers match the form.
+                    </p>
+
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                      <button
+                        type="button"
+                        onClick={handleDownloadImportTemplate}
+                        className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium inline-flex items-center gap-1"
+                      >
+                        <FiDownload className="w-4 h-4" />
+                        Download Excel template
+                      </button>
+                      {' '}(required columns marked with *)
                     </p>
 
                     <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-indigo-400 transition-colors">
@@ -4107,15 +4346,7 @@ function UserManagement() {
                     </div>
                   )}
 
-                  {/* Excel Template Info */}
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                    <p className="text-sm font-semibold text-blue-900 mb-2">Expected Excel Format:</p>
-                    <div className="text-xs text-blue-800 space-y-1">
-                      <p><strong>Required columns:</strong> First Name, Official Email ID (or Email), Phone, Employee ID, Role</p>
-                      <p><strong>Optional columns:</strong> Last Name, Middle Name, Department, Designation, Location, Password (defaults to Temp[EmployeeID]123! if not provided)</p>
-                      <p className="mt-2 text-blue-700"><strong>Note:</strong> If "Official Email ID" column is not present, "Email" column will be used as Official Email ID.</p>
-                    </div>
-                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 mb-4">Required columns in the template are marked with *.</p>
 
                   <div className="flex justify-end gap-3">
                     <button
