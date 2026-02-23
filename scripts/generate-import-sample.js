@@ -5,6 +5,8 @@
  *
  * Run: node scripts/generate-import-sample.js
  */
+/* eslint-env node */
+/* global process */
 
 import ExcelJS from 'exceljs'
 import { writeFileSync } from 'fs'

@@ -2424,7 +2424,7 @@ function UserManagement() {
               'Location (City)': 'cityLocation',
               'Location (City) .': 'cityLocation', // Handle trailing space dot
               'Location (City).': 'cityLocation', // Handle immediate dot
-              'City': 'cityLocation',
+              'City Location': 'cityLocation',
               'Spouse DOB': 'spouseDob',
               'Number of Children': 'numberOfChildren',
               'Number of Children *': 'numberOfChildren',
@@ -3444,7 +3444,7 @@ function UserManagement() {
       // Validate Passport format (1-2 letters + 6-7 digits)
       const invalidPassport = documents.find(d => d.documentType === 'Passport' && d.documentNumber && !/^[A-Z]{1,2}[0-9]{6,7}$/.test(d.documentNumber))
       if (invalidPassport) {
-        toast.error('Passport Number must be in format: 1-2 letters followed by 6-7 digits (e.g., A1234567 or AB1234567).')
+        toast.error('Passport Number must be 1–2 letters then 6–7 digits (e.g. A1234567 or AB1234567).')
         return
       }
       // Validate Voter ID format (6-10 alphanumeric)
@@ -6608,16 +6608,12 @@ function UserManagement() {
                                 value = first5 + next4 + last1
                               }
                             }
-                            // Passport: 1-2 letters followed by 6-7 digits (e.g., A1234567, AB1234567)
+                            // Passport: 1-2 letters followed by 6-7 digits (e.g., A1234567 or AB1234567)
                             else if (doc.documentType === 'Passport') {
                               const passportValue = value.toUpperCase().replace(/[^A-Z0-9]/g, '')
-                              if (passportValue.length <= 2) {
-                                value = passportValue.replace(/[^A-Z]/g, '')
-                              } else {
-                                const firstPart = passportValue.slice(0, 2).replace(/[^A-Z]/g, '')
-                                const secondPart = passportValue.slice(2).replace(/[^0-9]/g, '').slice(0, 7)
-                                value = firstPart + secondPart
-                              }
+                              const letters = (passportValue.match(/^[A-Z]{1,2}/) || [])[0] || ''
+                              const digits = passportValue.slice(letters.length).replace(/[^0-9]/g, '').slice(0, 7)
+                              value = letters + digits
                             }
                             // Voter ID: 6-10 alphanumeric characters
                             else if (doc.documentType === 'Voter ID') {
@@ -6645,10 +6641,10 @@ function UserManagement() {
                                 e.target.focus()
                               }
                             }
-                            // Validate Passport: 1-2 letters followed by 6-7 digits
+                            // Validate Passport: 1 or 2 letters followed by 6-7 digits
                             else if (doc.documentType === 'Passport') {
                               if (!/^[A-Z]{1,2}[0-9]{6,7}$/.test(value)) {
-                                toast.error('Passport Number must be in format: 1-2 letters followed by 6-7 digits (e.g., A1234567 or AB1234567)')
+                                toast.error('Passport Number must be 1–2 letters then 6–7 digits (e.g. A1234567 or AB1234567)')
                                 e.target.focus()
                               }
                             }
@@ -6693,13 +6689,18 @@ function UserManagement() {
                             } else if (doc.documentType === 'Passport') {
                               const char = String.fromCharCode(e.which).toUpperCase()
                               const currentLength = e.target.value.length
-                              if (currentLength < 2) {
-                                // First 1-2: alphabets only
+                              if (currentLength === 0) {
+                                // First char: letter only
                                 if (!/[A-Z]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
                                   e.preventDefault()
                                 }
+                              } else if (currentLength === 1) {
+                                // Second char: letter or digit (so A1 or AB both allowed)
+                                if (!/[A-Z0-9]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
+                                  e.preventDefault()
+                                }
                               } else {
-                                // After 2: digits only
+                                // After second char: digits only, max 9 total
                                 if (!/[0-9]/.test(char) && !e.ctrlKey && !e.metaKey && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Tab') {
                                   e.preventDefault()
                                 }
