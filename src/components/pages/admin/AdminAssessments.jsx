@@ -46,13 +46,23 @@ const AdminAssessments = () => {
   // Approvals tab state
   const [approvalRequests, setApprovalRequests] = useState([])
 
-  // Modules tab state
+  // Modules tab: Departments → Modules → Tests
+  const [departments, setDepartments] = useState([])
+  const [selectedDepartment, setSelectedDepartment] = useState(null)
   const [modules, setModules] = useState([])
   const [selectedModule, setSelectedModule] = useState(null)
+  const [tests, setTests] = useState([])
+  const [selectedTest, setSelectedTest] = useState(null)
+  const [showAddDepartment, setShowAddDepartment] = useState(false)
   const [showAddModule, setShowAddModule] = useState(false)
+  const [showAddTest, setShowAddTest] = useState(false)
   const [showAddQuestion, setShowAddQuestion] = useState(false)
+  const [newDepartmentName, setNewDepartmentName] = useState('')
+  const [newDepartmentDescription, setNewDepartmentDescription] = useState('')
   const [newModuleName, setNewModuleName] = useState('')
   const [newModuleDescription, setNewModuleDescription] = useState('')
+  const [newTestName, setNewTestName] = useState('')
+  const [newTestDescription, setNewTestDescription] = useState('')
   const [questions, setQuestions] = useState([])
   const [questionFile, setQuestionFile] = useState(null)
   const [testSettings, setTestSettings] = useState(defaultTestSettings)
@@ -69,15 +79,35 @@ const AdminAssessments = () => {
   const [uploadingNote, setUploadingNote] = useState(false)
 
   useEffect(() => {
-    // Fetch data when tab changes
     if (activeTab === 'approvals') fetchApprovals()
-    if (activeTab === 'modules') fetchModules()
+    if (activeTab === 'modules') fetchDepartments()
     if (activeTab === 'knowledge') {
       fetchKnowledgeBase()
       fetchModulesForKnowledge()
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch functions are stable, avoid refetch loops
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch on tab change
   }, [activeTab])
+
+  useEffect(() => {
+    if (activeTab === 'modules' && selectedDepartment) fetchModules()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, selectedDepartment])
+
+  useEffect(() => {
+    if (activeTab === 'modules' && selectedModule) fetchTests()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, selectedModule])
+
+  useEffect(() => {
+    if (activeTab === 'modules' && selectedTest) {
+      loadTestQuestions(selectedTest._id || selectedTest.id)
+      loadTestSettings(selectedTest._id || selectedTest.id)
+    } else if (activeTab === 'modules' && !selectedTest) {
+      setQuestions([])
+      setTestSettings(defaultTestSettings)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, selectedTest])
 
   const fetchApprovals = async () => {
     try {
@@ -111,15 +141,30 @@ const AdminAssessments = () => {
     }
   }
 
+  const fetchDepartments = async () => {
+    try {
+      const res = await axiosInstance.get('/api/assessments/departments').catch(() => ({ data: { departments: [] } }))
+      setDepartments(res.data?.departments || [])
+      if (!selectedDepartment && res.data?.departments?.length > 0) {
+        setSelectedDepartment(res.data.departments[0])
+      }
+    } catch {
+      setDepartments([])
+    }
+  }
+
   const fetchModules = async () => {
     try {
       setLoading(true)
-      const res = await axiosInstance.get('/api/assessments/modules').catch(() => ({ data: { modules: [] } }))
+      const url = selectedDepartment
+        ? `/api/assessments/modules?departmentId=${selectedDepartment._id || selectedDepartment.id}`
+        : '/api/assessments/modules'
+      const res = await axiosInstance.get(url).catch(() => ({ data: { modules: [] } }))
       setModules(res.data?.modules || [])
-      if (res.data?.modules?.length > 0 && !selectedModule) {
+      if (!selectedModule && res.data?.modules?.length > 0) {
         setSelectedModule(res.data.modules[0])
-        loadModuleQuestions(res.data.modules[0]._id || res.data.modules[0].id)
-        loadModuleSettings(res.data.modules[0]._id || res.data.modules[0].id)
+      } else if (selectedModule && !res.data?.modules?.some(m => (m._id || m.id) === (selectedModule._id || selectedModule.id))) {
+        setSelectedModule(res.data.modules[0] || null)
       }
     } catch {
       setModules([])
@@ -128,18 +173,38 @@ const AdminAssessments = () => {
     }
   }
 
-  const loadModuleQuestions = async (moduleId) => {
+  const fetchTests = async () => {
+    if (!selectedModule) {
+      setTests([])
+      setSelectedTest(null)
+      return
+    }
     try {
-      const res = await axiosInstance.get(`/api/assessments/modules/${moduleId}/questions`).catch(() => ({ data: { questions: [] } }))
+      const res = await axiosInstance.get(`/api/assessments/modules/${selectedModule._id || selectedModule.id}/tests`).catch(() => ({ data: { tests: [] } }))
+      setTests(res.data?.tests || [])
+      if (!selectedTest && res.data?.tests?.length > 0) {
+        setSelectedTest(res.data.tests[0])
+      } else if (selectedTest && !res.data?.tests?.some(t => (t._id || t.id) === (selectedTest._id || selectedTest.id))) {
+        setSelectedTest(res.data.tests[0] || null)
+      }
+    } catch {
+      setTests([])
+      setSelectedTest(null)
+    }
+  }
+
+  const loadTestQuestions = async (testId) => {
+    try {
+      const res = await axiosInstance.get(`/api/assessments/tests/${testId}/questions`).catch(() => ({ data: { questions: [] } }))
       setQuestions(res.data?.questions || [])
     } catch {
       setQuestions([])
     }
   }
 
-  const loadModuleSettings = async (moduleId) => {
+  const loadTestSettings = async (testId) => {
     try {
-      const res = await axiosInstance.get(`/api/assessments/modules/${moduleId}/settings`).catch(() => ({ data: { settings: defaultTestSettings } }))
+      const res = await axiosInstance.get(`/api/assessments/tests/${testId}/settings`).catch(() => ({ data: { settings: defaultTestSettings } }))
       setTestSettings(res.data?.settings || defaultTestSettings)
     } catch {
       setTestSettings(defaultTestSettings)
@@ -171,15 +236,59 @@ const AdminAssessments = () => {
     }
   }
 
+  const handleSelectDepartment = (dept) => {
+    setSelectedDepartment(dept)
+    setSelectedModule(null)
+    setSelectedTest(null)
+  }
+
   const handleSelectModule = (mod) => {
     setSelectedModule(mod)
-    const id = mod._id || mod.id
-    if (id) {
-      loadModuleQuestions(id)
-      loadModuleSettings(id)
-    } else {
-      setQuestions([])
-      setTestSettings(defaultTestSettings)
+    setSelectedTest(null)
+  }
+
+  const handleSelectTest = (test) => {
+    setSelectedTest(test)
+  }
+
+  const handleAddDepartment = async () => {
+    if (!newDepartmentName.trim()) {
+      toast.error('Department name is required')
+      return
+    }
+    try {
+      const res = await axiosInstance.post('/api/assessments/departments', {
+        name: newDepartmentName.trim(),
+        description: newDepartmentDescription.trim()
+      })
+      const newDept = res.data?.department
+      if (!newDept) throw new Error('Invalid response')
+      setDepartments(prev => [...prev, newDept])
+      setNewDepartmentName('')
+      setNewDepartmentDescription('')
+      setShowAddDepartment(false)
+      toast.success('Department added successfully')
+      setSelectedDepartment(newDept)
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to add department')
+    }
+  }
+
+  const handleDeleteDepartment = async (dept) => {
+    if (!window.confirm(`Delete department "${dept.name}"? All its modules and tests will be removed.`)) return
+    try {
+      await axiosInstance.delete(`/api/assessments/departments/${dept._id || dept.id}`)
+      setDepartments(prev => prev.filter(d => (d._id || d.id) !== (dept._id || dept.id)))
+      if (selectedDepartment && (selectedDepartment._id || selectedDepartment.id) === (dept._id || dept.id)) {
+        setSelectedDepartment(departments.find(d => (d._id || d.id) !== (dept._id || dept.id)) || null)
+        setModules([])
+        setSelectedModule(null)
+        setTests([])
+        setSelectedTest(null)
+      }
+      toast.success('Department deleted')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to delete department')
     }
   }
 
@@ -188,8 +297,13 @@ const AdminAssessments = () => {
       toast.error('Module name is required')
       return
     }
+    if (!selectedDepartment) {
+      toast.error('Please select a department first')
+      return
+    }
     try {
       const res = await axiosInstance.post('/api/assessments/modules', {
+        departmentId: selectedDepartment._id || selectedDepartment.id,
         name: newModuleName.trim(),
         description: newModuleDescription.trim()
       })
@@ -200,31 +314,75 @@ const AdminAssessments = () => {
       setNewModuleDescription('')
       setShowAddModule(false)
       toast.success('Module added successfully')
-      handleSelectModule(newMod)
+      setSelectedModule(newMod)
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to add module')
     }
   }
 
-  const handleDeleteModule = async (mod) => {
-    if (!window.confirm(`Delete module "${mod.name}"? This cannot be undone.`)) return
+  const handleAddTest = async () => {
+    if (!newTestName.trim()) {
+      toast.error('Test name is required')
+      return
+    }
+    if (!selectedModule) {
+      toast.error('Please select a module first')
+      return
+    }
     try {
-      await axiosInstance.delete(`/api/assessments/modules/${mod._id || mod.id}`).catch(() => {})
+      const res = await axiosInstance.post(`/api/assessments/modules/${selectedModule._id || selectedModule.id}/tests`, {
+        name: newTestName.trim(),
+        description: newTestDescription.trim()
+      })
+      const newT = res.data?.test
+      if (!newT) throw new Error('Invalid response')
+      setTests(prev => [...prev, newT])
+      setNewTestName('')
+      setNewTestDescription('')
+      setShowAddTest(false)
+      toast.success('Test added successfully')
+      setSelectedTest(newT)
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to add test')
+    }
+  }
+
+  const handleDeleteTest = async (test) => {
+    if (!window.confirm(`Delete test "${test.name}"? This cannot be undone.`)) return
+    try {
+      await axiosInstance.delete(`/api/assessments/tests/${test._id || test.id}`)
+      setTests(prev => prev.filter(t => (t._id || t.id) !== (test._id || test.id)))
+      if (selectedTest && (selectedTest._id || selectedTest.id) === (test._id || test.id)) {
+        setSelectedTest(tests.find(t => (t._id || t.id) !== (test._id || test.id)) || null)
+        setQuestions([])
+        setTestSettings(defaultTestSettings)
+      }
+      toast.success('Test deleted')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to delete test')
+    }
+  }
+
+  const handleDeleteModule = async (mod) => {
+    if (!window.confirm(`Delete module "${mod.name}"? All its tests will be removed.`)) return
+    try {
+      await axiosInstance.delete(`/api/assessments/modules/${mod._id || mod.id}`)
       setModules(prev => prev.filter(m => (m._id || m.id) !== (mod._id || mod.id)))
       if (selectedModule && (selectedModule._id || selectedModule.id) === (mod._id || mod.id)) {
-        setSelectedModule(modules[0] || null)
+        setSelectedModule(modules.find(m => (m._id || m.id) !== (mod._id || mod.id)) || null)
+        setTests([])
+        setSelectedTest(null)
         setQuestions([])
         setTestSettings(defaultTestSettings)
       }
       toast.success('Module deleted')
-    } catch {
-      setModules(prev => prev.filter(m => (m._id || m.id) !== (mod._id || mod.id)))
-      toast.success('Module deleted')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to delete module')
     }
   }
 
   const handleUploadQuestions = async () => {
-    if (!questionFile || !selectedModule) return
+    if (!questionFile || !selectedTest) return
     if (!questionFile.name.toLowerCase().endsWith('.xlsx')) {
       toast.error('Please upload an Excel file (.xlsx)')
       return
@@ -232,7 +390,7 @@ const AdminAssessments = () => {
     try {
       const formData = new FormData()
       formData.append('file', questionFile)
-      const res = await axiosInstance.post(`/api/assessments/modules/${selectedModule._id || selectedModule.id}/questions/upload`, formData, {
+      const res = await axiosInstance.post(`/api/assessments/tests/${selectedTest._id || selectedTest.id}/questions/upload`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       })
       toast.success(res.data?.message || `Uploaded ${res.data?.count ?? 0} question(s)`)
@@ -241,16 +399,16 @@ const AdminAssessments = () => {
       }
       setQuestionFile(null)
       setShowAddQuestion(false)
-      loadModuleQuestions(selectedModule._id || selectedModule.id)
+      loadTestQuestions(selectedTest._id || selectedTest.id)
     } catch (err) {
       toast.error(err.response?.data?.message || 'Upload failed')
     }
   }
 
   const handleSaveSettings = async () => {
-    if (!selectedModule) return
+    if (!selectedTest) return
     try {
-      await axiosInstance.put(`/api/assessments/modules/${selectedModule._id || selectedModule.id}/settings`, testSettings)
+      await axiosInstance.put(`/api/assessments/tests/${selectedTest._id || selectedTest.id}/settings`, testSettings)
       setEditingSettings(false)
       toast.success('Test settings saved')
     } catch (err) {
@@ -355,6 +513,9 @@ const AdminAssessments = () => {
                         <div>
                           <p className="font-medium text-gray-900 dark:text-gray-100">{req.requesterName || 'Unknown'}</p>
                           <p className="text-sm text-gray-500 dark:text-gray-400">{req.officialEmail || req.employeeId}</p>
+                          {req.departmentName ? (
+                            <p className="text-sm text-indigo-600 dark:text-indigo-400 mt-1 font-medium">Department: {req.departmentName}</p>
+                          ) : null}
                           <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                             Employee ID: {req.employeeId} · {req.createdAt ? new Date(req.createdAt).toLocaleString() : 'N/A'}
                           </p>
@@ -380,40 +541,39 @@ const AdminAssessments = () => {
               </div>
             )}
 
-            {/* Modules Tab */}
+            {/* Modules Tab: Department → Modules → Tests */}
             {activeTab === 'modules' && (
               <div className="flex flex-col lg:flex-row gap-6">
-                {/* Left: Module list */}
-                <div className="lg:w-72 flex-shrink-0">
+                {/* Left: Department | Module | Test lists */}
+                <div className="lg:w-80 flex-shrink-0 space-y-4">
+                  {/* Departments */}
                   <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
                     <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-                      <h3 className="font-semibold text-gray-900 dark:text-gray-100">Modules</h3>
+                      <h3 className="font-semibold text-gray-900 dark:text-gray-100">Departments</h3>
                       <button
-                        onClick={() => setShowAddModule(true)}
+                        onClick={() => setShowAddDepartment(true)}
                         className="p-2 rounded-lg bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400 hover:bg-indigo-200 dark:hover:bg-indigo-900/50"
+                        title="Add department"
                       >
                         <FiPlus className="w-4 h-4" />
                       </button>
                     </div>
-                    <div className="max-h-80 overflow-y-auto">
-                      {modules.length === 0 ? (
-                        <p className="p-4 text-gray-500 dark:text-gray-400 text-sm">No modules yet. Add one.</p>
+                    <div className="max-h-48 overflow-y-auto">
+                      {departments.length === 0 ? (
+                        <p className="p-4 text-gray-500 dark:text-gray-400 text-sm">No departments. Add one first.</p>
                       ) : (
-                        modules.map(mod => (
+                        departments.map(dept => (
                           <div
-                            key={mod._id || mod.id}
-                            onClick={() => handleSelectModule(mod)}
+                            key={dept._id || dept.id}
+                            onClick={() => handleSelectDepartment(dept)}
                             className={`flex items-center justify-between p-3 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-0 ${
-                              selectedModule && (selectedModule._id || selectedModule.id) === (mod._id || mod.id)
+                              selectedDepartment && (selectedDepartment._id || selectedDepartment.id) === (dept._id || dept.id)
                                 ? 'bg-indigo-50 dark:bg-indigo-900/20'
                                 : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
                             }`}
                           >
-                            <span className="font-medium text-gray-900 dark:text-gray-100 truncate">{mod.name}</span>
-                            <button
-                              onClick={e => { e.stopPropagation(); handleDeleteModule(mod) }}
-                              className="p-1 text-gray-400 hover:text-red-600"
-                            >
+                            <span className="font-medium text-gray-900 dark:text-gray-100 truncate">{dept.name}</span>
+                            <button onClick={e => { e.stopPropagation(); handleDeleteDepartment(dept) }} className="p-1 text-gray-400 hover:text-red-600">
                               <FiTrash2 className="w-4 h-4" />
                             </button>
                           </div>
@@ -421,13 +581,88 @@ const AdminAssessments = () => {
                       )}
                     </div>
                   </div>
+
+                  {/* Modules (when department selected) */}
+                  {selectedDepartment && (
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                      <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                        <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">Modules</h3>
+                        <button
+                          onClick={() => setShowAddModule(true)}
+                          className="p-2 rounded-lg bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400 hover:bg-indigo-200 dark:hover:bg-indigo-900/50"
+                          title="Add module"
+                        >
+                          <FiPlus className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className="max-h-48 overflow-y-auto">
+                        {modules.length === 0 ? (
+                          <p className="p-4 text-gray-500 dark:text-gray-400 text-sm">No modules. Add one.</p>
+                        ) : (
+                          modules.map(mod => (
+                            <div
+                              key={mod._id || mod.id}
+                              onClick={() => handleSelectModule(mod)}
+                              className={`flex items-center justify-between p-3 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-0 ${
+                                selectedModule && (selectedModule._id || selectedModule.id) === (mod._id || mod.id)
+                                  ? 'bg-indigo-50 dark:bg-indigo-900/20'
+                                  : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                              }`}
+                            >
+                              <span className="font-medium text-gray-900 dark:text-gray-100 truncate text-sm">{mod.name}</span>
+                              <button onClick={e => { e.stopPropagation(); handleDeleteModule(mod) }} className="p-1 text-gray-400 hover:text-red-600">
+                                <FiTrash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Tests (when module selected) */}
+                  {selectedModule && (
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                      <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                        <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">Tests</h3>
+                        <button
+                          onClick={() => setShowAddTest(true)}
+                          className="p-2 rounded-lg bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400 hover:bg-indigo-200 dark:hover:bg-indigo-900/50"
+                          title="Add test"
+                        >
+                          <FiPlus className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className="max-h-48 overflow-y-auto">
+                        {tests.length === 0 ? (
+                          <p className="p-4 text-gray-500 dark:text-gray-400 text-sm">No tests. Add one.</p>
+                        ) : (
+                          tests.map(t => (
+                            <div
+                              key={t._id || t.id}
+                              onClick={() => handleSelectTest(t)}
+                              className={`flex items-center justify-between p-3 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-0 ${
+                                selectedTest && (selectedTest._id || selectedTest.id) === (t._id || t.id)
+                                  ? 'bg-indigo-50 dark:bg-indigo-900/20'
+                                  : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                              }`}
+                            >
+                              <span className="font-medium text-gray-900 dark:text-gray-100 truncate text-sm">{t.name}</span>
+                              <button onClick={e => { e.stopPropagation(); handleDeleteTest(t) }} className="p-1 text-gray-400 hover:text-red-600">
+                                <FiTrash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                {/* Right: Module content */}
+                {/* Right: Test settings & questions (when test selected) */}
                 <div className="flex-1 space-y-6">
-                  {selectedModule ? (
+                  {selectedTest ? (
                     <>
-                      {/* Test settings accordion */}
                       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
                         <button
                           type="button"
@@ -436,7 +671,7 @@ const AdminAssessments = () => {
                         >
                           <h3 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
                             <FiSettings className="w-4 h-4" />
-                            Test Settings — {selectedModule.name}
+                            Test Settings — {selectedTest.name}
                             <span className="text-gray-400 dark:text-gray-500 ml-1">
                               {accordionSettingsOpen ? <FiChevronUp className="w-5 h-5" /> : <FiChevronDown className="w-5 h-5" />}
                             </span>
@@ -547,7 +782,6 @@ const AdminAssessments = () => {
                         )}
                       </div>
 
-                      {/* Questions accordion */}
                       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
                         <button
                           type="button"
@@ -606,7 +840,11 @@ const AdminAssessments = () => {
                     </>
                   ) : (
                     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-12 text-center text-gray-500 dark:text-gray-400">
-                      Select a module or add a new one.
+                      {!selectedDepartment
+                        ? 'Select a department to manage modules.'
+                        : !selectedModule
+                          ? 'Select a module to manage tests.'
+                          : 'Select a test or add a new one to configure settings and questions.'}
                     </div>
                   )}
                 </div>
@@ -688,11 +926,51 @@ const AdminAssessments = () => {
         )}
       </div>
 
+      {/* Add Department Modal */}
+      {showAddDepartment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Add Department</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
+                <input
+                  type="text"
+                  value={newDepartmentName}
+                  onChange={e => setNewDepartmentName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                  placeholder="e.g. Sales, Engineering"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description (optional)</label>
+                <textarea
+                  rows={2}
+                  value={newDepartmentDescription}
+                  onChange={e => setNewDepartmentDescription(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                  placeholder="Optional description"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-6">
+              <button onClick={handleAddDepartment} className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md font-medium">
+                Add
+              </button>
+              <button onClick={() => { setShowAddDepartment(false); setNewDepartmentName(''); setNewDepartmentDescription('') }} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Add Module Modal */}
       {showAddModule && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Add Module</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">Department: <strong>{selectedDepartment?.name || '—'}</strong></p>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
@@ -705,7 +983,7 @@ const AdminAssessments = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description (optional)</label>
                 <textarea
                   rows={2}
                   value={newModuleDescription}
@@ -720,6 +998,46 @@ const AdminAssessments = () => {
                 Add
               </button>
               <button onClick={() => { setShowAddModule(false); setNewModuleName(''); setNewModuleDescription('') }} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Test Modal */}
+      {showAddTest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Add Test</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">Module: <strong>{selectedModule?.name || '—'}</strong></p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
+                <input
+                  type="text"
+                  value={newTestName}
+                  onChange={e => setNewTestName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                  placeholder="e.g. Level 1 Assessment"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description (optional)</label>
+                <textarea
+                  rows={2}
+                  value={newTestDescription}
+                  onChange={e => setNewTestDescription(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                  placeholder="Optional description"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-6">
+              <button onClick={handleAddTest} className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md font-medium">
+                Add
+              </button>
+              <button onClick={() => { setShowAddTest(false); setNewTestName(''); setNewTestDescription('') }} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md">
                 Cancel
               </button>
             </div>
