@@ -70,21 +70,19 @@ const AdminAssessments = () => {
   const [accordionSettingsOpen, setAccordionSettingsOpen] = useState(true)
   const [accordionQuestionsOpen, setAccordionQuestionsOpen] = useState(true)
 
-  // Knowledge base tab state
-  const [knowledgeItems, setKnowledgeItems] = useState([])
-  const [knowledgeModules, setKnowledgeModules] = useState([])
-  const [showAddKnowledge, setShowAddKnowledge] = useState(false)
-  const [newKnowledge, setNewKnowledge] = useState({ moduleId: '', title: '', file: null })
-  const [knowledgeFilterModule, setKnowledgeFilterModule] = useState('')
-  const [uploadingNote, setUploadingNote] = useState(false)
+  // Knowledge base tab state (request-based: user requests → admin approves & uploads)
+  const [knowledgeRequests, setKnowledgeRequests] = useState([])
+  const [knowledgeFilterStatus, setKnowledgeFilterStatus] = useState('')
+  const [showUploadModal, setShowUploadModal] = useState(false)
+  const [selectedRequestForUpload, setSelectedRequestForUpload] = useState(null)
+  const [uploadFile, setUploadFile] = useState(null)
+  const [uploadTitle, setUploadTitle] = useState('')
+  const [uploadingRequest, setUploadingRequest] = useState(false)
 
   useEffect(() => {
     if (activeTab === 'approvals') fetchApprovals()
     if (activeTab === 'modules') fetchDepartments()
-    if (activeTab === 'knowledge') {
-      fetchKnowledgeBase()
-      fetchModulesForKnowledge()
-    }
+    if (activeTab === 'knowledge') fetchKnowledgeRequests()
   // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch on tab change
   }, [activeTab])
 
@@ -211,26 +209,17 @@ const AdminAssessments = () => {
     }
   }
 
-  const fetchModulesForKnowledge = async () => {
-    try {
-      const res = await axiosInstance.get('/api/assessments/modules').catch(() => ({ data: { modules: [] } }))
-      setKnowledgeModules(res.data?.modules || [])
-    } catch {
-      setKnowledgeModules([])
-    }
-  }
-
-  const fetchKnowledgeBase = async (moduleIdFilter) => {
+  const fetchKnowledgeRequests = async (statusFilter) => {
     try {
       setLoading(true)
-      const filter = moduleIdFilter !== undefined ? moduleIdFilter : knowledgeFilterModule
-      const url = filter
-        ? `/api/assessments/knowledge-base?moduleId=${filter}`
-        : '/api/assessments/knowledge-base'
-      const res = await axiosInstance.get(url).catch(() => ({ data: { items: [] } }))
-      setKnowledgeItems(res.data?.items || [])
+      const status = statusFilter !== undefined ? statusFilter : knowledgeFilterStatus
+      const url = status
+        ? `/api/assessments/knowledge-requests?status=${status}`
+        : '/api/assessments/knowledge-requests'
+      const res = await axiosInstance.get(url).catch(() => ({ data: { requests: [] } }))
+      setKnowledgeRequests(res.data?.requests || [])
     } catch {
-      setKnowledgeItems([])
+      setKnowledgeRequests([])
     } finally {
       setLoading(false)
     }
@@ -416,42 +405,58 @@ const AdminAssessments = () => {
     }
   }
 
-  const handleAddKnowledge = async () => {
-    if (!newKnowledge.moduleId) {
-      toast.error('Please select a module')
-      return
-    }
-    if (!newKnowledge.file) {
+  const openUploadModal = (req) => {
+    setSelectedRequestForUpload(req)
+    setUploadFile(null)
+    setUploadTitle(req?.description?.slice(0, 80) || '')
+    setShowUploadModal(true)
+  }
+
+  const handleApproveAndUpload = async () => {
+    if (!selectedRequestForUpload || !uploadFile) {
       toast.error('Please select a file (PDF, DOC, DOCX, or TXT)')
       return
     }
     try {
-      setUploadingNote(true)
+      setUploadingRequest(true)
       const formData = new FormData()
-      formData.append('moduleId', newKnowledge.moduleId)
-      formData.append('title', newKnowledge.title.trim() || newKnowledge.file.name)
-      formData.append('file', newKnowledge.file)
-      const res = await axiosInstance.post('/api/assessments/knowledge-base', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      })
-      const item = res.data?.item
-      if (item) setKnowledgeItems(prev => [item, ...prev])
-      setNewKnowledge({ moduleId: '', title: '', file: null })
-      setShowAddKnowledge(false)
-      toast.success('Note uploaded')
+      formData.append('title', uploadTitle.trim() || uploadFile.name)
+      formData.append('file', uploadFile)
+      await axiosInstance.put(
+        `/api/assessments/knowledge-requests/${selectedRequestForUpload._id || selectedRequestForUpload.id}/upload`,
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      )
+      toast.success('Document uploaded. Requester can now view it (view-only).')
+      setShowUploadModal(false)
+      setSelectedRequestForUpload(null)
+      setUploadFile(null)
+      setUploadTitle('')
+      fetchKnowledgeRequests()
     } catch (err) {
       toast.error(err.response?.data?.message || 'Upload failed')
     } finally {
-      setUploadingNote(false)
+      setUploadingRequest(false)
     }
   }
 
-  const handleDeleteKnowledge = async (item) => {
-    if (!window.confirm(`Delete "${item.title || item.fileName}"?`)) return
+  const handleRejectKnowledgeRequest = async (req) => {
+    if (!window.confirm('Reject this request? The user will see it as rejected.')) return
     try {
-      await axiosInstance.delete(`/api/assessments/knowledge-base/${item._id || item.id}`)
-      setKnowledgeItems(prev => prev.filter(k => (k._id || k.id) !== (item._id || item.id)))
-      toast.success('Note deleted')
+      await axiosInstance.put(`/api/assessments/knowledge-requests/${req._id || req.id}/reject`)
+      toast.success('Request rejected')
+      fetchKnowledgeRequests()
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to reject')
+    }
+  }
+
+  const handleDeleteKnowledgeRequest = async (req) => {
+    if (!window.confirm('Delete this request and any uploaded document? This cannot be undone.')) return
+    try {
+      await axiosInstance.delete(`/api/assessments/knowledge-requests/${req._id || req.id}`)
+      toast.success('Request deleted')
+      setKnowledgeRequests(prev => prev.filter(r => (r._id || r.id) !== (req._id || req.id)))
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to delete')
     }
@@ -851,69 +856,84 @@ const AdminAssessments = () => {
               </div>
             )}
 
-            {/* Knowledge Base Tab */}
+            {/* Knowledge Base Tab — Document requests from users; admin approves & uploads (view-only for requester) */}
             {activeTab === 'knowledge' && (
               <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
                 <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex flex-wrap justify-between items-center gap-3">
-                  <h3 className="font-semibold text-gray-900 dark:text-gray-100">Knowledge Base — Notes by Module</h3>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <select
-                      value={knowledgeFilterModule}
-                      onChange={e => {
-                        setKnowledgeFilterModule(e.target.value)
-                        fetchKnowledgeBase(e.target.value)
-                      }}
-                      className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm"
-                    >
-                      <option value="">All modules</option>
-                      {knowledgeModules.map(mod => (
-                        <option key={mod._id || mod.id} value={mod._id || mod.id}>{mod.name}</option>
-                      ))}
-                    </select>
-                    <button
-                      onClick={() => setShowAddKnowledge(true)}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white rounded-md text-sm"
-                    >
-                      <FiPlus className="w-4 h-4" /> Upload note
-                    </button>
-                  </div>
+                  <h3 className="font-semibold text-gray-900 dark:text-gray-100">Knowledge Base — Document Requests</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 w-full sm:w-auto">Users request documents; you approve and upload. Only the requester can view (no download/copy).</p>
+                  <select
+                    value={knowledgeFilterStatus}
+                    onChange={e => {
+                      setKnowledgeFilterStatus(e.target.value)
+                      fetchKnowledgeRequests(e.target.value)
+                    }}
+                    className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm"
+                  >
+                    <option value="">All statuses</option>
+                    <option value="pending">Pending</option>
+                    <option value="approved">Approved</option>
+                    <option value="rejected">Rejected</option>
+                  </select>
                 </div>
                 <div className="p-4">
-                  {knowledgeItems.length === 0 ? (
-                    <p className="text-gray-500 dark:text-gray-400 text-center py-12">No notes yet. Upload a document (PDF, DOC, DOCX, TXT) for a module.</p>
+                  {knowledgeRequests.length === 0 ? (
+                    <p className="text-gray-500 dark:text-gray-400 text-center py-12">No document requests yet. Users submit requests from the Assessments portal Knowledge Base.</p>
                   ) : (
-                    <div className="space-y-3">
-                      {knowledgeItems.map(item => (
+                    <div className="space-y-4">
+                      {knowledgeRequests.map(req => (
                         <div
-                          key={item.id || item._id}
-                          className="p-4 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-wrap items-center justify-between gap-3"
+                          key={req._id || req.id}
+                          className="p-4 rounded-lg border border-gray-200 dark:border-gray-700"
                         >
-                          <div className="flex items-center gap-3 min-w-0">
-                            <FiFileText className="w-5 h-5 text-indigo-500 flex-shrink-0" />
-                            <div className="min-w-0">
-                              <h4 className="font-medium text-gray-900 dark:text-gray-100 truncate">{item.title || item.fileName}</h4>
-                              <p className="text-sm text-gray-500 dark:text-gray-400">
-                                {item.moduleName ? <span className="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 px-1.5 py-0.5 rounded text-xs mr-2">{item.moduleName}</span> : null}
-                                {item.fileName}
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap mb-1">
+                                <span className="font-medium text-gray-900 dark:text-gray-100">{req.requesterName || 'Unknown'}</span>
+                                <span className="text-xs text-gray-500 dark:text-gray-400">({req.employeeId})</span>
+                                <span className={`text-xs px-2 py-0.5 rounded ${
+                                  req.status === 'pending' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' :
+                                  req.status === 'approved' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
+                                  'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                                }`}>
+                                  {req.status}
+                                </span>
+                              </div>
+                              {req.title ? <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{req.title}</p> : null}
+                              <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{req.description}</p>
+                              <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+                                Requested: {req.createdAt ? new Date(req.createdAt).toLocaleString() : 'N/A'}
+                                {req.respondedAt ? ` · Responded: ${new Date(req.respondedAt).toLocaleString()}` : ''}
                               </p>
+                              {req.status === 'approved' && req.documentTitle && (
+                                <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-1">Document: {req.documentTitle}</p>
+                              )}
                             </div>
-                          </div>
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            <a
-                              href={`${axiosInstance.defaults.baseURL || ''}/api/assessments/knowledge-base/${item._id || item.id}/download`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="px-2 py-1.5 text-indigo-600 dark:text-indigo-400 hover:underline text-sm"
-                            >
-                              View / Download
-                            </a>
-                            <button
-                              onClick={() => handleDeleteKnowledge(item)}
-                              className="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400"
-                              title="Delete"
-                            >
-                              <FiTrash2 className="w-4 h-4" />
-                            </button>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              {req.status === 'pending' && (
+                                <>
+                                  <button
+                                    onClick={() => openUploadModal(req)}
+                                    className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700"
+                                  >
+                                    <FiUpload className="w-4 h-4" /> Approve & Upload
+                                  </button>
+                                  <button
+                                    onClick={() => handleRejectKnowledgeRequest(req)}
+                                    className="px-3 py-1.5 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded-md text-sm font-medium hover:bg-red-200 dark:hover:bg-red-900/50"
+                                  >
+                                    Reject
+                                  </button>
+                                </>
+                              )}
+                              <button
+                                onClick={() => handleDeleteKnowledgeRequest(req)}
+                                className="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400"
+                                title="Delete request"
+                              >
+                                <FiTrash2 className="w-4 h-4" />
+                              </button>
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -1079,54 +1099,48 @@ const AdminAssessments = () => {
         </div>
       )}
 
-      {/* Add Knowledge Modal */}
-      {showAddKnowledge && (
+      {/* Approve & Upload document modal (Knowledge Base request) */}
+      {showUploadModal && selectedRequestForUpload && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Upload Note (by Module)</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Approve & Upload Document</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              For: <strong>{selectedRequestForUpload.requesterName}</strong> ({selectedRequestForUpload.employeeId})
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4 line-clamp-3">Request: {selectedRequestForUpload.description}</p>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Module *</label>
-                <select
-                  value={newKnowledge.moduleId}
-                  onChange={e => setNewKnowledge(k => ({ ...k, moduleId: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                >
-                  <option value="">Select module</option>
-                  {knowledgeModules.map(mod => (
-                    <option key={mod._id || mod.id} value={mod._id || mod.id}>{mod.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Title (optional)</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Document title (optional)</label>
                 <input
                   type="text"
-                  value={newKnowledge.title}
-                  onChange={e => setNewKnowledge(k => ({ ...k, title: e.target.value }))}
+                  value={uploadTitle}
+                  onChange={e => setUploadTitle(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                  placeholder="Display name (defaults to file name)"
+                  placeholder="Defaults to file name"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Document * (PDF, DOC, DOCX, TXT)</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">File * (PDF, DOC, DOCX, TXT)</label>
                 <input
                   type="file"
                   accept=".pdf,.doc,.docx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
-                  onChange={e => setNewKnowledge(k => ({ ...k, file: e.target.files?.[0] || null }))}
+                  onChange={e => setUploadFile(e.target.files?.[0] || null)}
                   className="w-full text-sm text-gray-600 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-indigo-50 file:text-indigo-600 dark:file:bg-indigo-900/30 dark:file:text-indigo-400"
                 />
               </div>
             </div>
             <div className="flex gap-2 mt-6">
               <button
-                onClick={handleAddKnowledge}
-                disabled={uploadingNote || !newKnowledge.moduleId || !newKnowledge.file}
-                className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md font-medium disabled:opacity-50"
+                onClick={handleApproveAndUpload}
+                disabled={uploadingRequest || !uploadFile}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md font-medium disabled:opacity-50"
               >
-                {uploadingNote ? 'Uploading…' : 'Upload'}
+                {uploadingRequest ? 'Uploading…' : 'Approve & Upload'}
               </button>
-              <button onClick={() => setShowAddKnowledge(false)} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md">
+              <button
+                onClick={() => { setShowUploadModal(false); setSelectedRequestForUpload(null); setUploadFile(null); setUploadTitle('') }}
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md"
+              >
                 Cancel
               </button>
             </div>
