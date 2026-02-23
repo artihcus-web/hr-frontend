@@ -887,25 +887,31 @@ const Timesheet = () => {
 
     const currentHours = row.dailyHours[index];
     let type = "";
-    let hoursVal = currentHours;
+    let hoursVal = (currentHours != null && typeof currentHours === 'string') ? currentHours : "";
     let shiftVal = "General";
 
     if (currentHours === "WO") { type = "WO"; hoursVal = "0 : 00"; }
     else if (currentHours === "FL") { type = "FL"; hoursVal = "0 : 00"; }
     else {
       // Parse Shift
-      if (hoursVal.includes("(Second)")) shiftVal = "Second";
-      else if (hoursVal.includes("(Night)")) shiftVal = "Night";
+      if (hoursVal && hoursVal.includes("(Second)")) shiftVal = "Second";
+      else if (hoursVal && hoursVal.includes("(Night)")) shiftVal = "Night";
 
       // Clean Shift from hoursVal
-      hoursVal = hoursVal.replace(" (Second)", "").replace(" (Night)", "").replace(" (General)", "");
+      if (hoursVal) hoursVal = hoursVal.replace(" (Second)", "").replace(" (Night)", "").replace(" (General)", "");
 
-      if (hoursVal.includes("(HD)")) { type = "HD"; hoursVal = hoursVal.replace(" (HD)", ""); }
+      if (hoursVal && hoursVal.includes("(HD)")) { type = "HD"; hoursVal = hoursVal.replace(" (HD)", ""); }
     }
+
+    // Auto-populate hours: General/Second/Night → 8:00, Half Day → 4:00, Week Off/Leave → 0:00
+    let initialHours = hoursVal && hoursVal.trim() && hoursVal !== "0 : 00" ? hoursVal.trim() : "";
+    if (type === "WO" || type === "FL") initialHours = "0 : 00";
+    else if (type === "HD") initialHours = initialHours || "4 : 00";
+    else initialHours = initialHours || "8 : 00";
 
     setEditingCell({ rowId: row.id, dayIndex: index, left, top, bottom, width });
     setPopoverData({
-      hours: hoursVal,
+      hours: initialHours,
       timeIn: "",
       timeOut: "",
       location: "India - Hyderabad",
@@ -1923,7 +1929,15 @@ const Timesheet = () => {
                     <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 mb-1 transition-colors">Shift</label>
                     <select
                       value={popoverData.shift}
-                      onChange={(e) => setPopoverData({ ...popoverData, shift: e.target.value })}
+                      onChange={(e) => {
+                        const newShift = e.target.value;
+                        // Auto-populate hours when shift changes: General/Second/Night → 8:00, Half Day → 4:00, WO/Leave → 0:00
+                        let newHours = popoverData.hours;
+                        if (popoverData.leaveType === 'WO' || popoverData.leaveType === 'FL') newHours = "0 : 00";
+                        else if (popoverData.leaveType === 'HD') newHours = "4 : 00";
+                        else newHours = "8 : 00";
+                        setPopoverData({ ...popoverData, shift: newShift, hours: newHours });
+                      }}
                       className="w-full text-xs border border-gray-300 dark:border-gray-700 rounded p-1.5 focus:ring-indigo-500 focus:border-indigo-500 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 transition-colors"
                       disabled={popoverData.leaveType === 'WO' || popoverData.leaveType === 'FL'}
                     >

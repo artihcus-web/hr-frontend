@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { FiPower, FiSun, FiMoon } from 'react-icons/fi'
 import { useAuth } from '../../context/AuthContext'
 import { useTheme } from '../../context/ThemeContext'
 import { getProfileImageUrl } from '../../config/apiConfig'
 function Header() {
-  const navigate = useNavigate()
-
   const { user, logout } = useAuth()
   const [imageError, setImageError] = useState(false)
 
@@ -26,7 +24,7 @@ function Header() {
 
   const handleLogout = () => {
     logout()
-    navigate('/login')
+    // logout() now does window.location.href = '/login', so no need to navigate
   }
 
   const displayName = user?.fullName || user?.username || 'User'
