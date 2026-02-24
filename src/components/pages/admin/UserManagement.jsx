@@ -2891,8 +2891,8 @@ function UserManagement() {
     }
   }
 
-  // Download Excel import template (headers from schema; required fields get * in header; styled header row)
-  const handleDownloadImportTemplate = async () => {
+  // Download Excel import template (headers from schema; required fields get * in header)
+  const handleDownloadImportTemplate = () => {
     const requiredSet = new Set(excelImportFromSchema.requiredFieldNames || [])
     const cols = exportColumnsFromSchema.length > 0 ? exportColumnsFromSchema : [
       { key: 'firstName', header: 'First Name' }, { key: 'lastName', header: 'Last Name' },
@@ -2900,30 +2900,10 @@ function UserManagement() {
       { key: 'employeeId', header: 'Employee ID' }, { key: 'role', header: 'Role' }
     ]
     const headers = cols.map(c => (requiredSet.has(c.key) ? `${c.header} *` : c.header))
-
-    const wb = new ExcelJS.Workbook()
-    const ws = wb.addWorksheet('Employees', { views: [{ state: 'frozen', ySplit: 1 }] })
-    const headerRow = ws.addRow(headers)
-    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } }
-    headerRow.fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'FF4472C4' }
-    }
-    headerRow.alignment = { horizontal: 'center' }
-    headerRow.height = 22
-    cols.forEach((_, i) => {
-      ws.getColumn(i + 1).width = Math.max(12, (headers[i]?.length || 0) + 2)
-    })
-
-    const buffer = await wb.xlsx.writeBuffer()
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'Employee_Import_Template.xlsx'
-    a.click()
-    URL.revokeObjectURL(url)
+    const ws = XLSX.utils.aoa_to_sheet([headers])
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Employees')
+    XLSX.writeFile(wb, 'Employee_Import_Template.xlsx')
     toast.success('Template downloaded. Required columns are marked with *.')
   }
 
