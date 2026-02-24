@@ -5205,39 +5205,50 @@ function UserManagement() {
                   </div>
                   <div className="col-span-3">
                     <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 md:hidden">{getFieldLabelById(13, 'dob', 'DOB')}</label>
-                    <input
-                      type="date"
-                      value={member.dob ? new Date(member.dob).toISOString().split('T')[0] : ''}
-                      required={getFieldRequiredById(13, 'dob', false)}
-                      onChange={(e) => {
-                        const dateValue = e.target.value
-                        if (dateValue) {
-                          const dateParts = dateValue.split('-')
-                          if (dateParts.length === 3) {
-                            const year = dateParts[0]
-                            if (year.length !== 4 || parseInt(year) < 1900 || parseInt(year) > 2100) {
-                              toast.error('Please enter a valid date with 4-digit year (1900-2100)')
-                              return
+                    {(() => {
+                      const today = new Date()
+                      const todayStr = today.toISOString().slice(0, 10)
+                      return (
+                        <input
+                          type="date"
+                          value={member.dob ? new Date(member.dob).toISOString().split('T')[0] : ''}
+                          required={getFieldRequiredById(13, 'dob', false)}
+                          onChange={(e) => {
+                            const dateValue = e.target.value
+                            if (dateValue) {
+                              const dateParts = dateValue.split('-')
+                              if (dateParts.length === 3) {
+                                const year = dateParts[0]
+                                if (year.length !== 4 || parseInt(year) < 1900) {
+                                  toast.error('Please enter a valid date with 4-digit year (>= 1900)')
+                                  return
+                                }
+                                const selected = new Date(dateValue)
+                                if (selected > today) {
+                                  toast.error('Family member DOB cannot be in the future')
+                                  return
+                                }
+                              }
                             }
-                          }
-                        }
-                        handleFamilyDetailChange(index, 'dob', dateValue)
-                      }}
-                      onBlur={(e) => {
-                        const dateValue = e.target.value
-                        if (dateValue) {
-                          const dateParts = dateValue.split('-')
-                          if (dateParts.length === 3 && dateParts[0].length !== 4) {
-                            toast.error('Year must be exactly 4 digits')
-                            e.target.value = ''
-                            handleFamilyDetailChange(index, 'dob', '')
-                          }
-                        }
-                      }}
-                      min="1900-01-01"
-                      max="2100-12-31"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    />
+                            handleFamilyDetailChange(index, 'dob', dateValue)
+                          }}
+                          onBlur={(e) => {
+                            const dateValue = e.target.value
+                            if (dateValue) {
+                              const dateParts = dateValue.split('-')
+                              if (dateParts.length === 3 && dateParts[0].length !== 4) {
+                                toast.error('Year must be exactly 4 digits')
+                                e.target.value = ''
+                                handleFamilyDetailChange(index, 'dob', '')
+                              }
+                            }
+                          }}
+                          min="1900-01-01"
+                          max={todayStr}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        />
+                      )
+                    })()}
                   </div>
                   <div className="col-span-1 flex items-center">
                     <button
