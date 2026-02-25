@@ -2011,6 +2011,9 @@ function UserManagement() {
       // Force Physically Challenged to always use isPhysicallyChallenged so form state and API key match (like role)
       const isPCField = sectionId === 1 && (field.name === 'isPhysicallyChallenged' || (field.name || '').toLowerCase().replace(/\s+/g, '') === 'physicallychallenged' || (field.label || '').toLowerCase().includes('physically challenged'))
       if (isPCField && arrayIndex === null) fieldName = 'isPhysicallyChallenged'
+      // Force Department (Employment section) to always use department so dropdown shows saved value like role
+      const isDeptField = sectionId === 2 && (field.name === 'department' || (field.name || '').toLowerCase().replace(/\s+/g, '') === 'department' || (field.label || '').toLowerCase().includes('department'))
+      if (isDeptField && arrayIndex === null) fieldName = 'department'
 
       const computedRequired = getFieldRequiredById(sectionId, field.name, field.required || false)
       if (FORM_DEBUG) {
@@ -2328,6 +2331,7 @@ function UserManagement() {
         documents: Array.isArray(emp.documents) ? emp.documents : [],
         isEligibleForPF: emp.isEligibleForPF || false,
         pfNumber: emp.pfNumber || '',
+        universalAccountNumber: emp.universalAccountNumber || '',
         pfScheme: emp.pfScheme || '',
         pfJoiningDate: formatDate(emp.pfJoiningDate),
         eligibleForExcessEPFContribution: emp.eligibleForExcessEPFContribution || false,
