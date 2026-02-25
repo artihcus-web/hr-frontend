@@ -24,7 +24,8 @@ import LoadingSpinner from '../../common/LoadingSpinner'
 const TABS = [
   { id: 'approvals', label: 'Approvals', icon: FiCheckCircle },
   { id: 'modules', label: 'Modules', icon: FiGrid },
-  { id: 'knowledge', label: 'Knowledge Base', icon: FiBook }
+  { id: 'knowledge', label: 'Knowledge Base', icon: FiBook },
+  { id: 'reports', label: 'Test Reports', icon: FiFileText }
 ]
 
 // Default test settings structure
@@ -79,10 +80,23 @@ const AdminAssessments = () => {
   const [uploadTitle, setUploadTitle] = useState('')
   const [uploadingRequest, setUploadingRequest] = useState(false)
 
+  // Test reports tab state
+  const [reportEmployees, setReportEmployees] = useState([])
+  const [selectedReportEmployee, setSelectedReportEmployee] = useState(null)
+  const [reportAttempts, setReportAttempts] = useState([])
+  const [reportLoading, setReportLoading] = useState(false)
+  const [reportError, setReportError] = useState(null)
+  const [reportModuleFilter, setReportModuleFilter] = useState('')
+  const [reportTestFilter, setReportTestFilter] = useState('')
+  const [reportFromDate, setReportFromDate] = useState('')
+  const [reportToDate, setReportToDate] = useState('')
+  const [selectedReportAttempt, setSelectedReportAttempt] = useState(null)
+
   useEffect(() => {
     if (activeTab === 'approvals') fetchApprovals()
     if (activeTab === 'modules') fetchDepartments()
     if (activeTab === 'knowledge') fetchKnowledgeRequests()
+    if (activeTab === 'reports') fetchReportEmployees()
   // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch on tab change
   }, [activeTab])
 
@@ -447,6 +461,35 @@ const AdminAssessments = () => {
       fetchKnowledgeRequests()
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to reject')
+    }
+  }
+
+  // ---- Test Reports (admin) ----
+  const fetchReportEmployees = async () => {
+    try {
+      setReportLoading(true)
+      setReportError(null)
+      const res = await axiosInstance.get('/api/assessments/reports/employees')
+      setReportEmployees(res.data?.employees || [])
+    } catch (err) {
+      setReportEmployees([])
+      setReportError(err.response?.data?.message || 'Failed to load test reports')
+    } finally {
+      setReportLoading(false)
+    }
+  }
+
+  const fetchEmployeeAttempts = async (employeeId) => {
+    try {
+      setReportLoading(true)
+      setReportError(null)
+      const res = await axiosInstance.get(`/api/assessments/reports/employees/${encodeURIComponent(employeeId)}/attempts`)
+      setReportAttempts(res.data?.attempts || [])
+    } catch (err) {
+      setReportAttempts([])
+      setReportError(err.response?.data?.message || 'Failed to load attempts')
+    } finally {
+      setReportLoading(false)
     }
   }
 
@@ -939,6 +982,221 @@ const AdminAssessments = () => {
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* Test Reports Tab */}
+            {activeTab === 'reports' && (
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2 flex items-center gap-2">
+                  <FiFileText className="w-5 h-5 text-indigo-500" />
+                  Test Reports
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                  View analytics for completed assessments. Select an employee to see their test history with filters.
+                </p>
+
+                {reportError && (
+                  <div className="mb-3 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40 rounded-md px-3 py-2">
+                    {reportError}
+                  </div>
+                )}
+
+                {!selectedReportEmployee ? (
+                  <>
+                    {reportLoading ? (
+                      <LoadingSpinner />
+                    ) : reportEmployees.length === 0 ? (
+                      <p className="text-gray-500 dark:text-gray-400 text-sm">No completed assessments found yet.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {reportEmployees.map(emp => (
+                          <button
+                            key={emp.employeeId}
+                            type="button"
+                            onClick={() => {
+                              setSelectedReportEmployee(emp.employeeId)
+                              setSelectedReportAttempt(null)
+                              setReportModuleFilter('')
+                              setReportTestFilter('')
+                              setReportFromDate('')
+                              setReportToDate('')
+                              fetchEmployeeAttempts(emp.employeeId)
+                            }}
+                            className="w-full flex items-center justify-between px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/40 text-left"
+                          >
+                            <div>
+                              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{emp.employeeId}</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                Attempts: {emp.attempts}{' '}
+                                {emp.lastAttemptAt && `· Last: ${new Date(emp.lastAttemptAt).toLocaleString()}`}
+                              </p>
+                            </div>
+                            <span className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">View reports →</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Employee: {selectedReportEmployee}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Filter and inspect this employee&apos;s test attempts.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedReportEmployee(null)
+                          setReportAttempts([])
+                          setSelectedReportAttempt(null)
+                        }}
+                        className="px-3 py-1.5 rounded-md border border-gray-200 dark:border-gray-700 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/60"
+                      >
+                        ← Back to employees
+                      </button>
+                    </div>
+
+                    {reportLoading ? (
+                      <LoadingSpinner />
+                    ) : reportAttempts.length === 0 ? (
+                      <p className="text-gray-500 dark:text-gray-400 text-sm">No attempts found for this employee.</p>
+                    ) : (
+                      <>
+                        {/* Filters */}
+                        <div className="flex flex-wrap gap-3 items-end mb-4">
+                          <div className="flex flex-col gap-1">
+                            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Module</span>
+                            <select
+                              value={reportModuleFilter}
+                              onChange={e => { setReportModuleFilter(e.target.value); setReportTestFilter('') }}
+                              className="px-2 py-1.5 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-xs text-gray-800 dark:text-gray-200"
+                            >
+                              <option value="">All</option>
+                              {Array.from(new Map(reportAttempts
+                                .filter(a => a.moduleId)
+                                .map(a => [String(a.moduleId), a.moduleName || 'Module'])).entries()).map(([id, name]) => (
+                                <option key={id} value={id}>{name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Assessment</span>
+                            <select
+                              value={reportTestFilter}
+                              onChange={e => setReportTestFilter(e.target.value)}
+                              className="px-2 py-1.5 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-xs text-gray-800 dark:text-gray-200"
+                            >
+                              <option value="">All</option>
+                              {Array.from(new Map(reportAttempts
+                                .filter(a => (!reportModuleFilter || String(a.moduleId) === reportModuleFilter) && a.testId)
+                                .map(a => [String(a.testId), a.testName || 'Assessment'])).entries()).map(([id, name]) => (
+                                <option key={id} value={id}>{name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">From date</span>
+                            <input
+                              type="date"
+                              value={reportFromDate}
+                              onChange={e => setReportFromDate(e.target.value)}
+                              className="px-2 py-1.5 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-xs text-gray-800 dark:text-gray-200"
+                            />
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">To date</span>
+                            <input
+                              type="date"
+                              value={reportToDate}
+                              onChange={e => setReportToDate(e.target.value)}
+                              className="px-2 py-1.5 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-xs text-gray-800 dark:text-gray-200"
+                            />
+                          </div>
+                        </div>
+
+                        {(() => {
+                          const filtered = reportAttempts.filter(a => {
+                            if (reportModuleFilter && String(a.moduleId) !== reportModuleFilter) return false
+                            if (reportTestFilter && String(a.testId) !== reportTestFilter) return false
+                            if (reportFromDate) {
+                              const d = new Date(a.startedAt)
+                              if (d < new Date(reportFromDate)) return false
+                            }
+                            if (reportToDate) {
+                              const d = new Date(a.startedAt)
+                              const end = new Date(reportToDate)
+                              end.setHours(23, 59, 59, 999)
+                              if (d > end) return false
+                            }
+                            return true
+                          })
+
+                          return (
+                            <>
+                              <div className="mb-4 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                                <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700 text-xs font-semibold text-gray-700 dark:text-gray-200">
+                                  Attempts ({filtered.length})
+                                </div>
+                                <div className="divide-y divide-gray-100 dark:divide-gray-800 text-xs">
+                                  {filtered.map(a => (
+                                    <button
+                                      key={a._id || a.id}
+                                      type="button"
+                                      onClick={() => setSelectedReportAttempt(a)}
+                                      className="w-full px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center justify-between gap-3"
+                                    >
+                                      <div className="min-w-0">
+                                        <p className="font-medium text-gray-900 dark:text-gray-100 truncate">{a.testName}</p>
+                                        <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
+                                          {[a.departmentName, a.moduleName].filter(Boolean).join(' · ')}
+                                        </p>
+                                        <p className="text-[11px] text-gray-400 dark:text-gray-500">
+                                          {a.startedAt && new Date(a.startedAt).toLocaleString()}
+                                        </p>
+                                      </div>
+                                      <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
+                                        <span className={`text-[11px] font-semibold ${a.passed ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                                          {a.scorePercent ?? 0}%
+                                        </span>
+                                        <span className="text-[11px] text-gray-500 dark:text-gray-400">
+                                          {a.endReasonCode === 'user_submitted' ? 'Submitted' :
+                                           a.endReasonCode === 'time_up' ? 'Time up' :
+                                           a.endReasonCode === 'tab_switch' ? 'Tab switch' : 'Ended'}
+                                        </span>
+                                      </div>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {selectedReportAttempt && (
+                                <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 text-xs text-gray-700 dark:text-gray-200">
+                                  <div className="flex items-center justify-between mb-3">
+                                    <div>
+                                      <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{selectedReportAttempt.testName}</p>
+                                      <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                                        {[selectedReportAttempt.departmentName, selectedReportAttempt.moduleName].filter(Boolean).join(' · ')}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-2">
+                                    <div><span className="font-semibold">Started:</span> {selectedReportAttempt.startedAt && new Date(selectedReportAttempt.startedAt).toLocaleString()}</div>
+                                    <div><span className="font-semibold">Ended:</span> {selectedReportAttempt.endedAt && new Date(selectedReportAttempt.endedAt).toLocaleString()}</div>
+                                    <div><span className="font-semibold">Score:</span> {selectedReportAttempt.scorePercent}%</div>
+                                    <div><span className="font-semibold">Result:</span> {selectedReportAttempt.passed ? 'Passed' : 'Not passed'}</div>
+                                    <div><span className="font-semibold">End reason:</span> {selectedReportAttempt.endReasonText || selectedReportAttempt.endReasonCode}</div>
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          )
+                        })()}
+                      </>
+                    )}
+                  </>
+                )}
               </div>
             )}
           </>
