@@ -146,8 +146,18 @@ const FormField = ({ label, name, type = 'text', required, formData, handleChang
   }
 
   const formDataKey = getFormDataKey(name)
-  const value = getValue(formData, formDataKey)
-  
+  let value = getValue(formData, formDataKey)
+  // For select/dropdown: if saved value doesn't exactly match an option, match case-insensitive so the dropdown shows the saved value
+  if ((type === 'select' || String(type).toLowerCase() === 'dropdown') && Array.isArray(options) && options.length > 0 && value != null && value !== '') {
+    const strVal = String(value).trim()
+    if (options.some(o => String(o) === strVal)) {
+      value = strVal
+    } else {
+      const matched = options.find(o => String(o).trim().toLowerCase() === strVal.toLowerCase())
+      if (matched !== undefined) value = matched
+    }
+  }
+
   // DEBUG: Log value retrieval for confirmDate
   if (isConfirmDate) {
     console.log('📊 FormField value retrieval:', {
@@ -1372,6 +1382,7 @@ function UserManagement() {
       if (normalized === 'text' || normalized === 'string') result = 'text'
       if (normalized === 'number' || normalized === 'numeric') result = 'number'
       if (normalized === 'alphanumeric' || normalized === 'alphanum') result = 'alphanumeric'
+      if (normalized === 'dropdown') result = 'select'
       return result
     },
     [getSectionKey, getFieldConfig]
@@ -1462,7 +1473,7 @@ function UserManagement() {
     aadhaarAddressOption: '', // 'present', 'permanent' or empty for manual
     emergencyContactName: '',
     emergencyContactNumber: '',
-    isPhysicallyChallenged: false,
+    isPhysicallyChallenged: '', // schema-driven: checkbox→false when unchecked, select/text→'' for placeholder
     physicallyChallengedDetails: '',
     isInternationalEmployee: false,
     countryOfOrigin: '',
@@ -1530,6 +1541,27 @@ function UserManagement() {
     password: ''
   })
   const [submittingSection, setSubmittingSection] = useState(null)
+
+  // When schema defines Physically Challenged as a select (e.g. Yes / No / Not to say),
+  // map stored boolean to the appropriate option label for the form state so the dropdown
+  // shows the saved value. Run when both formData and schema are available (e.g. config loaded after handleEdit).
+  useEffect(() => {
+    const sectionKey = getSectionKey(1)
+    if (!sectionKey || !employeeFormConfig?.sections) return
+    const pcField = getFieldConfig(sectionKey, 'isPhysicallyChallenged')
+    if (!pcField || String(pcField.type || '').toLowerCase() !== 'select') return
+
+    const current = formData.isPhysicallyChallenged
+    if (current !== true && current !== false) return
+
+    const options = getFieldOptionsById(1, 'isPhysicallyChallenged', pcField.options || [])
+    const yesOpt = options.find(o => String(o).trim().toLowerCase() === 'yes') || options[0] || ''
+    const noOpt = options.find(o => String(o).trim().toLowerCase() === 'no') || ''
+
+    const mapped = current === true ? yesOpt : (noOpt || '')
+    console.log('[PhysicallyChallenged useEffect] mapping boolean→string for dropdown', { current, options, mapped })
+    setFormData(prev => (prev.isPhysicallyChallenged === current ? { ...prev, isPhysicallyChallenged: mapped } : prev))
+  }, [employeeFormConfig, formData.isPhysicallyChallenged, getSectionKey, getFieldConfig, getFieldOptionsById])
 
   // Build default object for one array item from schema (e.g. new language row). Only includes fields defined in schema so removed fields (e.g. write) stay gone.
   const getDefaultArrayItemFromSchema = useCallback(
@@ -1975,8 +2007,11 @@ function UserManagement() {
       if (!isFieldVisibleById(sectionId, field.name)) return null
       
       // Construct field name: if inside array entry, use arrayName[index].fieldName format
-      const fieldName = arrayIndex !== null && arrayName ? `${arrayName}.${arrayIndex}.${field.name}` : field.name
-      
+      let fieldName = arrayIndex !== null && arrayName ? `${arrayName}.${arrayIndex}.${field.name}` : field.name
+      // Force Physically Challenged to always use isPhysicallyChallenged so form state and API key match (like role)
+      const isPCField = sectionId === 1 && (field.name === 'isPhysicallyChallenged' || (field.name || '').toLowerCase().replace(/\s+/g, '') === 'physicallychallenged' || (field.label || '').toLowerCase().includes('physically challenged'))
+      if (isPCField && arrayIndex === null) fieldName = 'isPhysicallyChallenged'
+
       const computedRequired = getFieldRequiredById(sectionId, field.name, field.required || false)
       if (FORM_DEBUG) {
         formLog('SchemaExtraField', { sectionId, fieldName: field.name, schemaRequired: field.required, computedRequired, type: field.type })
@@ -2116,17 +2151,25 @@ function UserManagement() {
         : field.helpText
       
       
+      // Normalize options to array (schema may send comma-separated string) so select value matches an option
+      const fieldType = getFieldTypeById(sectionId, field.name, field.type || 'text')
+      const rawType = String(field.type || '').toLowerCase()
+      const isSelectOrDropdown = fieldType === 'select' || rawType === 'select' || rawType === 'dropdown'
+      const normalizedOptions = isSelectOrDropdown
+        ? getFieldOptionsById(sectionId, field.name, field.options || [])
+        : (field.options || [])
+
       return (
         <FormField
           key={fieldName}
           label={getFieldLabelById(sectionId, field.name, field.label || field.name)}
           name={fieldName}
-          type={getFieldTypeById(sectionId, field.name, field.type || 'text')}
+          type={fieldType}
           required={computedRequired}
           formData={formData}
           handleChange={customHandleChange}
           placeholder={field.placeholder}
-          options={field.options || []}
+          options={Array.isArray(normalizedOptions) ? normalizedOptions : []}
           disabled={shouldDisableConfirmDate}
           readOnly={shouldDisableConfirmDate}
           helpText={helpText}
@@ -2179,6 +2222,16 @@ function UserManagement() {
         return d.toISOString().split('T')[0]
       }
 
+      // Dropdown needs a string that matches an option. DB may have boolean (legacy) or string.
+      let isPhysicallyChallengedValue = emp.isPhysicallyChallenged
+      if (typeof isPhysicallyChallengedValue === 'boolean') {
+        isPhysicallyChallengedValue = isPhysicallyChallengedValue ? 'Yes' : 'No'
+      } else if (isPhysicallyChallengedValue != null && isPhysicallyChallengedValue !== '') {
+        isPhysicallyChallengedValue = String(isPhysicallyChallengedValue).trim()
+      } else {
+        isPhysicallyChallengedValue = ''
+      }
+
       // Populate form with employee data
       setFormData({
         employeeName: `${emp.firstName || ''} ${emp.lastName || ''}`.trim(),
@@ -2217,7 +2270,7 @@ function UserManagement() {
         // permanentAddress handled above
         emergencyContactName: emp.emergencyContactName || '',
         emergencyContactNumber: emp.emergencyContactNumber || '',
-        isPhysicallyChallenged: emp.isPhysicallyChallenged || false,
+        isPhysicallyChallenged: isPhysicallyChallengedValue,
         physicallyChallengedDetails: emp.physicallyChallengedDetails || '',
         isInternationalEmployee: emp.isInternationalEmployee || false,
         countryOfOrigin: emp.countryOfOrigin || '',
@@ -2967,7 +3020,7 @@ function UserManagement() {
       // permanentAddress handled above
       emergencyContactName: '',
       emergencyContactNumber: '',
-      isPhysicallyChallenged: false,
+      isPhysicallyChallenged: '',
       physicallyChallengedDetails: '',
       isInternationalEmployee: false,
       countryOfOrigin: '',
@@ -3609,6 +3662,10 @@ function UserManagement() {
         isActive: formData.employeeStatus === 'Active',
         ...formData
       }
+      // Same as role: send selected dropdown value as-is (form now always uses key isPhysicallyChallenged).
+      const rawPC = formData.isPhysicallyChallenged
+      apiData.isPhysicallyChallenged = rawPC != null && String(rawPC).trim() !== '' ? String(rawPC).trim() : ''
+      delete apiData['Physically Challenged']
       if (apiData.profileImage && (String(apiData.profileImage).startsWith('data:') || String(apiData.profileImage).startsWith('blob:'))) {
         delete apiData.profileImage
       }
@@ -4532,45 +4589,53 @@ function UserManagement() {
                 )
               })()}
 
-              {/* Physically Challenged: when schema has it as checkbox, show checkbox + optional details text only when checked (both from schema) */}
+              {/* Physically Challenged: behavior driven entirely by schema type */}
               {(() => {
                 const pcField = getFieldConfig(getSectionKey(1), 'isPhysicallyChallenged')
                 const detailsField = getFieldConfig(getSectionKey(1), 'physicallyChallengedDetails')
-                const isCheckbox = pcField && String(pcField.type || '').toLowerCase() === 'checkbox'
-                const showCheckbox = pcField && isFieldVisibleById(1, 'isPhysicallyChallenged') && isCheckbox
-                const showDetailsWhenChecked = detailsField && isFieldVisibleById(1, 'physicallyChallengedDetails')
-                if (!showCheckbox) return null
-                return (
-                  <div className="col-span-full">
-                    <div className="flex items-center mb-2">
-                      <input
-                        type="checkbox"
-                        id="isPhysicallyChallenged"
-                        name="isPhysicallyChallenged"
-                        checked={formData.isPhysicallyChallenged || false}
-                        onChange={handleChange}
-                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                      />
-                      <label htmlFor="isPhysicallyChallenged" className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                        {getFieldLabelById(1, 'isPhysicallyChallenged', 'Is Physically Challenged?')}
-                        {getFieldRequiredById(1, 'isPhysicallyChallenged', false) && <span className="text-red-500 ml-0.5">*</span>}
-                      </label>
-                    </div>
-                    {showDetailsWhenChecked && (formData.isPhysicallyChallenged === true || formData.isPhysicallyChallenged === 'true') && (
-                      <div className="mt-2 animate-fadeIn">
-                        <FormField
-                          label={getFieldLabelById(1, 'physicallyChallengedDetails', 'Details (Please specify)')}
-                          name="physicallyChallengedDetails"
-                          type={getFieldTypeById(1, 'physicallyChallengedDetails', 'text')}
-                          required={getFieldRequiredById(1, 'physicallyChallengedDetails', false)}
-                          formData={formData}
-                          handleChange={handleChange}
-                          placeholder={detailsField?.placeholder || 'Provide details about the physical challenge...'}
+                if (!pcField || !isFieldVisibleById(1, 'isPhysicallyChallenged')) return null
+                const type = String(pcField.type || '').toLowerCase()
+                const isCheckbox = type === 'checkbox'
+
+                // If schema defines a checkbox, show a checkbox + optional details text when checked.
+                if (isCheckbox) {
+                  const showDetailsWhenChecked = detailsField && isFieldVisibleById(1, 'physicallyChallengedDetails')
+                  return (
+                    <div className="col-span-full">
+                      <div className="flex items-center mb-2">
+                        <input
+                          type="checkbox"
+                          id="isPhysicallyChallenged"
+                          name="isPhysicallyChallenged"
+                          checked={formData.isPhysicallyChallenged === true || String(formData.isPhysicallyChallenged || '').trim().toLowerCase() === 'yes'}
+                          onChange={handleChange}
+                          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                         />
+                        <label htmlFor="isPhysicallyChallenged" className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                          {getFieldLabelById(1, 'isPhysicallyChallenged', 'Is Physically Challenged?')}
+                          {getFieldRequiredById(1, 'isPhysicallyChallenged', false) && <span className="text-red-500 ml-0.5">*</span>}
+                        </label>
                       </div>
-                    )}
-                  </div>
-                )
+                      {showDetailsWhenChecked && (formData.isPhysicallyChallenged === true || formData.isPhysicallyChallenged === 'true' || String(formData.isPhysicallyChallenged || '').trim().toLowerCase() === 'yes') && (
+                        <div className="mt-2 animate-fadeIn">
+                          <FormField
+                            label={getFieldLabelById(1, 'physicallyChallengedDetails', 'Details (Please specify)')}
+                            name="physicallyChallengedDetails"
+                            type={getFieldTypeById(1, 'physicallyChallengedDetails', 'text')}
+                            required={getFieldRequiredById(1, 'physicallyChallengedDetails', false)}
+                            formData={formData}
+                            handleChange={handleChange}
+                            placeholder={detailsField?.placeholder || 'Provide details about the physical challenge...'}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )
+                }
+
+                // If schema defines a select (e.g. Yes / No / Not to say), let generic schema renderer handle it.
+                // In view mode, this will show the saved value as text; in edit mode, it becomes a dropdown with the saved option pre-selected.
+                return null
               })()}
 
               {/* Profile Image Upload (file upload, not base64) */}
@@ -4646,7 +4711,12 @@ function UserManagement() {
               )}
               {renderSchemaExtraFields(1, [
                 'employeeName', 'firstName', 'middleName', 'lastName', 'gender', 'bloodGroup', 'birthdayDate', 'dateOfBirth', 'maritalStatus', 'marriageDate', 'profileImage', 'isInternationalEmployee', 'countryOfOrigin', 'cityLocation',
-                ...(getFieldConfig(getSectionKey(1), 'isPhysicallyChallenged')?.type === 'checkbox' ? ['isPhysicallyChallenged', 'physicallyChallengedDetails'] : [])
+                // For Physically Challenged:
+                // - If schema type is checkbox, we render the checkbox manually above and only need details here.
+                // - If schema type is select, let schema renderer handle the full field (select).
+                ...(String(getFieldConfig(getSectionKey(1), 'isPhysicallyChallenged')?.type || '').toLowerCase() === 'checkbox'
+                  ? ['physicallyChallengedDetails']
+                  : ['isPhysicallyChallenged', 'physicallyChallengedDetails'])
               ])}
             </FormSection>
 
