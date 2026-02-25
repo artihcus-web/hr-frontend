@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../context/AuthContext'
-import { FiEdit2, FiTrash2, FiUpload, FiX, FiSearch, FiFilter, FiDownload, FiChevronDown, FiChevronUp, FiSave, FiPlus, FiMoreVertical, FiEye } from 'react-icons/fi'
+import { FiEdit2, FiTrash2, FiUpload, FiX, FiSearch, FiFilter, FiDownload, FiChevronDown, FiChevronUp, FiSave, FiPlus, FiMoreVertical, FiEye, FiLoader } from 'react-icons/fi'
 import * as XLSX from 'xlsx'
 import ExcelJS from 'exceljs'
 import toast from '../../../utils/toast'
@@ -1105,9 +1105,16 @@ const FormSection = ({ title, children, isOpen, onToggle, onSave, isSubmitting, 
                 type="button"
                 onClick={(e) => onSave(e, sectionId)}
                 disabled={isSubmitting}
-                className="px-4 py-1.5 bg-indigo-600 dark:bg-indigo-500 text-white text-sm rounded-md hover:bg-indigo-700 dark:hover:bg-indigo-600 disabled:opacity-50 flex items-center gap-2 transition-colors shadow-sm"
+                className="px-4 py-1.5 bg-indigo-600 dark:bg-indigo-500 text-white text-sm font-medium rounded-md hover:bg-indigo-700 dark:hover:bg-indigo-600 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer active:scale-[0.98] active:bg-indigo-800 dark:active:bg-indigo-700 flex items-center gap-2 transition-all duration-150 shadow-sm select-none"
               >
-                {isSubmitting ? 'Saving...' : 'SAVE'}
+                {isSubmitting ? (
+                  <>
+                    <FiLoader className="w-4 h-4 animate-spin flex-shrink-0" aria-hidden />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  'SAVE'
+                )}
               </button>
             </div>
           )}
@@ -3725,8 +3732,8 @@ function UserManagement() {
           }
           setProfileImageFile(null)
           toast.success(isSectionSave ? 'Section saved. Continue with other sections.' : 'Employee created successfully.')
+          setSubmittingSection(null) // clear button state so it matches the toast
           await fetchEmployees()
-          setSubmittingSection(null)
           return
         }
       }
@@ -3734,6 +3741,7 @@ function UserManagement() {
       if (editingEmployee) {
         await axiosInstance.put(`/api/auth/users/${editingEmployee}`, apiData)
         toast.success(isSectionSave ? 'Section saved successfully' : 'Employee updated successfully')
+        setSubmittingSection(null) // clear button state so it matches the toast
         setEditingSectionId(null)
       } else {
         const res = await axiosInstance.post('/api/auth/users', apiData)
@@ -3741,6 +3749,7 @@ function UserManagement() {
         setEditingEmployee(newEmployee._id || newEmployee.id)
         setAddFlowJustSaved(true) // Keep "Add New Employee" title and editable sections until user leaves
         toast.success(isSectionSave ? 'Section saved. Continue with other sections.' : 'Employee created successfully.')
+        setSubmittingSection(null) // clear button state so it matches the toast
       }
 
       // Refresh employees list but KEEP form open for incremental saving
